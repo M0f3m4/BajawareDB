@@ -1,0 +1,1845 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BAJAWARE</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #f0f2f5;
+      color: #333;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    /* ─── LOGIN ─────────────────────────────────────────── */
+    #login-page {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      background: linear-gradient(135deg, #1a3558 0%, #0f2040 100%);
+    }
+
+    .login-card {
+      background: #fff;
+      border-radius: 12px;
+      padding: 48px 40px;
+      width: 360px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+      text-align: center;
+    }
+
+    .login-logo {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      margin-bottom: 32px;
+    }
+
+    .bw-icon {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      border: 2.5px solid #1a3558;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 14px;
+      color: #1a3558;
+    }
+
+    .login-logo span {
+      font-size: 24px;
+      font-weight: 700;
+      color: #1a3558;
+      letter-spacing: 2px;
+    }
+
+    .login-subtitle {
+      color: #888;
+      font-size: 13px;
+      margin-bottom: 32px;
+    }
+
+    .login-card label {
+      display: block;
+      text-align: left;
+      font-size: 13px;
+      font-weight: 600;
+      color: #555;
+      margin-bottom: 6px;
+    }
+
+    .login-card input {
+      width: 100%;
+      padding: 11px 14px;
+      border: 1.5px solid #ddd;
+      border-radius: 7px;
+      font-size: 14px;
+      outline: none;
+      transition: border-color 0.2s;
+      margin-bottom: 24px;
+    }
+
+    .login-card input:focus { border-color: #1a3558; }
+
+    .login-btn {
+      width: 100%;
+      padding: 12px;
+      background: #1a3558;
+      color: #fff;
+      border: none;
+      border-radius: 7px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .login-btn:hover { background: #254a78; }
+    .login-btn:disabled { background: #7a95b5; cursor: not-allowed; }
+
+    .login-error {
+      color: #c0392b;
+      font-size: 13px;
+      margin-top: 12px;
+      display: none;
+    }
+
+    /* ─── MAIN APP ───────────────────────────────────────── */
+    #main-app {
+      display: none;
+      height: 100vh;
+      flex-direction: column;
+    }
+
+    .app-header {
+      height: 56px;
+      background: #fff;
+      border-bottom: 1px solid #e0e0e0;
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      padding: 0 24px;
+      gap: 10px;
+      flex-shrink: 0;
+    }
+
+    .header-user { font-size: 14px; color: #444; font-weight: 500; }
+
+    .header-avatar {
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      border: 2px solid #1a3558;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      font-weight: 700;
+      color: #1a3558;
+    }
+
+    .app-body { display: flex; flex: 1; overflow: hidden; }
+
+    /* SIDEBAR */
+    .sidebar {
+      width: 185px;
+      background: linear-gradient(180deg, #1e3d6e 0%, #152a4e 100%);
+      color: #fff;
+      display: flex;
+      flex-direction: column;
+      overflow-y: auto;
+      flex-shrink: 0;
+    }
+
+    .sidebar-logo {
+      padding: 20px 16px 16px;
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      border-bottom: 1px solid rgba(255,255,255,0.1);
+      margin-bottom: 8px;
+    }
+
+    .sidebar-bw {
+      width: 36px; height: 36px;
+      border-radius: 50%;
+      border: 2px solid rgba(255,255,255,0.8);
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 700; font-size: 12px; color: #fff; flex-shrink: 0;
+    }
+
+    .sidebar-logo-text { font-size: 16px; font-weight: 700; letter-spacing: 1.5px; }
+
+    .nav-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 16px;
+      cursor: pointer;
+      font-size: 13.5px;
+      color: rgba(255,255,255,0.85);
+      transition: background 0.15s;
+      user-select: none;
+    }
+
+    .nav-item:hover, .nav-item.active {
+      background: rgba(255,255,255,0.12);
+      color: #fff;
+    }
+
+    .nav-item-left { display: flex; align-items: center; gap: 10px; }
+    .nav-icon { width: 18px; text-align: center; font-size: 15px; opacity: 0.85; }
+    .nav-arrow { font-size: 11px; opacity: 0.6; transition: transform 0.2s; }
+    .nav-arrow.open { transform: rotate(180deg); }
+
+    .sub-menu { display: none; background: rgba(0,0,0,0.15); }
+    .sub-menu.open { display: block; }
+
+    .sub-item {
+      padding: 8px 16px 8px 44px;
+      font-size: 13px;
+      color: rgba(255,255,255,0.7);
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+
+    .sub-item:hover, .sub-item.active {
+      background: rgba(255,255,255,0.1);
+      color: #fff;
+    }
+
+    .nav-salir { margin-top: auto; border-top: 1px solid rgba(255,255,255,0.1); }
+
+    /* CONTENT */
+    .content-area { flex: 1; overflow-y: auto; padding: 32px 36px; }
+    .content-section { display: none; }
+    .content-section.active { display: block; }
+
+    .section-title {
+      font-size: 22px;
+      font-weight: 600;
+      color: #1a3558;
+      margin-bottom: 16px;
+      padding-bottom: 12px;
+      border-bottom: 2px solid #e8edf3;
+    }
+
+    /* STATUS BAR */
+    .status-bar {
+      background: rgba(26,53,88,0.06);
+      border-radius: 6px;
+      padding: 8px 14px;
+      font-size: 12px;
+      color: #888;
+      margin-bottom: 20px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
+    .dot-ok { background: #27ae60; }
+    .dot-warn { background: #f39c12; }
+    .dot-err { background: #e74c3c; }
+
+    /* STATS */
+    .dashboard-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .dash-card {
+      background: #fff;
+      border-radius: 8px;
+      padding: 20px;
+      border-left: 4px solid #1a3558;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+    }
+
+    .dash-card .label { font-size: 12px; color: #888; margin-bottom: 6px; }
+    .dash-card .value { font-size: 28px; font-weight: 700; color: #1a3558; }
+
+    /* TABLE */
+    .data-table-wrap {
+      background: #fff;
+      border-radius: 8px;
+      border: 1px solid #e8edf3;
+      overflow: auto;
+    }
+
+    .data-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+
+    .data-table th {
+      background: #f5f7fa;
+      padding: 10px 14px;
+      text-align: left;
+      font-size: 11px;
+      font-weight: 600;
+      color: #888;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      border-bottom: 1px solid #e8edf3;
+      white-space: nowrap;
+    }
+
+    .data-table td {
+      padding: 10px 14px;
+      border-bottom: 1px solid #f0f2f5;
+      color: #444;
+      white-space: nowrap;
+    }
+
+    .data-table tr:last-child td { border-bottom: none; }
+    .data-table tr:hover td { background: #fafbfc; }
+
+    .badge {
+      display: inline-block;
+      font-size: 11px;
+      padding: 2px 9px;
+      border-radius: 10px;
+      font-weight: 600;
+    }
+
+    .badge-green  { background: #eafaf1; color: #1e8449; }
+    .badge-yellow { background: #fef9e7; color: #b7770d; }
+    .badge-red    { background: #fdedec; color: #a93226; }
+
+    /* PLACEHOLDER */
+    .placeholder-card {
+      background: #fff;
+      border-radius: 8px;
+      padding: 48px;
+      text-align: center;
+      color: #aaa;
+      border: 2px dashed #e0e0e0;
+      font-size: 14px;
+    }
+
+    .placeholder-card .icon { font-size: 40px; margin-bottom: 12px; }
+
+    /* LOADING */
+    .loading { text-align: center; padding: 40px; color: #aaa; font-size: 14px; }
+
+    /* SPRINT PROGRESS */
+    .sprint-info {
+      background: #fff;
+      border-radius: 8px;
+      padding: 24px;
+      margin-bottom: 16px;
+      border: 1px solid #e8edf3;
+    }
+
+    .sprint-bar-bg {
+      background: #e8edf3;
+      border-radius: 6px;
+      height: 12px;
+      overflow: hidden;
+      margin: 12px 0 6px;
+    }
+
+    .sprint-bar-fill {
+      height: 100%;
+      background: #1a3558;
+      border-radius: 6px;
+      transition: width 0.4s ease;
+    }
+
+    .sprint-meta {
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+      color: #888;
+    }
+
+    /* TICKET DETAIL PANEL */
+    .tickets-layout { display: flex; gap: 16px; height: calc(100vh - 180px); }
+    .tickets-left   { flex: 1; overflow-y: auto; }
+    .ticket-panel   { width: 340px; flex-shrink: 0; background: #fff; border-radius: 8px; border: 1px solid #e8edf3; padding: 20px; overflow-y: auto; display: none; }
+    .ticket-panel.open { display: block; }
+    .panel-title    { font-size: 13px; font-weight: 700; color: #1a3558; margin-bottom: 4px; }
+    .panel-key      { font-size: 12px; color: #888; margin-bottom: 16px; }
+    .panel-label    { font-size: 11px; font-weight: 600; color: #888; text-transform: uppercase; letter-spacing: 0.5px; margin: 14px 0 5px; }
+    .panel-val      { font-size: 13px; color: #333; }
+    .panel-select   { width: 100%; padding: 8px 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 13px; margin-bottom: 8px; }
+    .panel-btn      { width: 100%; padding: 9px; background: #1a3558; color: #fff; border: none; border-radius: 6px; font-size: 13px; cursor: pointer; margin-bottom: 4px; }
+    .panel-btn:hover { background: #254a78; }
+    .panel-btn.secondary { background: #f0f2f5; color: #333; }
+    .panel-btn.secondary:hover { background: #e0e2e5; }
+    .panel-textarea { width: 100%; padding: 8px 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 13px; resize: vertical; min-height: 70px; font-family: inherit; margin-bottom: 8px; }
+    .panel-divider  { border: none; border-top: 1px solid #e8edf3; margin: 16px 0; }
+    .comment-item   { background: #f5f7fa; border-radius: 6px; padding: 10px; margin-bottom: 8px; font-size: 12px; }
+    .comment-autor  { font-weight: 600; color: #1a3558; margin-bottom: 3px; }
+
+    /* NUEVO TICKET MODAL */
+    .modal-overlay  { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.4); z-index:100; align-items:center; justify-content:center; }
+    .modal-overlay.open { display:flex; }
+    .modal-card     { background:#fff; border-radius:10px; padding:28px; width:460px; max-height:90vh; overflow-y:auto; }
+    .modal-title    { font-size:16px; font-weight:700; color:#1a3558; margin-bottom:20px; }
+    .modal-label    { font-size:12px; font-weight:600; color:#555; margin-bottom:5px; display:block; }
+    .modal-input    { width:100%; padding:9px 12px; border:1px solid #ddd; border-radius:6px; font-size:13px; margin-bottom:14px; font-family:inherit; outline:none; }
+    .modal-input:focus { border-color:#1a3558; }
+    .modal-select   { width:100%; padding:9px 12px; border:1px solid #ddd; border-radius:6px; font-size:13px; margin-bottom:14px; }
+    .modal-row      { display:flex; gap:10px; }
+    .modal-row > *  { flex:1; }
+    .modal-footer   { display:flex; gap:10px; justify-content:flex-end; margin-top:8px; }
+    .btn-cancel     { padding:9px 20px; border:1px solid #ddd; border-radius:6px; background:#fff; font-size:13px; cursor:pointer; }
+    .btn-crear      { padding:9px 20px; border:none; border-radius:6px; background:#1a3558; color:#fff; font-size:13px; cursor:pointer; }
+    .btn-crear:hover { background:#254a78; }
+
+    /* Jira badge colors */
+    .badge-blue   { background: #e3f2fd; color: #1565c0; }
+    .badge-purple { background: #f3e5f5; color: #6a1b9a; }
+
+    /* Toolbar */
+    .toolbar { display:flex; align-items:center; gap:10px; margin-bottom:14px; flex-wrap:wrap; }
+    .toolbar select { padding:7px 10px; border:1px solid #ddd; border-radius:6px; font-size:13px; }
+    .toolbar input  { padding:7px 10px; border:1px solid #ddd; border-radius:6px; font-size:13px; width:180px; outline:none; }
+    .toolbar input:focus { border-color:#1a3558; }
+    .toolbar-right  { margin-left:auto; }
+    .btn-nuevo { padding:8px 16px; background:#1a3558; color:#fff; border:none; border-radius:6px; font-size:13px; cursor:pointer; }
+    .btn-nuevo:hover { background:#254a78; }
+
+    /* Epics */
+    .epics-section  { margin-top: 20px; }
+    .epics-proyecto { margin-bottom: 18px; }
+    .epics-proyecto-title { font-size: 13px; font-weight: 600; color: #1a3558; margin-bottom: 8px; display: flex; align-items: center; gap: 8px; }
+    .epics-grid     { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; }
+    .epic-card      { background: #fff; border-radius: 7px; border: 1px solid #e8edf3; padding: 12px 14px; border-left: 3px solid #1a3558; }
+    .epic-card.done { border-left-color: #27ae60; }
+    .epic-card.progress { border-left-color: #f39c12; }
+    .epic-key       { font-size: 11px; color: #888; margin-bottom: 3px; }
+    .epic-name      { font-size: 13px; font-weight: 600; color: #333; margin-bottom: 6px; line-height: 1.3; }
+    .epic-footer    { display: flex; justify-content: space-between; align-items: center; }
+    .epic-tickets   { font-size: 11px; color: #888; }
+
+    /* Detalle ticket */
+    .detalle-header { display:flex; align-items:center; gap:12px; margin-bottom:20px; }
+    .detalle-back   { background:none; border:1px solid #ddd; border-radius:6px; padding:6px 12px; font-size:13px; cursor:pointer; color:#555; }
+    .detalle-back:hover { background:#f0f2f5; }
+    .detalle-key    { font-size:13px; font-weight:700; color:#1a3558; background:#e8edf3; padding:4px 10px; border-radius:6px; }
+    .detalle-grid   { display:grid; grid-template-columns:1fr 280px; gap:20px; }
+    .detalle-main   { background:#fff; border-radius:8px; border:1px solid #e8edf3; padding:24px; }
+    .detalle-side   { display:flex; flex-direction:column; gap:14px; }
+    .detalle-meta   { background:#fff; border-radius:8px; border:1px solid #e8edf3; padding:18px; }
+    .detalle-title  { font-size:18px; font-weight:700; color:#1a3558; margin-bottom:16px; }
+    .detalle-lbl    { font-size:11px; font-weight:600; color:#888; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:4px; }
+    .detalle-val    { font-size:13px; color:#333; margin-bottom:14px; }
+    .comment-box    { background:#f5f7fa; border-radius:6px; padding:12px; margin-bottom:8px; }
+    .comment-box .autor { font-size:12px; font-weight:600; color:#1a3558; }
+    .comment-box .fecha { font-size:11px; color:#aaa; margin-left:8px; }
+    .comment-box .texto { font-size:13px; color:#444; margin-top:5px; }
+
+    .tr-clickable { cursor:pointer; }
+    .tr-clickable.selected td { background:#e8edf3 !important; }
+  </style>
+</head>
+<body>
+
+<!-- ══════════════════ LOGIN ══════════════════════════════ -->
+<div id="login-page">
+  <div class="login-card">
+    <div class="login-logo">
+      <div class="bw-icon">Bw</div>
+      <span>BAJAWARE</span>
+    </div>
+    <p class="login-subtitle">Reportware 5.0 — Base de Conocimiento</p>
+
+    <label for="username">Usuario</label>
+    <input type="text" id="username" placeholder="Ingresa tu usuario" autocomplete="off" />
+
+    <button class="login-btn" id="login-btn" onclick="doLogin()">Entrar</button>
+    <p class="login-error" id="login-error">Por favor ingresa un usuario.</p>
+  </div>
+</div>
+
+<!-- ══════════════════ MAIN APP ════════════════════════════ -->
+<div id="main-app">
+  <div class="app-header">
+    <span class="header-user" id="header-user"></span>
+    <div class="header-avatar" id="header-avatar"></div>
+    <button onclick="doLogout()" style="padding:6px 14px;border:1px solid #ddd;border-radius:6px;background:#fff;font-size:13px;cursor:pointer;color:#555;">Cerrar sesión</button>
+  </div>
+
+  <div class="app-body">
+    <!-- SIDEBAR -->
+    <div class="sidebar">
+      <div class="sidebar-logo" onclick="showSection('dashboard')" style="cursor:pointer;" title="Ir al dashboard">
+        <div class="sidebar-bw">Bw</div>
+        <span class="sidebar-logo-text">BAJAWARE</span>
+      </div>
+
+      <div class="nav-item" onclick="toggleMenu('seg')">
+        <div class="nav-item-left"><span class="nav-icon">🔒</span> Seguridad</div>
+        <span class="nav-arrow" id="arr-seg">▼</span>
+      </div>
+      <div class="sub-menu" id="sub-seg">
+        <div class="sub-item" onclick="showSection('usuarios')">Usuarios</div>
+        <div class="sub-item" onclick="showSection('roles')">Roles</div>
+        <div class="sub-item" onclick="showSection('permisos')">Permisos</div>
+      </div>
+
+      <div class="nav-item" onclick="toggleMenu('about')">
+        <div class="nav-item-left"><span class="nav-icon">ℹ️</span> About</div>
+        <span class="nav-arrow" id="arr-about">▼</span>
+      </div>
+      <div class="sub-menu" id="sub-about">
+        <div class="sub-item" onclick="showSection('version')">Versión</div>
+        <div class="sub-item" onclick="showSection('licencia')">Licencia</div>
+      </div>
+
+      <div class="nav-item" onclick="toggleMenu('inv')">
+        <div class="nav-item-left"><span class="nav-icon">📋</span> Inventario</div>
+        <span class="nav-arrow" id="arr-inv">▼</span>
+      </div>
+      <div class="sub-menu" id="sub-inv">
+        <div class="sub-item" onclick="showSection('inv-layouts')">Layouts</div>
+        <div class="sub-item" onclick="showSection('inv-reportes')">Reportes</div>
+        <div class="sub-item" onclick="showSection('inv-catalogos')">Catálogos</div>
+      </div>
+
+      <div class="nav-item" onclick="toggleMenu('cont')">
+        <div class="nav-item-left"><span class="nav-icon">📝</span> Contratos</div>
+        <span class="nav-arrow" id="arr-cont">▼</span>
+      </div>
+      <div class="sub-menu" id="sub-cont">
+        <div class="sub-item" onclick="showSection('cont-lista')">Lista</div>
+        <div class="sub-item" onclick="showSection('cont-nuevo')">Nuevo</div>
+      </div>
+
+      <div class="nav-item" onclick="toggleMenu('chi')">
+        <div class="nav-item-left"><span class="nav-icon">〰️</span> CHI</div>
+        <span class="nav-arrow" id="arr-chi">▼</span>
+      </div>
+      <div class="sub-menu" id="sub-chi">
+        <div class="sub-item" onclick="showSection('chi-main')">Consulta</div>
+        <div class="sub-item" onclick="showSection('chi-reportes')">Reportes</div>
+      </div>
+
+      <div class="nav-item" onclick="toggleMenu('spr')">
+        <div class="nav-item-left"><span class="nav-icon">⏱️</span> Sprints</div>
+        <span class="nav-arrow" id="arr-spr">▼</span>
+      </div>
+      <div class="sub-menu" id="sub-spr">
+        <div class="sub-item" onclick="showSection('spr-activo')">Sprint Activo</div>
+        <div class="sub-item" onclick="showSection('spr-historial')">Historial</div>
+        <div class="sub-item" onclick="showSection('spr-tickets')">Tickets</div>
+      </div>
+
+      <div class="nav-item" onclick="toggleMenu('doc')">
+        <div class="nav-item-left"><span class="nav-icon">📁</span> Documentación</div>
+        <span class="nav-arrow" id="arr-doc">▼</span>
+      </div>
+      <div class="sub-menu" id="sub-doc">
+        <div class="sub-item" onclick="showSection('doc-lista')">Documentos</div>
+        <div class="sub-item" onclick="showSection('doc-subir')">Subir</div>
+      </div>
+
+      <div class="nav-item" onclick="toggleMenu('prog')">
+        <div class="nav-item-left"><span class="nav-icon">💻</span> Programación</div>
+        <span class="nav-arrow" id="arr-prog">▼</span>
+      </div>
+      <div class="sub-menu" id="sub-prog">
+        <div class="sub-item" onclick="showSection('prog-tareas')">Tareas</div>
+        <div class="sub-item" onclick="showSection('prog-avance')">Avance</div>
+      </div>
+
+      <div class="nav-item" onclick="showSection('cert')">
+        <div class="nav-item-left"><span class="nav-icon">✅</span> Certificación</div>
+      </div>
+
+      <div class="nav-item" onclick="toggleMenu('sop')">
+        <div class="nav-item-left"><span class="nav-icon">🎧</span> Soporte</div>
+        <span class="nav-arrow" id="arr-sop">▼</span>
+      </div>
+      <div class="sub-menu" id="sub-sop">
+        <div class="sub-item" onclick="showSection('sop-cliente')">Cliente</div>
+        <div class="sub-item" onclick="showSection('sop-fixes')">Fixes por cliente</div>
+      </div>
+
+      <div class="nav-item" onclick="toggleMenu('con')">
+        <div class="nav-item-left"><span class="nav-icon">🎓</span> Conocimiento</div>
+        <span class="nav-arrow" id="arr-con">▼</span>
+      </div>
+      <div class="sub-menu" id="sub-con">
+        <div class="sub-item" onclick="showSection('con-base')">Base</div>
+        <div class="sub-item" onclick="showSection('con-articulos')">Artículos</div>
+      </div>
+
+      <div class="nav-item" onclick="showSection('paquetes')">
+        <div class="nav-item-left"><span class="nav-icon">📦</span> Paquetes</div>
+      </div>
+
+      <div class="nav-item nav-salir" onclick="doLogout()">
+        <div class="nav-item-left"><span class="nav-icon">🚪</span> Salir</div>
+      </div>
+    </div>
+
+    <!-- CONTENT -->
+    <div class="content-area">
+
+      <!-- Dashboard -->
+      <div class="content-section active" id="sec-dashboard">
+        <h2 class="section-title">Dashboard</h2>
+        <div class="status-bar">
+          <span class="dot dot-warn" id="db-dot"></span>
+          <span id="db-status">Verificando conexión...</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+          <div class="status-bar" style="margin:0;flex:1;">
+            <span class="dot dot-ok"></span>
+            <span>Jira conectado · <strong>bajaware.atlassian.net</strong></span>
+          </div>
+          <button onclick="loadDashboardStats()" style="padding:6px 14px;border:1px solid #ddd;border-radius:6px;background:#fff;font-size:12px;cursor:pointer;">↻ Actualizar</button>
+        </div>
+        <div class="dashboard-grid">
+          <div class="dash-card"><div class="label">Tickets pendientes</div><div class="value" id="stat-pendientes">–</div></div>
+          <div class="dash-card"><div class="label">En progreso</div><div class="value" id="stat-progreso">–</div></div>
+          <div class="dash-card"><div class="label">Completados</div><div class="value" id="stat-hechos">–</div></div>
+          <div class="dash-card"><div class="label">Total tickets</div><div class="value" id="stat-total">–</div></div>
+        </div>
+        <div id="dashboard-sprints"><div class="loading">Cargando sprints activos...</div></div>
+        <div class="epics-section" id="dashboard-epics"><div class="loading">Cargando epics...</div></div>
+      </div>
+
+      <!-- Inventario — Layouts -->
+      <div class="content-section" id="sec-inv-layouts">
+        <h2 class="section-title">Inventario — Layouts</h2>
+        <div class="status-bar">
+          <span class="dot dot-warn" id="layouts-dot"></span>
+          <span id="layouts-status">Cargando datos...</span>
+        </div>
+        <div class="data-table-wrap" id="layouts-table-wrap">
+          <div class="loading">Cargando...</div>
+        </div>
+      </div>
+
+      <!-- Sprints — Activo -->
+      <div class="content-section" id="sec-spr-activo">
+        <h2 class="section-title">Sprints — Sprint Activo</h2>
+        <div id="sprint-activo-content"><div class="loading">Cargando...</div></div>
+      </div>
+
+      <!-- Sprints — Tickets -->
+      <div class="content-section" id="sec-spr-tickets">
+        <h2 class="section-title">Sprints — Tickets</h2>
+        <div class="toolbar">
+          <select id="filter-proyecto" onchange="loadJiraTickets()">
+            <option value="">— Proyecto —</option>
+          </select>
+          <select id="filter-estado" onchange="loadJiraTickets()">
+            <option value="">Todos los estados</option>
+            <option value="To Do">To Do</option>
+            <option value="In Progress">In Progress</option>
+            <option value="Done">Done</option>
+          </select>
+          <select id="filter-asignado" onchange="loadJiraTickets()">
+            <option value="">Todos</option>
+            <option value="currentUser">Mis tickets</option>
+          </select>
+          <input type="text" id="filter-texto" placeholder="Buscar..." onkeydown="if(event.key==='Enter') loadJiraTickets()" />
+          <button onclick="loadJiraTickets()" style="padding:7px 12px;border:1px solid #1a3558;border-radius:6px;background:#fff;color:#1a3558;font-size:13px;cursor:pointer;">Buscar</button>
+          <div class="toolbar-right">
+            <button class="btn-nuevo" onclick="abrirNuevoTicket()">+ Nuevo ticket</button>
+          </div>
+        </div>
+        <div class="tickets-layout">
+          <div class="tickets-left">
+            <div class="data-table-wrap" id="tickets-table-wrap">
+              <div class="loading">Cargando...</div>
+            </div>
+          </div>
+          <div class="ticket-panel" id="ticket-panel">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px;">
+              <div>
+                <div class="panel-key" id="panel-key"></div>
+                <div class="panel-title" id="panel-title"></div>
+              </div>
+              <button onclick="cerrarPanel()" style="background:none;border:none;font-size:18px;cursor:pointer;color:#888;">✕</button>
+            </div>
+            <div class="panel-label">Asignado a</div>
+            <div class="panel-val" id="panel-asignado"></div>
+            <div class="panel-label">Prioridad</div>
+            <div class="panel-val" id="panel-prioridad"></div>
+            <hr class="panel-divider">
+            <div class="panel-label">Cambiar estado</div>
+            <select class="panel-select" id="panel-trans-select"><option>Cargando...</option></select>
+            <button class="panel-btn" id="panel-btn-actualizar" onclick="actualizarEstado()">Actualizar estado</button>
+            <a class="panel-btn" id="panel-btn-jira" target="_blank" style="display:none;text-decoration:none;text-align:center;background:#0052cc;">Abrir en Jira ↗</a>
+            <hr class="panel-divider">
+            <div class="panel-label">Agregar comentario</div>
+            <textarea class="panel-textarea" id="panel-comentario" placeholder="Escribe un comentario..."></textarea>
+            <button class="panel-btn" onclick="enviarComentario()">Enviar comentario</button>
+            <hr class="panel-divider">
+            <div class="panel-label">Comentarios recientes</div>
+            <div id="panel-comentarios"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Modal nuevo ticket -->
+      <div class="modal-overlay" id="modal-nuevo">
+        <div class="modal-card">
+          <div class="modal-title">Nuevo ticket en Jira</div>
+          <label class="modal-label">Proyecto</label>
+          <select class="modal-select" id="nuevo-proyecto"></select>
+          <label class="modal-label">Resumen</label>
+          <input class="modal-input" id="nuevo-resumen" type="text" placeholder="Título del ticket" />
+          <label class="modal-label">Descripción</label>
+          <textarea class="modal-input" id="nuevo-descripcion" placeholder="Descripción (opcional)" style="min-height:80px;resize:vertical;"></textarea>
+          <div class="modal-row">
+            <div>
+              <label class="modal-label">Tipo</label>
+              <select class="modal-select" id="nuevo-tipo">
+                <option>Task</option><option>Bug</option><option>Story</option><option>Epic</option>
+              </select>
+            </div>
+            <div>
+              <label class="modal-label">Prioridad</label>
+              <select class="modal-select" id="nuevo-prioridad">
+                <option>Medium</option><option>High</option><option>Low</option><option>Highest</option><option>Lowest</option>
+              </select>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn-cancel" onclick="cerrarNuevoTicket()">Cancelar</button>
+            <button class="btn-crear" onclick="crearTicket()">Crear ticket</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Detalle de ticket -->
+      <div class="content-section" id="sec-ticket-detalle">
+        <div class="detalle-header">
+          <button class="detalle-back" onclick="showSection('spr-tickets')">← Volver a tickets</button>
+          <span class="detalle-key" id="detalle-key"></span>
+          <span id="detalle-estado-badge"></span>
+        </div>
+        <div class="detalle-grid">
+          <div class="detalle-main">
+            <div class="detalle-title" id="detalle-titulo"></div>
+            <div class="detalle-lbl">Descripción</div>
+            <div class="detalle-val" id="detalle-descripcion" style="color:#555;line-height:1.6;"></div>
+            <hr style="border:none;border-top:1px solid #e8edf3;margin:20px 0;">
+            <div class="detalle-lbl">Comentarios</div>
+            <div id="detalle-comentarios" style="margin-bottom:16px;"></div>
+            <div class="detalle-lbl" style="margin-top:16px;">Nuevo comentario</div>
+            <textarea class="panel-textarea" id="detalle-comentario-txt" placeholder="Escribe un comentario..." style="width:100%;"></textarea>
+            <button class="panel-btn" style="width:auto;padding:9px 20px;" onclick="enviarComentarioDetalle()">Enviar comentario</button>
+          </div>
+          <div class="detalle-side">
+            <div class="detalle-meta">
+              <div class="detalle-lbl">Asignado a</div>
+              <div class="detalle-val" id="detalle-asignado"></div>
+              <div class="detalle-lbl">Prioridad</div>
+              <div class="detalle-val" id="detalle-prioridad"></div>
+              <div class="detalle-lbl">Tipo</div>
+              <div class="detalle-val" id="detalle-tipo"></div>
+            </div>
+            <div class="detalle-meta">
+              <div class="detalle-lbl" style="margin-bottom:8px;">Cambiar estado</div>
+              <select class="panel-select" id="detalle-trans-select"></select>
+              <button class="panel-btn" id="detalle-btn-actualizar" onclick="actualizarEstadoDetalle()">Actualizar estado</button>
+              <a class="panel-btn" id="detalle-btn-jira" target="_blank" style="display:none;text-decoration:none;text-align:center;background:#0052cc;">Abrir en Jira ↗</a>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Paquetes -->
+      <div class="content-section" id="sec-paquetes">
+        <h2 class="section-title">Paquetes</h2>
+        <div class="toolbar">
+          <select id="paq-filtro-estatus" onchange="loadPaquetes()">
+            <option value="">Todos los estados</option>
+            <option value="IDENTIFICADO">Identificado</option>
+            <option value="PRE-ANALISIS">Pre-análisis</option>
+            <option value="ANALISIS">Análisis</option>
+            <option value="EN DESARROLLO">En desarrollo</option>
+            <option value="POR REGISTRAR EN DEV">Por registrar en dev</option>
+            <option value="APROBADO QA">Aprobado QA</option>
+            <option value="IMPLEMENTACION">Implementación</option>
+            <option value="CERRADO">Cerrado</option>
+          </select>
+          <select id="paq-filtro-grupo" onchange="loadPaquetes()">
+            <option value="">Todos los grupos</option>
+          </select>
+          <input type="text" id="paq-filtro-cliente" placeholder="Buscar cliente..." onkeydown="if(event.key==='Enter') loadPaquetes()" style="padding:7px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;width:180px;" />
+          <button onclick="loadPaquetes()" style="padding:7px 12px;border:1px solid #1a3558;border-radius:6px;background:#fff;color:#1a3558;font-size:13px;cursor:pointer;">Buscar</button>
+          <div class="toolbar-right">
+            <span id="paq-count" style="font-size:13px;color:#888;"></span>
+          </div>
+        </div>
+        <div id="paquetes-content"><div class="loading">Cargando...</div></div>
+      </div>
+
+      <!-- Placeholders genéricos -->
+      <div class="content-section" id="sec-usuarios">
+        <h2 class="section-title">Seguridad — Usuarios</h2>
+        <div class="toolbar">
+          <div style="font-size:13px;color:#888;" id="usuarios-count"></div>
+          <div class="toolbar-right">
+            <button class="btn-nuevo" id="btn-nuevo-usuario" onclick="abrirNuevoUsuario()">+ Nuevo usuario</button>
+          </div>
+        </div>
+        <div class="data-table-wrap" id="usuarios-table-wrap">
+          <div class="loading">Cargando...</div>
+        </div>
+
+        <!-- Modal nuevo/editar usuario -->
+        <div class="modal-overlay" id="modal-usuario">
+          <div class="modal-card">
+            <div class="modal-title" id="modal-usuario-title">Nuevo usuario</div>
+            <input type="hidden" id="usuario-edit-id" />
+            <label class="modal-label">Username (para iniciar sesión)</label>
+            <input class="modal-input" id="usuario-username" type="text" placeholder="ej. jperez" />
+            <label class="modal-label">Nombre completo</label>
+            <input class="modal-input" id="usuario-nombre" type="text" placeholder="ej. Juan Pérez" />
+            <label class="modal-label">Rol</label>
+            <select class="modal-select" id="usuario-rol">
+              <option value="lector">Lector — solo consulta</option>
+              <option value="admin">Admin — acceso total</option>
+            </select>
+            <div id="modal-usuario-error" style="color:#c0392b;font-size:13px;margin-bottom:10px;display:none;"></div>
+            <div class="modal-footer">
+              <button class="btn-cancel" onclick="cerrarModalUsuario()">Cancelar</button>
+              <button class="btn-crear" onclick="guardarUsuario()">Guardar</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="content-section" id="sec-roles"><h2 class="section-title">Seguridad — Roles</h2><div class="placeholder-card"><div class="icon">🛡️</div>Próximamente</div></div>
+      <div class="content-section" id="sec-permisos"><h2 class="section-title">Seguridad — Permisos</h2><div class="placeholder-card"><div class="icon">🔑</div>Próximamente</div></div>
+      <div class="content-section" id="sec-version"><h2 class="section-title">About — Versión</h2><div class="placeholder-card"><div class="icon">📦</div>Reportware 5.0 · v1.0.7 · BD v1.0.1</div></div>
+      <div class="content-section" id="sec-licencia"><h2 class="section-title">About — Licencia</h2><div class="placeholder-card"><div class="icon">📄</div>Próximamente</div></div>
+      <div class="content-section" id="sec-inv-reportes"><h2 class="section-title">Inventario — Reportes</h2><div class="placeholder-card"><div class="icon">📊</div>Próximamente</div></div>
+      <div class="content-section" id="sec-inv-catalogos"><h2 class="section-title">Inventario — Catálogos</h2><div class="placeholder-card"><div class="icon">📚</div>Próximamente</div></div>
+      <div class="content-section" id="sec-cont-lista"><h2 class="section-title">Contratos — Lista</h2><div class="placeholder-card"><div class="icon">📝</div>Próximamente</div></div>
+      <div class="content-section" id="sec-cont-nuevo"><h2 class="section-title">Contratos — Nuevo</h2><div class="placeholder-card"><div class="icon">➕</div>Próximamente</div></div>
+      <div class="content-section" id="sec-chi-main"><h2 class="section-title">CHI — Consulta</h2><div class="placeholder-card"><div class="icon">〰️</div>Próximamente</div></div>
+      <div class="content-section" id="sec-chi-reportes"><h2 class="section-title">CHI — Reportes</h2><div class="placeholder-card"><div class="icon">📈</div>Próximamente</div></div>
+      <div class="content-section" id="sec-spr-historial"><h2 class="section-title">Sprints — Historial</h2><div class="placeholder-card"><div class="icon">📅</div>Próximamente</div></div>
+      <div class="content-section" id="sec-doc-lista"><h2 class="section-title">Documentación</h2><div class="placeholder-card"><div class="icon">📁</div>Próximamente</div></div>
+      <div class="content-section" id="sec-doc-subir"><h2 class="section-title">Documentación — Subir</h2><div class="placeholder-card"><div class="icon">⬆️</div>Próximamente</div></div>
+      <div class="content-section" id="sec-prog-tareas"><h2 class="section-title">Programación — Tareas</h2><div class="placeholder-card"><div class="icon">💻</div>Próximamente</div></div>
+      <div class="content-section" id="sec-prog-avance"><h2 class="section-title">Programación — Avance</h2><div class="placeholder-card"><div class="icon">📶</div>Próximamente</div></div>
+      <div class="content-section" id="sec-cert"><h2 class="section-title">Certificación</h2><div class="placeholder-card"><div class="icon">✅</div>Próximamente</div></div>
+      <!-- Soporte — Cliente -->
+      <div class="content-section" id="sec-sop-cliente">
+        <h2 class="section-title">Soporte — Cliente</h2>
+        <div class="toolbar">
+          <select id="sop-select-cliente" onchange="loadSoporteCliente()" style="min-width:260px;">
+            <option value="">— Selecciona un cliente —</option>
+          </select>
+        </div>
+        <div id="sop-cliente-content"></div>
+      </div>
+
+      <!-- Soporte — Fixes por cliente -->
+      <div class="content-section" id="sec-sop-fixes">
+        <h2 class="section-title">Soporte — Fixes por cliente</h2>
+        <div class="toolbar">
+          <select id="sop-select-fixes" onchange="loadSoporteFixes()" style="min-width:260px;">
+            <option value="">— Selecciona un cliente —</option>
+          </select>
+          <select id="sop-fixes-estatus" onchange="loadSoporteFixes()">
+            <option value="">Todos los estados</option>
+            <option value="IDENTIFICADO">Identificado</option>
+            <option value="PRE-ANALISIS">Pre-análisis</option>
+            <option value="ANALISIS">Análisis</option>
+            <option value="EN DESARROLLO">En desarrollo</option>
+            <option value="POR REGISTRAR EN DEV">Por registrar en dev</option>
+            <option value="APROBADO QA">Aprobado QA</option>
+            <option value="IMPLEMENTACION">Implementación</option>
+            <option value="CERRADO">Cerrado</option>
+          </select>
+        </div>
+        <div id="sop-fixes-content"><div class="loading">Selecciona un cliente para ver sus fixes.</div></div>
+      </div>
+      <div class="content-section" id="sec-con-base"><h2 class="section-title">Conocimiento — Base</h2><div class="placeholder-card"><div class="icon">🎓</div>Próximamente</div></div>
+      <div class="content-section" id="sec-con-articulos"><h2 class="section-title">Conocimiento — Artículos</h2><div class="placeholder-card"><div class="icon">📖</div>Próximamente</div></div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+  // ── LOGIN ────────────────────────────────────────────────
+  async function doLogin() {
+    const username = document.getElementById('username').value.trim();
+    const errEl    = document.getElementById('login-error');
+    const btn      = document.getElementById('login-btn');
+
+    if (!username) { errEl.style.display = 'block'; return; }
+    errEl.style.display = 'none';
+    btn.disabled = true;
+    btn.textContent = 'Entrando...';
+
+    try {
+      const res  = await fetch('/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username })
+      });
+      const data = await res.json();
+
+      if (data.ok) {
+        initApp(data.user);
+      } else {
+        errEl.textContent = data.message || 'Error al iniciar sesión';
+        errEl.style.display = 'block';
+      }
+    } catch (e) {
+      errEl.textContent = 'No se puede conectar al servidor';
+      errEl.style.display = 'block';
+    }
+
+    btn.disabled = false;
+    btn.textContent = 'Entrar';
+  }
+
+  document.getElementById('username').addEventListener('keydown', e => {
+    if (e.key === 'Enter') doLogin();
+  });
+
+  // ── INIT APP ─────────────────────────────────────────────
+  function initApp(user) {
+    document.getElementById('login-page').style.display = 'none';
+    document.getElementById('main-app').style.display = 'flex';
+    document.getElementById('header-user').textContent = user.nombre + ' — Bajaware';
+    document.getElementById('header-avatar').textContent = user.nombre.substring(0, 2).toUpperCase();
+    loadDashboardStats();
+    loadProyectos();
+  }
+
+  // ── LOGOUT ────────────────────────────────────────────────
+  async function doLogout() {
+    await fetch('/auth/logout', { method: 'POST' });
+    document.getElementById('main-app').style.display = 'none';
+    document.getElementById('login-page').style.display = 'flex';
+    document.getElementById('username').value = '';
+    showSection('dashboard');
+  }
+
+  // ── HELPERS ───────────────────────────────────────────────
+  function epicCardClass(cat) {
+    if (!cat) return '';
+    const c = cat.toLowerCase();
+    if (c.includes('done')) return 'done';
+    if (c.includes('progress') || c.includes('progreso')) return 'progress';
+    return '';
+  }
+
+  function renderEpicsHTML(porProyecto) {
+    if (!porProyecto.length) return '<div style="color:#aaa;font-size:13px;padding:8px 0;">Sin epics registrados.</div>';
+    return porProyecto.map(p => `
+      <div class="epics-proyecto">
+        <div class="epics-proyecto-title">
+          <span style="background:#e8edf3;color:#1a3558;padding:2px 8px;border-radius:5px;font-size:11px;">${p.key}</span>
+          ${p.nombre}
+          <span style="font-weight:400;color:#aaa;">(${p.epics.length} epic${p.epics.length !== 1 ? 's' : ''})</span>
+        </div>
+        <div class="epics-grid">
+          ${p.epics.map(e => `
+            <div class="epic-card ${epicCardClass(e.categoria)}">
+              <div class="epic-key">${e.key}</div>
+              <div class="epic-name">${e.resumen}</div>
+              <div class="epic-footer">
+                <span class="badge ${badgeClass(e.estado)}" style="font-size:10px;">${e.estado || '—'}</span>
+              </div>
+            </div>`).join('')}
+        </div>
+      </div>`).join('');
+  }
+
+  // ── DASHBOARD STATS (desde Jira) ──────────────────────────
+  async function loadDashboardStats() {
+    try {
+      const [statsRes, sprintsRes, epicsRes] = await Promise.all([
+        fetch('/api/jira/stats'),
+        fetch('/api/jira/sprints/activos'),
+        fetch('/api/jira/epics')
+      ]);
+      const stats   = await statsRes.json();
+      const sprints = await sprintsRes.json();
+      const epics   = await epicsRes.json();
+
+      if (stats.ok) {
+        document.getElementById('stat-pendientes').textContent = stats.data.pendientes;
+        document.getElementById('stat-progreso').textContent   = stats.data.enProgreso;
+        document.getElementById('stat-hechos').textContent     = stats.data.hechos;
+        document.getElementById('stat-total').textContent      = stats.data.total;
+      }
+
+      if (sprints.ok) {
+        const el = document.getElementById('dashboard-sprints');
+        if (!sprints.data.length) {
+          el.innerHTML = '<div class="placeholder-card" style="padding:20px;"><div class="icon" style="font-size:24px;">⏱️</div>No hay sprints activos en Jira.</div>';
+        } else {
+          el.innerHTML = `
+            <div style="font-size:13px;font-weight:600;color:#1a3558;margin-bottom:10px;">Sprints activos</div>
+            ${sprints.data.map(s => {
+              const inicio = new Date(s.startDate).toLocaleDateString('es-MX');
+              const fin    = new Date(s.endDate).toLocaleDateString('es-MX');
+              const total  = (new Date(s.endDate) - new Date(s.startDate)) / 864e5;
+              const trans  = (new Date() - new Date(s.startDate)) / 864e5;
+              const pct    = Math.min(100, Math.max(0, Math.round((trans / total) * 100)));
+              return `<div class="sprint-info">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                  <strong style="color:#1a3558;font-size:14px;">${s.name}</strong>
+                  <span style="font-size:11px;color:#888;">${s.boardName}</span>
+                </div>
+                <div style="font-size:12px;color:#888;margin-bottom:8px;">${inicio} — ${fin}</div>
+                <div class="sprint-bar-bg"><div class="sprint-bar-fill" style="width:${pct}%"></div></div>
+                <div class="sprint-meta"><span>${pct}% del tiempo transcurrido</span><span>Estado: ${s.state}</span></div>
+              </div>`;
+            }).join('')}`;
+        }
+      }
+
+      if (epics.ok) {
+        const el = document.getElementById('dashboard-epics');
+        el.innerHTML = `
+          <div style="font-size:13px;font-weight:600;color:#1a3558;margin:4px 0 12px;">
+            Epics · ${epics.total} total
+          </div>
+          ${renderEpicsHTML(epics.data)}`;
+      }
+    } catch (e) {
+      console.error('Error cargando stats:', e);
+    }
+  }
+
+  // ── PROYECTOS (para filtros y modal) ─────────────────────
+  let proyectosList = [];
+  async function loadProyectos() {
+    try {
+      const res  = await fetch('/api/jira/proyectos');
+      const data = await res.json();
+      if (!data.ok) return;
+      proyectosList = data.data;
+
+      // Filtro en tickets
+      const sel = document.getElementById('filter-proyecto');
+      data.data.forEach(p => {
+        const opt = document.createElement('option');
+        opt.value = p.key; opt.textContent = p.name;
+        sel.appendChild(opt);
+      });
+
+      // Modal nuevo ticket
+      const nSel = document.getElementById('nuevo-proyecto');
+      nSel.innerHTML = '';
+      data.data.forEach(p => {
+        const opt = document.createElement('option');
+        opt.value = p.key; opt.textContent = p.name;
+        nSel.appendChild(opt);
+      });
+    } catch (e) { console.error('Error cargando proyectos:', e); }
+  }
+
+  // ── INVENTARIO LAYOUTS ────────────────────────────────────
+  async function loadLayouts() {
+    const wrap = document.getElementById('layouts-table-wrap');
+    const dot  = document.getElementById('layouts-dot');
+    const lbl  = document.getElementById('layouts-status');
+    wrap.innerHTML = '<div class="loading">Cargando...</div>';
+    try {
+      const res  = await fetch('/api/inventario/layouts');
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.message);
+      dot.className = 'dot dot-ok';
+      lbl.textContent = data.data.length + ' registros · ' + new Date().toLocaleTimeString();
+      if (!data.data.length) { wrap.innerHTML = '<div class="loading">Sin registros</div>'; return; }
+      const cols = Object.keys(data.data[0]);
+      wrap.innerHTML = `<table class="data-table">
+        <thead><tr>${cols.map(c => `<th>${c}</th>`).join('')}</tr></thead>
+        <tbody>${data.data.map(row => `<tr>${cols.map(c => `<td>${row[c] ?? ''}</td>`).join('')}</tr>`).join('')}</tbody>
+      </table>`;
+    } catch (e) {
+      dot.className = 'dot dot-err';
+      lbl.textContent = 'Error: ' + e.message;
+      wrap.innerHTML = '<div class="loading">No se pudieron cargar los datos.</div>';
+    }
+  }
+
+  // ── SPRINT ACTIVO (desde Jira) ────────────────────────────
+  async function loadSprintActivo() {
+    const el = document.getElementById('sprint-activo-content');
+    el.innerHTML = '<div class="loading">Cargando...</div>';
+    try {
+      const res  = await fetch('/api/jira/sprints/activos');
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.message);
+      if (!data.data.length) {
+        el.innerHTML = '<div class="placeholder-card"><div class="icon">⏱️</div>No hay sprints activos en Jira.</div>';
+        return;
+      }
+
+      // Cargar sprint info + tickets por epic en paralelo
+      const sprintsHTML = await Promise.all(data.data.map(async s => {
+        const inicio = new Date(s.startDate).toLocaleDateString('es-MX');
+        const fin    = new Date(s.endDate).toLocaleDateString('es-MX');
+        const total  = (new Date(s.endDate) - new Date(s.startDate)) / 864e5;
+        const trans  = (new Date() - new Date(s.startDate)) / 864e5;
+        const pct    = Math.min(100, Math.max(0, Math.round((trans / total) * 100)));
+
+        let epicsHTML = '';
+        try {
+          const tr   = await fetch(`/api/jira/sprints/${s.id}/tickets`);
+          const td   = await tr.json();
+          if (td.ok && td.data.length) {
+            epicsHTML = td.data.map(epic => {
+              const done  = epic.tickets.filter(t => t.categoria?.toLowerCase().includes('done')).length;
+              const total = epic.tickets.length;
+              const pctE  = total ? Math.round((done / total) * 100) : 0;
+              return `
+                <div style="margin-top:12px;background:#f5f7fa;border-radius:7px;padding:12px 14px;">
+                  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+                    <div>
+                      ${epic.key ? `<span style="font-size:11px;color:#888;margin-right:6px;">${epic.key}</span>` : ''}
+                      <strong style="font-size:13px;color:#1a3558;">${epic.resumen}</strong>
+                    </div>
+                    <span style="font-size:11px;color:#888;">${done}/${total} completadas</span>
+                  </div>
+                  <div class="sprint-bar-bg" style="height:6px;margin:0 0 8px;">
+                    <div class="sprint-bar-fill" style="width:${pctE}%;background:${pctE===100?'#27ae60':'#1a3558'};"></div>
+                  </div>
+                  <div style="display:flex;flex-wrap:wrap;gap:5px;">
+                    ${epic.tickets.map(t => `
+                      <span title="${t.resumen} · ${t.asignado}"
+                        class="badge ${badgeClass(t.estado)}"
+                        style="font-size:10px;cursor:default;">
+                        ${t.key}
+                      </span>`).join('')}
+                  </div>
+                </div>`;
+            }).join('');
+          }
+        } catch (e) { /* sin detalle de epics */ }
+
+        return `<div class="sprint-info">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+            <strong style="color:#1a3558;font-size:15px;">${s.name}</strong>
+            <span style="font-size:12px;color:#888;">${s.boardName}</span>
+          </div>
+          <div style="font-size:13px;color:#888;margin-bottom:10px;">${inicio} — ${fin}</div>
+          <div class="sprint-bar-bg"><div class="sprint-bar-fill" style="width:${pct}%"></div></div>
+          <div class="sprint-meta"><span>${pct}% del tiempo transcurrido</span><span>Estado: ${s.state}</span></div>
+          ${epicsHTML}
+        </div>`;
+      }));
+
+      el.innerHTML = sprintsHTML.join('');
+    } catch (e) {
+      el.innerHTML = '<div class="placeholder-card"><div class="icon">⚠️</div>' + e.message + '</div>';
+    }
+  }
+
+  // ── BADGE PAQUETES ─────────────────────────────────────────
+  const badgePaq = est => {
+    switch ((est || '').toUpperCase()) {
+      case 'CERRADO':               return 'badge-green';
+      case 'APROBADO QA':           return 'badge-green';
+      case 'IMPLEMENTACION':        return 'badge-purple';
+      case 'EN DESARROLLO':         return 'badge-yellow';
+      case 'POR REGISTRAR EN DEV':  return 'badge-yellow';
+      case 'ANALISIS':              return 'badge-red';
+      case 'PRE-ANALISIS':          return 'badge-red';
+      case 'IDENTIFICADO':          return 'badge-red';
+      default:                      return '';
+    }
+  };
+
+  // ── JIRA TICKETS ──────────────────────────────────────────
+  const badgeClass = est => {
+    if (!est) return '';
+    const e = est.toLowerCase();
+    if (e.includes('done') || e.includes('cerrado') || e.includes('completo')) return 'badge-green';
+    if (e.includes('progress') || e.includes('progreso'))  return 'badge-yellow';
+    if (e.includes('review'))  return 'badge-purple';
+    return 'badge-red';
+  };
+
+  async function loadJiraTickets() {
+    const wrap     = document.getElementById('tickets-table-wrap');
+    const project  = document.getElementById('filter-proyecto').value;
+    const status   = document.getElementById('filter-estado').value;
+    const asignado = document.getElementById('filter-asignado').value;
+    const texto    = document.getElementById('filter-texto').value.trim();
+    const sinFiltros = !project && !texto && !status && !asignado;
+
+    wrap.innerHTML = '<div class="loading">Cargando tickets de Jira...</div>';
+    cerrarPanel();
+
+    let url = '/api/jira/tickets?max=150';
+    if (project)    url += '&project='  + encodeURIComponent(project);
+    if (status)     url += '&status='   + encodeURIComponent(status);
+    if (asignado)   url += '&assignee=' + encodeURIComponent(asignado);
+    if (texto)      url += '&texto='    + encodeURIComponent(texto);
+    // Sin filtros → sprint activo por defecto (backend usa sprint in openSprints())
+
+    try {
+      const res  = await fetch(url);
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.message);
+
+      if (!data.data.length) {
+        wrap.innerHTML = '<div class="loading">Sin tickets con esos filtros.</div>';
+        return;
+      }
+
+      const labelFiltro = sinFiltros
+        ? `<div style="font-size:12px;color:#888;margin-bottom:10px;">📋 Sprint activo — ${data.data.length} tickets</div>`
+        : `<div style="font-size:12px;color:#888;margin-bottom:10px;">${data.data.length} tickets encontrados</div>`;
+
+      wrap.innerHTML = labelFiltro + `<table class="data-table">
+        <thead><tr><th>Key</th><th>Resumen</th><th>Tipo</th><th>Asignado</th><th>Prioridad</th><th>Estado</th><th></th></tr></thead>
+        <tbody>
+          ${data.data.map(t => `
+            <tr class="tr-clickable" onclick="abrirTicket('${t.key}', this)">
+              <td><strong style="color:#1a3558;">${t.key}</strong></td>
+              <td>${t.resumen}</td>
+              <td>${t.tipo || '—'}</td>
+              <td>${t.asignado}</td>
+              <td>${t.prioridad || '—'}</td>
+              <td><span class="badge ${badgeClass(t.estado)}">${t.estado || '—'}</span></td>
+              <td><button onclick="event.stopPropagation();verDetalle('${t.key}')" style="padding:4px 10px;font-size:11px;border:1px solid #1a3558;border-radius:5px;background:#fff;color:#1a3558;cursor:pointer;">Ver más</button></td>
+            </tr>`).join('')}
+        </tbody>
+      </table>`;
+    } catch (e) {
+      wrap.innerHTML = '<div class="loading">Error: ' + e.message + '</div>';
+    }
+  }
+
+  // ── TICKET PANEL ──────────────────────────────────────────
+  let ticketActual = null;
+
+  async function abrirTicket(key, row) {
+    // Highlight fila
+    document.querySelectorAll('.tr-clickable').forEach(r => r.classList.remove('selected'));
+    row.classList.add('selected');
+
+    const panel = document.getElementById('ticket-panel');
+    panel.classList.add('open');
+    document.getElementById('panel-key').textContent    = key;
+    document.getElementById('panel-title').textContent  = 'Cargando...';
+    document.getElementById('panel-asignado').textContent = '...';
+    document.getElementById('panel-prioridad').textContent = '...';
+    document.getElementById('panel-trans-select').innerHTML = '<option>Cargando...</option>';
+    document.getElementById('panel-comentarios').innerHTML = '';
+    document.getElementById('panel-comentario').value = '';
+    ticketActual = key;
+
+    try {
+      const [detRes, transRes] = await Promise.all([
+        fetch('/api/jira/tickets/' + key),
+        fetch('/api/jira/tickets/' + key + '/transiciones')
+      ]);
+      const det   = await detRes.json();
+      const trans = await transRes.json();
+
+      if (det.ok) {
+        document.getElementById('panel-title').textContent    = det.data.resumen;
+        document.getElementById('panel-asignado').textContent = det.data.asignado;
+        document.getElementById('panel-prioridad').textContent = det.data.prioridad || '—';
+
+        const coms = det.data.comentarios || [];
+        document.getElementById('panel-comentarios').innerHTML = coms.length
+          ? coms.slice(-3).map(c => `<div class="comment-item"><div class="comment-autor">${c.autor}</div>${c.cuerpo}</div>`).join('')
+          : '<div style="font-size:12px;color:#aaa;">Sin comentarios</div>';
+      }
+
+      if (trans.ok && trans.data.length) {
+        document.getElementById('panel-trans-select').style.display = '';
+        document.getElementById('panel-trans-select').innerHTML =
+          trans.data.map(t => `<option value="${t.id}">${t.nombre}</option>`).join('');
+        document.getElementById('panel-btn-actualizar').style.display = '';
+        document.getElementById('panel-btn-jira').style.display = 'none';
+      } else {
+        document.getElementById('panel-trans-select').style.display = 'none';
+        document.getElementById('panel-btn-actualizar').style.display = 'none';
+        document.getElementById('panel-btn-jira').style.display = '';
+        document.getElementById('panel-btn-jira').href = `https://bajaware.atlassian.net/browse/${key}`;
+      }
+    } catch (e) {
+      document.getElementById('panel-title').textContent = 'Error cargando ticket';
+      document.getElementById('panel-trans-select').style.display = 'none';
+      document.getElementById('panel-btn-actualizar').style.display = 'none';
+    }
+  }
+
+  function cerrarPanel() {
+    document.getElementById('ticket-panel').classList.remove('open');
+    document.querySelectorAll('.tr-clickable').forEach(r => r.classList.remove('selected'));
+    ticketActual = null;
+  }
+
+  async function actualizarEstado() {
+    if (!ticketActual) return;
+    const transitionId = document.getElementById('panel-trans-select').value;
+    try {
+      const res  = await fetch(`/api/jira/tickets/${ticketActual}/estado`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ transitionId })
+      });
+      const data = await res.json();
+      if (data.ok) {
+        alert('Estado actualizado ✓');
+        loadJiraTickets();
+      } else {
+        alert('Error: ' + data.message);
+      }
+    } catch (e) { alert('Error: ' + e.message); }
+  }
+
+  async function enviarComentario() {
+    if (!ticketActual) return;
+    const texto = document.getElementById('panel-comentario').value.trim();
+    if (!texto) return;
+    try {
+      const res  = await fetch(`/api/jira/tickets/${ticketActual}/comentario`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ texto })
+      });
+      const data = await res.json();
+      if (data.ok) {
+        document.getElementById('panel-comentario').value = '';
+        alert('Comentario enviado ✓');
+        abrirTicket(ticketActual, document.querySelector('.tr-clickable.selected'));
+      } else {
+        alert('Error: ' + data.message);
+      }
+    } catch (e) { alert('Error: ' + e.message); }
+  }
+
+  // ── DETALLE COMPLETO DE TICKET ───────────────────────────
+  let detalleKey = null;
+
+  async function verDetalle(key) {
+    detalleKey = key;
+    showSection('ticket-detalle');
+
+    document.getElementById('detalle-key').textContent    = key;
+    document.getElementById('detalle-titulo').textContent = 'Cargando...';
+    document.getElementById('detalle-asignado').textContent  = '...';
+    document.getElementById('detalle-prioridad').textContent = '...';
+    document.getElementById('detalle-tipo').textContent      = '...';
+    document.getElementById('detalle-descripcion').textContent = '';
+    document.getElementById('detalle-comentarios').innerHTML = '<div class="loading">Cargando...</div>';
+    document.getElementById('detalle-trans-select').innerHTML = '<option>Cargando...</option>';
+    document.getElementById('detalle-estado-badge').innerHTML = '';
+
+    try {
+      const [detRes, transRes] = await Promise.all([
+        fetch('/api/jira/tickets/' + key),
+        fetch('/api/jira/tickets/' + key + '/transiciones')
+      ]);
+      const det   = await detRes.json();
+      const trans = await transRes.json();
+
+      if (det.ok) {
+        const d = det.data;
+        document.getElementById('detalle-titulo').textContent    = d.resumen;
+        document.getElementById('detalle-asignado').textContent  = d.asignado;
+        document.getElementById('detalle-prioridad').textContent = d.prioridad || '—';
+        document.getElementById('detalle-tipo').textContent      = d.tipo || '—';
+        document.getElementById('detalle-descripcion').textContent = d.descripcion || 'Sin descripción.';
+        document.getElementById('detalle-estado-badge').innerHTML =
+          `<span class="badge ${badgeClass(d.estado)}">${d.estado}</span>`;
+
+        const coms = d.comentarios || [];
+        document.getElementById('detalle-comentarios').innerHTML = coms.length
+          ? coms.map(c => `
+              <div class="comment-box">
+                <span class="autor">${c.autor}</span>
+                <span class="fecha">${new Date(c.creado).toLocaleString('es-MX')}</span>
+                <div class="texto">${c.cuerpo}</div>
+              </div>`).join('')
+          : '<div style="color:#aaa;font-size:13px;">Sin comentarios aún.</div>';
+      }
+
+      if (trans.ok && trans.data.length) {
+        document.getElementById('detalle-trans-select').style.display = '';
+        document.getElementById('detalle-trans-select').innerHTML =
+          trans.data.map(t => `<option value="${t.id}">${t.nombre}</option>`).join('');
+        document.getElementById('detalle-btn-actualizar').style.display = '';
+        document.getElementById('detalle-btn-jira').style.display = 'none';
+      } else {
+        document.getElementById('detalle-trans-select').style.display = 'none';
+        document.getElementById('detalle-btn-actualizar').style.display = 'none';
+        document.getElementById('detalle-btn-jira').style.display = '';
+        document.getElementById('detalle-btn-jira').href = `https://bajaware.atlassian.net/browse/${key}`;
+      }
+    } catch (e) {
+      document.getElementById('detalle-titulo').textContent = 'Error cargando ticket: ' + e.message;
+      document.getElementById('detalle-trans-select').style.display = 'none';
+      document.getElementById('detalle-btn-actualizar').style.display = 'none';
+    }
+  }
+
+  async function actualizarEstadoDetalle() {
+    if (!detalleKey) return;
+    const transitionId = document.getElementById('detalle-trans-select').value;
+    try {
+      const res  = await fetch(`/api/jira/tickets/${detalleKey}/estado`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ transitionId })
+      });
+      const data = await res.json();
+      if (data.ok) {
+        alert('Estado actualizado ✓');
+        verDetalle(detalleKey);
+      } else {
+        alert('Error: ' + data.message);
+      }
+    } catch (e) { alert('Error: ' + e.message); }
+  }
+
+  async function enviarComentarioDetalle() {
+    if (!detalleKey) return;
+    const texto = document.getElementById('detalle-comentario-txt').value.trim();
+    if (!texto) return;
+    try {
+      const res  = await fetch(`/api/jira/tickets/${detalleKey}/comentario`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ texto })
+      });
+      const data = await res.json();
+      if (data.ok) {
+        document.getElementById('detalle-comentario-txt').value = '';
+        verDetalle(detalleKey);
+      } else {
+        alert('Error: ' + data.message);
+      }
+    } catch (e) { alert('Error: ' + e.message); }
+  }
+
+  // ── NUEVO TICKET ──────────────────────────────────────────
+  function abrirNuevoTicket() {
+    document.getElementById('modal-nuevo').classList.add('open');
+  }
+
+  function cerrarNuevoTicket() {
+    document.getElementById('modal-nuevo').classList.remove('open');
+    document.getElementById('nuevo-resumen').value     = '';
+    document.getElementById('nuevo-descripcion').value = '';
+  }
+
+  async function crearTicket() {
+    const project    = document.getElementById('nuevo-proyecto').value;
+    const resumen    = document.getElementById('nuevo-resumen').value.trim();
+    const descripcion = document.getElementById('nuevo-descripcion').value.trim();
+    const tipo       = document.getElementById('nuevo-tipo').value;
+    const prioridad  = document.getElementById('nuevo-prioridad').value;
+
+    if (!resumen) { alert('El resumen es requerido'); return; }
+
+    try {
+      const res  = await fetch('/api/jira/tickets', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ project, resumen, descripcion, tipo, prioridad })
+      });
+      const data = await res.json();
+      if (data.ok) {
+        cerrarNuevoTicket();
+        alert('Ticket creado: ' + data.key + ' ✓');
+        loadJiraTickets();
+      } else {
+        alert('Error: ' + data.message);
+      }
+    } catch (e) { alert('Error: ' + e.message); }
+  }
+
+  // ── NAVEGACIÓN ────────────────────────────────────────────
+  function toggleMenu(id) {
+    const sub = document.getElementById('sub-' + id);
+    const arr = document.getElementById('arr-' + id);
+    if (!sub) return;
+    const open = sub.classList.toggle('open');
+    if (arr) arr.classList.toggle('open', open);
+  }
+
+  // ── GESTIÓN DE USUARIOS ───────────────────────────────────
+  async function loadUsuarios() {
+    const wrap = document.getElementById('usuarios-table-wrap');
+    const count = document.getElementById('usuarios-count');
+    wrap.innerHTML = '<div class="loading">Cargando...</div>';
+
+    try {
+      const res  = await fetch('/api/usuarios');
+      const data = await res.json();
+
+      if (!data.ok) {
+        wrap.innerHTML = `<div class="placeholder-card"><div class="icon">🔒</div>${data.message}</div>`;
+        document.getElementById('btn-nuevo-usuario').style.display = 'none';
+        return;
+      }
+
+      count.textContent = data.data.length + ' usuario(s) registrado(s)';
+
+      wrap.innerHTML = `<table class="data-table">
+        <thead><tr><th>Username</th><th>Nombre</th><th>Rol</th><th>Estado</th><th>Creado</th><th></th></tr></thead>
+        <tbody>
+          ${data.data.map(u => `
+            <tr>
+              <td><strong>${u.username}</strong></td>
+              <td>${u.nombre}</td>
+              <td><span class="badge ${u.rol === 'admin' ? 'badge-blue' : 'badge-yellow'}">${u.rol}</span></td>
+              <td><span class="badge ${u.activo ? 'badge-green' : 'badge-red'}">${u.activo ? 'Activo' : 'Inactivo'}</span></td>
+              <td style="font-size:12px;color:#888;">${new Date(u.createdAt).toLocaleDateString('es-MX')}</td>
+              <td style="display:flex;gap:6px;">
+                <button onclick="editarUsuario(${u.id},'${u.username}','${u.nombre}','${u.rol}')"
+                  style="padding:4px 10px;font-size:11px;border:1px solid #1a3558;border-radius:5px;background:#fff;color:#1a3558;cursor:pointer;">
+                  Editar
+                </button>
+                <button onclick="toggleUsuario(${u.id})"
+                  style="padding:4px 10px;font-size:11px;border:1px solid ${u.activo ? '#c0392b' : '#27ae60'};border-radius:5px;background:#fff;color:${u.activo ? '#c0392b' : '#27ae60'};cursor:pointer;">
+                  ${u.activo ? 'Desactivar' : 'Activar'}
+                </button>
+              </td>
+            </tr>`).join('')}
+        </tbody>
+      </table>`;
+    } catch (e) {
+      wrap.innerHTML = '<div class="loading">Error: ' + e.message + '</div>';
+    }
+  }
+
+  function abrirNuevoUsuario() {
+    document.getElementById('modal-usuario-title').textContent = 'Nuevo usuario';
+    document.getElementById('usuario-edit-id').value = '';
+    document.getElementById('usuario-username').value = '';
+    document.getElementById('usuario-username').disabled = false;
+    document.getElementById('usuario-nombre').value = '';
+    document.getElementById('usuario-rol').value = 'lector';
+    document.getElementById('modal-usuario-error').style.display = 'none';
+    document.getElementById('modal-usuario').classList.add('open');
+  }
+
+  function editarUsuario(id, username, nombre, rol) {
+    document.getElementById('modal-usuario-title').textContent = 'Editar usuario';
+    document.getElementById('usuario-edit-id').value = id;
+    document.getElementById('usuario-username').value = username;
+    document.getElementById('usuario-username').disabled = true;
+    document.getElementById('usuario-nombre').value = nombre;
+    document.getElementById('usuario-rol').value = rol;
+    document.getElementById('modal-usuario-error').style.display = 'none';
+    document.getElementById('modal-usuario').classList.add('open');
+  }
+
+  function cerrarModalUsuario() {
+    document.getElementById('modal-usuario').classList.remove('open');
+  }
+
+  async function guardarUsuario() {
+    const id       = document.getElementById('usuario-edit-id').value;
+    const username = document.getElementById('usuario-username').value.trim();
+    const nombre   = document.getElementById('usuario-nombre').value.trim();
+    const rol      = document.getElementById('usuario-rol').value;
+    const errEl    = document.getElementById('modal-usuario-error');
+
+    if (!nombre || (!id && !username)) {
+      errEl.textContent = 'Todos los campos son requeridos';
+      errEl.style.display = 'block';
+      return;
+    }
+
+    try {
+      const url    = id ? `/api/usuarios/${id}` : '/api/usuarios';
+      const method = id ? 'PUT' : 'POST';
+      const res    = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, nombre, rol })
+      });
+      const data = await res.json();
+
+      if (data.ok) {
+        cerrarModalUsuario();
+        loadUsuarios();
+      } else {
+        errEl.textContent = data.message;
+        errEl.style.display = 'block';
+      }
+    } catch (e) {
+      errEl.textContent = 'Error: ' + e.message;
+      errEl.style.display = 'block';
+    }
+  }
+
+  async function toggleUsuario(id) {
+    try {
+      const res  = await fetch(`/api/usuarios/${id}/toggle`, { method: 'POST' });
+      const data = await res.json();
+      if (data.ok) loadUsuarios();
+      else alert('Error: ' + data.message);
+    } catch (e) { alert('Error: ' + e.message); }
+  }
+
+  // ── SOPORTE ───────────────────────────────────────────────
+  let sopClientesCache = [];
+
+  async function initSoporte(seccion) {
+    // Cargar clientes si no están en cache
+    if (!sopClientesCache.length) {
+      try {
+        const res  = await fetch('/api/soporte/clientes');
+        const data = await res.json();
+        if (data.ok) sopClientesCache = data.data;
+      } catch (_) {}
+    }
+    ['sop-select-cliente', 'sop-select-fixes'].forEach(id => {
+      const sel = document.getElementById(id);
+      if (sel && sel.options.length <= 1) {
+        sopClientesCache.forEach(c => {
+          const o = document.createElement('option');
+          o.value = c.CLAVE_CLIENTE;
+          o.textContent = c.NOMBRE_CLIENTE;
+          sel.appendChild(o);
+        });
+      }
+    });
+    if (seccion === 'sop-cliente') loadSoporteCliente();
+    if (seccion === 'sop-fixes')   loadSoporteFixes();
+  }
+
+  async function loadSoporteCliente() {
+    const clave   = document.getElementById('sop-select-cliente').value;
+    const content = document.getElementById('sop-cliente-content');
+    if (!clave) { content.innerHTML = ''; return; }
+
+    content.innerHTML = '<div class="loading">Cargando...</div>';
+    try {
+      const res  = await fetch('/api/soporte/cliente/' + encodeURIComponent(clave));
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.message);
+      const d = data.data;
+
+      const contratosHTML = d.contratos.map(c => `
+        <tr>
+          <td><strong style="color:#1a3558;">${c.CLAVE_CONTRATO}</strong></td>
+          <td>${c.NOMBRE_CONTRATO}</td>
+          <td>${c.CLAVE_PLATAFORMA || '—'}</td>
+          <td>${c.FECHA_MODIFICA ? new Date(c.FECHA_MODIFICA).toLocaleDateString('es-MX') : '—'}</td>
+        </tr>`).join('');
+
+      content.innerHTML = `
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:24px;">
+          <div class="stat-card">
+            <div class="stat-number">${d.contratos.length}</div>
+            <div class="stat-label">Contratos</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-number">${d.totalReportes}</div>
+            <div class="stat-label">Reportes contratados</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-number" style="color:#e74c3c;">${d.paquetesActivos}</div>
+            <div class="stat-label">Fixes pendientes</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-number" style="color:#27ae60;">${d.paquetesCerrados}</div>
+            <div class="stat-label">Fixes entregados</div>
+          </div>
+        </div>
+        <h3 style="font-size:14px;font-weight:700;color:#1a3558;margin-bottom:12px;">Contratos</h3>
+        <table class="data-table" style="margin-bottom:0;">
+          <thead><tr><th>Clave</th><th>Nombre</th><th>Plataforma</th><th>Última modificación</th></tr></thead>
+          <tbody>${contratosHTML}</tbody>
+        </table>`;
+    } catch (e) {
+      content.innerHTML = '<div class="loading">Error: ' + e.message + '</div>';
+    }
+  }
+
+  async function loadSoporteFixes() {
+    const clave   = document.getElementById('sop-select-fixes').value;
+    const estatus = document.getElementById('sop-fixes-estatus').value;
+    const content = document.getElementById('sop-fixes-content');
+    if (!clave) { content.innerHTML = '<div class="loading">Selecciona un cliente para ver sus fixes.</div>'; return; }
+
+    content.innerHTML = '<div class="loading">Cargando fixes...</div>';
+    try {
+      const res  = await fetch('/api/soporte/cliente/' + encodeURIComponent(clave) + '/fixes');
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.message);
+
+      let fixes = data.data;
+      if (estatus) fixes = fixes.filter(f => f.paquete.estatus === estatus);
+
+      if (!fixes.length) {
+        content.innerHTML = '<div class="loading">Sin fixes para este cliente.</div>';
+        return;
+      }
+
+      content.innerHTML = fixes.map(f => {
+        const pct   = f.globalTotal ? Math.round((f.globalCerrados / f.globalTotal) * 100) : 0;
+        const color = pct === 100 ? '#27ae60' : pct > 0 ? '#f39c12' : '#e74c3c';
+        return `
+          <div style="background:#fff;border-radius:8px;border:1px solid #e8edf3;padding:16px 20px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center;">
+            <div style="flex:1;">
+              <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;">
+                <a href="https://bajaware.atlassian.net/browse/${f.ticket}" target="_blank"
+                   style="font-weight:700;color:#1a3558;font-size:14px;text-decoration:none;">${f.ticket}</a>
+                <span class="badge ${badgePaq(f.paquete.estatus)}" style="font-size:10px;">${f.paquete.estatus}</span>
+                <span style="font-size:11px;color:#aaa;">${f.tipo} · ${f.grupo}</span>
+              </div>
+              <div style="font-size:13px;color:#555;margin-bottom:4px;">${f.descripcion}</div>
+              <div style="font-size:11px;color:#aaa;">
+                Reportes: ${f.reportes || '—'}
+                ${f.paquete.fechaLibera ? ' · Liberado: ' + new Date(f.paquete.fechaLibera).toLocaleDateString('es-MX') : ''}
+              </div>
+            </div>
+            <div style="min-width:140px;text-align:right;padding-left:20px;">
+              <div style="font-size:11px;color:#888;margin-bottom:4px;">Progreso global: ${f.globalCerrados}/${f.globalTotal}</div>
+              <div style="background:#e8edf3;border-radius:4px;height:6px;">
+                <div style="background:${color};width:${pct}%;height:6px;border-radius:4px;"></div>
+              </div>
+            </div>
+          </div>`;
+      }).join('');
+    } catch (e) {
+      content.innerHTML = '<div class="loading">Error: ' + e.message + '</div>';
+    }
+  }
+
+  // ── PAQUETES ──────────────────────────────────────────────
+  async function loadPaquetes() {
+    const wrap    = document.getElementById('paquetes-content');
+    const estatus = document.getElementById('paq-filtro-estatus').value;
+    const grupo   = document.getElementById('paq-filtro-grupo').value;
+    const cliente = document.getElementById('paq-filtro-cliente').value.trim();
+
+    wrap.innerHTML = '<div class="loading">Cargando paquetes...</div>';
+
+    let url = '/api/paquetes?x=1';
+    if (estatus) url += '&estatus=' + encodeURIComponent(estatus);
+    if (grupo)   url += '&grupo='   + encodeURIComponent(grupo);
+    if (cliente) url += '&cliente=' + encodeURIComponent(cliente);
+
+    try {
+      const res  = await fetch(url);
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.message);
+
+      document.getElementById('paq-count').textContent = `${data.data.length} tickets`;
+
+      if (!data.data.length) {
+        wrap.innerHTML = '<div class="loading">Sin resultados.</div>';
+        return;
+      }
+
+      wrap.innerHTML = data.data.map(t => {
+        const pct     = t.total ? Math.round((t.cerrados / t.total) * 100) : 0;
+        const color   = pct === 100 ? '#27ae60' : pct > 0 ? '#f39c12' : '#e74c3c';
+        const badgeT  = pct === 100
+          ? '<span class="badge badge-green">Completo</span>'
+          : `<span class="badge badge-red">${t.cerrados}/${t.total} cerrados</span>`;
+
+        const clientesHTML = t.clientes.map(c => `
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid #f0f2f5;">
+            <div>
+              <span style="font-size:12px;font-weight:600;color:#333;">${c.cliente}</span>
+              <span style="font-size:11px;color:#aaa;margin-left:6px;">${c.entidad}</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;">
+              ${c.fechaLibera ? `<span style="font-size:11px;color:#888;">${new Date(c.fechaLibera).toLocaleDateString('es-MX')}</span>` : ''}
+              <span class="badge ${badgePaq(c.estatus)}" style="font-size:10px;">${c.estatus}</span>
+            </div>
+          </div>`).join('');
+
+        return `
+          <div style="background:#fff;border-radius:8px;border:1px solid #e8edf3;margin-bottom:16px;overflow:hidden;">
+            <div style="padding:14px 18px;display:flex;justify-content:space-between;align-items:flex-start;">
+              <div style="flex:1;">
+                <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px;">
+                  <a href="https://bajaware.atlassian.net/browse/${t.ticket}" target="_blank"
+                     style="font-weight:700;color:#1a3558;font-size:14px;text-decoration:none;">${t.ticket}</a>
+                  <span style="font-size:11px;color:#888;background:#f0f2f5;padding:2px 8px;border-radius:10px;">${t.tipo}</span>
+                  <span style="font-size:11px;color:#888;background:#f0f2f5;padding:2px 8px;border-radius:10px;">${t.grupo}</span>
+                  ${badgeT}
+                </div>
+                <div style="font-size:13px;color:#555;">${t.descripcion}</div>
+                <div style="font-size:11px;color:#aaa;margin-top:2px;">Reportes: ${t.reportes || '—'}</div>
+              </div>
+              <div style="min-width:120px;text-align:right;">
+                <div style="font-size:11px;color:#888;margin-bottom:4px;">${t.cerrados}/${t.total} clientes</div>
+                <div style="background:#e8edf3;border-radius:4px;height:6px;width:120px;">
+                  <div style="background:${color};width:${pct}%;height:6px;border-radius:4px;transition:width 0.3s;"></div>
+                </div>
+              </div>
+            </div>
+            <details style="border-top:1px solid #f0f2f5;">
+              <summary style="padding:8px 18px;font-size:12px;color:#888;cursor:pointer;list-style:none;">
+                ▶ Ver ${t.total} clientes
+              </summary>
+              <div style="padding:0 18px 12px;">${clientesHTML}</div>
+            </details>
+          </div>`;
+      }).join('');
+
+    } catch (e) {
+      wrap.innerHTML = '<div class="loading">Error: ' + e.message + '</div>';
+    }
+  }
+
+  async function initPaquetes() {
+    // Cargar grupos para el filtro
+    try {
+      const res  = await fetch('/api/paquetes/grupos');
+      const data = await res.json();
+      if (data.ok) {
+        const sel = document.getElementById('paq-filtro-grupo');
+        data.data.forEach(g => {
+          const o = document.createElement('option');
+          o.value = g; o.textContent = g;
+          sel.appendChild(o);
+        });
+      }
+    } catch (_) {}
+    loadPaquetes();
+  }
+
+  const lazyLoaders = {
+    'inv-layouts':    loadLayouts,
+    'spr-activo':     loadSprintActivo,
+    'spr-tickets':    loadJiraTickets,
+    'usuarios':       loadUsuarios,
+    'paquetes':       initPaquetes,
+    'sop-cliente':    () => initSoporte('sop-cliente'),
+    'sop-fixes':      () => initSoporte('sop-fixes')
+  };
+  const loaded = {};
+
+  function showSection(id) {
+    document.querySelectorAll('.content-section').forEach(s => s.classList.remove('active'));
+    const sec = document.getElementById('sec-' + id);
+    if (sec) sec.classList.add('active');
+    if (lazyLoaders[id] && !loaded[id]) {
+      loaded[id] = true;
+      lazyLoaders[id]();
+    }
+  }
+</script>
+</body>
+</html>
