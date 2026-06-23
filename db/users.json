@@ -6,5 +6,45 @@
     "rol": "admin",
     "activo": true,
     "createdAt": "2026-06-12T00:00:00.000Z"
+  },
+  {
+    "id": 2,
+    "username": "lozano",
+    "nombre": "Omar Lozano",
+    "rol": "admin",
+    "activo": false,
+    "createdAt": "2026-06-23T18:53:27.872Z"
+  },
+  {
+    "id": 3,
+    "username": "olozano",
+    "nombre": "Omar Lozano",
+    "rol": "admin",
+    "activo": true,
+    "createdAt": "2026-06-23T18:53:55.671Z"
+  },
+  {
+    "id": 4,
+    "username": "rpizano",
+    "nombre": "Raul Pizano",
+    "rol": "admin",
+    "activo": true,
+    "createdAt": "2026-06-23T18:56:00.594Z"
+  },
+  {
+    "id": 5,
+    "username": "Saavedra",
+    "nombre": "Fernando Saavedra",
+    "rol": "admin",
+    "activo": false,
+    "createdAt": "2026-06-23T18:56:31.083Z"
+  },
+  {
+    "id": 6,
+    "username": "fsaavedra",
+    "nombre": "Fernando Saavedra",
+    "rol": "admin",
+    "activo": true,
+    "createdAt": "2026-06-23T18:57:04.295Z"
   }
 ]
