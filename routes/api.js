@@ -18,6 +18,22 @@ router.get('/status', async (req, res) => {
   }
 });
 
+// ── GET /api/buscar-tabla?q=layout ───────────────────────
+router.get('/buscar-tabla', async (req, res) => {
+  const q = (req.query.q || '').toUpperCase();
+  try {
+    const rows = await query(`
+      SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES
+      WHERE TABLE_TYPE = 'BASE TABLE'
+        AND UPPER(TABLE_NAME) LIKE '%${q.replace(/'/g,"''")}%'
+      ORDER BY TABLE_NAME
+    `);
+    res.json({ ok: true, data: rows.map(r => r.TABLE_NAME) });
+  } catch (err) {
+    res.status(500).json({ ok: false, message: err.message });
+  }
+});
+
 // ── GET /api/explorar ─────────────────────────────────────
 // Lista todas las tablas con sus columnas y cantidad de filas
 router.get('/explorar', async (req, res) => {
@@ -141,25 +157,22 @@ router.get('/paquetes/estatus-distintos', async (req, res) => {
 
 // ── GET /api/inventario/layouts ───────────────────────────
 router.get('/inventario/layouts', requireAuth, async (req, res) => {
+  const { layout, entidad, texto } = req.query;
+  let where = 'WHERE 1=1';
+  if (layout)  where += ` AND CLAVE_LAYOUT = '${layout.replace(/'/g,"''")}'`;
+  if (entidad) where += ` AND CLAVE_ENTIDADREGULADA = '${entidad.replace(/'/g,"''")}'`;
+  if (texto)   where += ` AND (NOMBRE_CAMPO LIKE '%${texto.replace(/'/g,"''")}%' OR CLAVE_LAYOUT LIKE '%${texto.replace(/'/g,"''")}%')`;
   try {
-    // Ajusta la query a tu schema real
     const rows = await query(`
-      SELECT TOP 100
-        clave_layout,
-        clave_layout_citi,
-        reporte_que_aplica,
-        columna_que_aplica,
-        orden,
-        nombre_campo,
-        llave,
-        tipo_dato,
-        formato,
-        obligatorio,
-        validacion
-      FROM inventario_layouts
-      ORDER BY clave_layout
+      SELECT TOP 500
+        CLAVE_PAIS, CLAVE_ENTIDADREGULADA, CLAVE_LAYOUT,
+        CLAVE_LAYOUT_CITI, ORDEN, NOMBRE_CAMPO,
+        LLAVE, TIPO_DATO, FORMATO, OBLIGATORIO, VALIDACION
+      FROM LAYOUTS
+      ${where}
+      ORDER BY CLAVE_LAYOUT, ORDEN
     `);
-    res.json({ ok: true, data: rows });
+    res.json({ ok: true, total: rows.length, data: rows });
   } catch (err) {
     res.status(500).json({ ok: false, message: err.message });
   }
@@ -334,6 +347,166 @@ router.get('/soporte/cliente/:clave/fixes', requireAuth, async (req, res) => {
     }
 
     res.json({ ok: true, data: Object.values(tickets) });
+  } catch (err) {
+    res.status(500).json({ ok: false, message: err.message });
+  }
+});
+
+// ── GET /api/inventario/reportes ─────────────────────────
+router.get('/inventario/reportes', requireAuth, async (req, res) => {
+  const { reg, entidad, grupo, periodo, texto } = req.query;
+  let where = 'WHERE 1=1';
+  if (reg)     where += ` AND CLAVE_REG = '${reg.replace(/'/g,"''")}'`;
+  if (entidad) where += ` AND CLAVE_ENTIDADREGULADA = '${entidad.replace(/'/g,"''")}'`;
+  if (grupo)   where += ` AND CLAVE_GRUPO = '${grupo.replace(/'/g,"''")}'`;
+  if (periodo) where += ` AND CLAVE_PERIODO = '${periodo.replace(/'/g,"''")}'`;
+  if (texto)   where += ` AND (CLAVE_REP LIKE '%${texto.replace(/'/g,"''")}%' OR REPORTE LIKE '%${texto.replace(/'/g,"''")}%' OR DESCRIPCION_ESP LIKE '%${texto.replace(/'/g,"''")}%')`;
+  try {
+    const rows = await query(`
+      SELECT TOP 200
+        ir.CLAVE_REP, ir.REPORTE, ir.CLAVE_ENTIDADREGULADA, ir.CLAVE_REG,
+        ir.CLAVE_GRUPO, ir.CLAVE_PERIODO, ir.CLAVE_VERSION_REPORTE,
+        ir.DESCRIPCION_ESP, ir.VIGENTE, ir.FECHA_ACTUALIZADA,
+        r.REGULADOR AS REGULADOR_NOMBRE
+      FROM INVENTARIO_REPORTES ir
+      LEFT JOIN CAT_REGULADORES r ON r.CLAVE_REG = ir.CLAVE_REG
+      ${where}
+      ORDER BY ir.CLAVE_REP
+    `);
+    res.json({ ok: true, total: rows.length, data: rows });
+  } catch (err) {
+    res.status(500).json({ ok: false, message: err.message });
+  }
+});
+
+// ── GET /api/inventario/filtros ───────────────────────────
+router.get('/inventario/filtros', requireAuth, async (req, res) => {
+  try {
+    const [regs, entidades, grupos, periodos] = await Promise.all([
+      query(`SELECT CLAVE_REG, REGULADOR FROM CAT_REGULADORES ORDER BY REGULADOR`),
+      query(`SELECT CLAVE_ENTIDADREGULADA, ENTIDAD_REGULADA FROM CAT_ENTIDAD_REGULADA ORDER BY ENTIDAD_REGULADA`),
+      query(`SELECT DISTINCT CLAVE_GRUPO FROM INVENTARIO_REPORTES WHERE CLAVE_GRUPO IS NOT NULL ORDER BY CLAVE_GRUPO`),
+      query(`SELECT CLAVE_PERIODO, PERIODO FROM CAT_PERIODICIDAD ORDER BY PERIODO`)
+    ]);
+    res.json({ ok: true, data: { regs, entidades, grupos: grupos.map(g => g.CLAVE_GRUPO), periodos } });
+  } catch (err) {
+    res.status(500).json({ ok: false, message: err.message });
+  }
+});
+
+// ── GET /api/estatus-reportes ─────────────────────────────
+router.get('/estatus-reportes', requireAuth, async (req, res) => {
+  const { plataforma, estatus, texto } = req.query;
+  let where = 'WHERE 1=1';
+  if (plataforma) where += ` AND CLAVE_PLATAFORMA = '${plataforma.replace(/'/g,"''")}'`;
+  if (estatus)    where += ` AND ESTATUS = '${estatus.replace(/'/g,"''")}'`;
+  if (texto)      where += ` AND CLAVE_REP LIKE '%${texto.replace(/'/g,"''")}%'`;
+  try {
+    const rows = await query(`
+      SELECT TOP 200
+        CLAVE_REP, CLAVE_PLATAFORMA, VERSION, ESTATUS,
+        DOCUMENTADO, DOC_FECHA_ESTIMADA, DOC_FECHA_REAL, USER_DOC,
+        PROGRAMADO,  PROG_FECHA_ESTIMADA, PROG_FECHA_REAL, USER_PROG,
+        CERTIFICADO, CERT_FECHA_ESTIMADA, CERT_FECHA_REAL, USER_CERT,
+        QA_ALPHA, QA_BETA
+      FROM ESTATUS_REPORTE
+      ${where}
+      ORDER BY CERT_FECHA_ESTIMADA ASC
+    `);
+    res.json({ ok: true, total: rows.length, data: rows });
+  } catch (err) {
+    res.status(500).json({ ok: false, message: err.message });
+  }
+});
+
+// ── GET /api/estatus-reportes/plataformas ─────────────────
+router.get('/estatus-reportes/plataformas', requireAuth, async (req, res) => {
+  try {
+    const rows = await query(`SELECT DISTINCT CLAVE_PLATAFORMA FROM ESTATUS_REPORTE ORDER BY CLAVE_PLATAFORMA`);
+    res.json({ ok: true, data: rows.map(r => r.CLAVE_PLATAFORMA) });
+  } catch (err) {
+    res.status(500).json({ ok: false, message: err.message });
+  }
+});
+
+// ── GET /api/estatus-reportes/estatus-valores ─────────────
+router.get('/estatus-reportes/estatus-valores', requireAuth, async (req, res) => {
+  try {
+    const rows = await query(`SELECT DISTINCT ESTATUS FROM ESTATUS_REPORTE WHERE ESTATUS IS NOT NULL ORDER BY ESTATUS`);
+    res.json({ ok: true, data: rows.map(r => r.ESTATUS) });
+  } catch (err) {
+    res.status(500).json({ ok: false, message: err.message });
+  }
+});
+
+// ── GET /api/sprints/historial ────────────────────────────
+router.get('/sprints/historial', requireAuth, async (req, res) => {
+  try {
+    const rows = await query(`
+      SELECT ID_SPRINT, DESC_SPRINT, FECHA_INICIO_SPRINT, FECHA_FIN_SPRINT,
+             DOC_ESTIMADOS, DOC_REAL, PROG_ESTIMADOS, PROG_REAL,
+             CERT_ESTIMADOS, CERT_REAL,
+             VAL_DOC_ESTIMADOS, VAL_DOC_REAL,
+             VAL_PROG_ESTIMADOS, VAL_PROG_REAL,
+             VAL_CERT_ESTIMADOS, VAL_CERT_REAL
+      FROM CAT_SPRINTS_ENTREGAS_HIST
+      ORDER BY FECHA_INICIO_SPRINT ASC
+    `);
+    res.json({ ok: true, data: rows });
+  } catch (err) {
+    res.status(500).json({ ok: false, message: err.message });
+  }
+});
+
+// ── GET /api/actividad ────────────────────────────────────
+router.get('/actividad', requireAuth, async (req, res) => {
+  const { limit = 50, usuario, tipo } = req.query;
+  let where = 'WHERE 1=1';
+  if (usuario) where += ` AND USER_NAME LIKE '%${usuario.replace(/'/g,"''")}%'`;
+  if (tipo)    where += ` AND TIPO_CAMBIO = '${tipo.replace(/'/g,"''")}'`;
+  try {
+    const rows = await query(`
+      SELECT TOP ${parseInt(limit)}
+        ID_CAMBIOS, USER_NAME, TIPO_CAMBIO, TIPO_IDENTIDAD, CLAVE, DESCRIPCION, FECHA
+      FROM CAMBIOS
+      ${where}
+      ORDER BY FECHA DESC
+    `);
+    res.json({ ok: true, data: rows });
+  } catch (err) {
+    res.status(500).json({ ok: false, message: err.message });
+  }
+});
+
+// ── GET /api/chi/clientes ─────────────────────────────────
+router.get('/chi/clientes', requireAuth, async (req, res) => {
+  try {
+    const rows = await query(`
+      SELECT cc.CLAVE_CLIENTE, cc.SOPORTE_SLA, cc.PMRV, cc.CCI,
+             cc.P_ACTIVOS, cc.CARTERA, cc.ACT_PRODUCTO, cc.SUMA, cc.EDS,
+             c.NOMBRE_CLIENTE
+      FROM CHI_CLIENTE cc
+      LEFT JOIN CLIENTE c ON c.CLAVE_CLIENTE = cc.CLAVE_CLIENTE
+      ORDER BY cc.SUMA DESC
+    `);
+    res.json({ ok: true, data: rows });
+  } catch (err) {
+    res.status(500).json({ ok: false, message: err.message });
+  }
+});
+
+// ── GET /api/chi/proyectos ────────────────────────────────
+router.get('/chi/proyectos', requireAuth, async (req, res) => {
+  try {
+    const rows = await query(`
+      SELECT cp.CLAVE_CONTRATO, cp.PROYECTO_COSTO, cp.CEH, cp.CEAP,
+             cp.REP_CERT, cp.VAL_CERT, cp.SUMA,
+             c.NOMBRE_CONTRATO, c.CLAVE_CLIENTE
+      FROM CHI_PROYECTO cp
+      LEFT JOIN CONTRATOS c ON c.CLAVE_CONTRATO = cp.CLAVE_CONTRATO
+      ORDER BY cp.SUMA DESC
+    `);
+    res.json({ ok: true, data: rows });
   } catch (err) {
     res.status(500).json({ ok: false, message: err.message });
   }

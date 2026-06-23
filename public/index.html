@@ -446,6 +446,7 @@
     .tr-clickable { cursor:pointer; }
     .tr-clickable.selected td { background:#e8edf3 !important; }
   </style>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
 <body>
 
@@ -507,7 +508,8 @@
       </div>
       <div class="sub-menu" id="sub-inv">
         <div class="sub-item" onclick="showSection('inv-layouts')">Layouts</div>
-        <div class="sub-item" onclick="showSection('inv-reportes')">Reportes</div>
+        <div class="sub-item" onclick="showSection('inv-reportes')">Inventario</div>
+        <div class="sub-item" onclick="showSection('inv-estatus')">Estatus Reportes</div>
         <div class="sub-item" onclick="showSection('inv-catalogos')">Catálogos</div>
       </div>
 
@@ -525,8 +527,19 @@
         <span class="nav-arrow" id="arr-chi">▼</span>
       </div>
       <div class="sub-menu" id="sub-chi">
-        <div class="sub-item" onclick="showSection('chi-main')">Consulta</div>
-        <div class="sub-item" onclick="showSection('chi-reportes')">Reportes</div>
+        <div class="sub-item" onclick="showSection('chi-clientes')">Clientes</div>
+        <div class="sub-item" onclick="showSection('chi-proyectos')">Proyectos</div>
+      </div>
+
+      <div class="nav-item" onclick="showSection('actividad')">
+        <div class="nav-item-left"><span class="nav-icon">📡</span> Actividad</div>
+      </div>
+
+      <div class="nav-item" onclick="showSection('qa-alertas')" id="nav-qa-alertas">
+        <div class="nav-item-left">
+          <span class="nav-icon">🚨</span> QA Alertas
+          <span id="qa-badge" style="display:none;margin-left:6px;background:#e74c3c;color:#fff;border-radius:10px;padding:1px 7px;font-size:11px;font-weight:700;"></span>
+        </div>
       </div>
 
       <div class="nav-item" onclick="toggleMenu('spr')">
@@ -612,13 +625,91 @@
           <div class="dash-card"><div class="label">Total tickets</div><div class="value" id="stat-total">–</div></div>
         </div>
         <div id="dashboard-sprints"><div class="loading">Cargando sprints activos...</div></div>
+        <!-- BD Stats row -->
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin:18px 0 8px;">
+          <div class="dash-card"><div class="label">Paquetes activos</div><div class="value" id="stat-paq-activos">–</div></div>
+          <div class="dash-card"><div class="label">Paquetes cerrados</div><div class="value" id="stat-paq-cerrados">–</div></div>
+          <div class="dash-card"><div class="label">Clientes en soporte</div><div class="value" id="stat-sop-clientes">–</div></div>
+          <div class="dash-card"><div class="label">Cambios hoy</div><div class="value" id="stat-cambios-hoy">–</div></div>
+        </div>
+        <!-- Actividad reciente mini -->
+        <div style="background:#fff;border-radius:8px;border:1px solid #e8edf3;padding:16px 20px;margin-bottom:16px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+            <span style="font-size:13px;font-weight:600;color:#1a3558;">📡 Actividad reciente en BD</span>
+            <a onclick="showSection('actividad')" style="font-size:12px;color:#1a3558;cursor:pointer;text-decoration:underline;">Ver todo →</a>
+          </div>
+          <div id="dashboard-actividad"><div class="loading">Cargando...</div></div>
+        </div>
         <div class="epics-section" id="dashboard-epics"><div class="loading">Cargando epics...</div></div>
       </div>
 
       <!-- Inventario — Layouts -->
       <div class="content-section" id="sec-inv-layouts">
         <h2 class="section-title">Inventario — Layouts</h2>
-        <div class="status-bar">
+
+        <!-- Toolbar principal -->
+        <div class="toolbar" style="flex-wrap:wrap;gap:8px;margin-bottom:10px;align-items:center;">
+          <select id="lay-entidad" onchange="loadLayouts()" style="min-width:180px;">
+            <option value="">Todas las entidades</option>
+          </select>
+          <select id="lay-layout" onchange="loadLayouts()" style="min-width:180px;">
+            <option value="">Todos los layouts</option>
+          </select>
+          <input type="text" id="lay-texto" placeholder="Buscar campo o layout..." oninput="loadLayoutsDebounced()" style="padding:7px 12px;border:1px solid #ddd;border-radius:6px;font-size:13px;min-width:200px;" />
+          <button onclick="loadLayouts()" style="padding:7px 16px;background:#1a3558;color:#fff;border:none;border-radius:6px;font-size:13px;cursor:pointer;">Buscar</button>
+          <!-- Separador -->
+          <div style="flex:1"></div>
+          <!-- Carga Excel -->
+          <input type="file" id="lay-excel-input" accept=".xlsx,.xls" style="display:none" onchange="uploadLayoutExcel(this)" />
+          <button onclick="document.getElementById('lay-excel-input').click()"
+                  style="padding:7px 14px;background:#27ae60;color:#fff;border:none;border-radius:6px;font-size:13px;cursor:pointer;display:flex;align-items:center;gap:6px;">
+            📥 Cargar Excel
+          </button>
+          <button onclick="toggleVersiones()"
+                  style="padding:7px 14px;background:#e8f4fd;color:#1a3558;border:1px solid #b0cfe8;border-radius:6px;font-size:13px;cursor:pointer;">
+            🕑 Versiones
+          </button>
+          <button onclick="exportarLayoutsExcel()"
+                  style="padding:7px 14px;background:#f0faf5;color:#27ae60;border:1px solid #a9dfbf;border-radius:6px;font-size:13px;cursor:pointer;">
+            📤 Exportar Excel
+          </button>
+        </div>
+
+        <!-- Panel de versiones (colapsable) -->
+        <div id="lay-versiones-panel" style="display:none;margin-bottom:14px;border:1px solid #d4e6f1;border-radius:8px;overflow:hidden;">
+          <div style="background:#e8f4fd;padding:10px 16px;font-weight:600;color:#1a3558;font-size:13px;display:flex;justify-content:space-between;align-items:center;">
+            Historial de versiones
+            <button onclick="toggleVersiones()" style="background:none;border:none;cursor:pointer;font-size:16px;color:#888;">✕</button>
+          </div>
+          <div id="lay-versiones-content" style="padding:12px 16px;">
+            <div class="loading">Cargando versiones...</div>
+          </div>
+        </div>
+
+        <!-- Modal resultado upload -->
+        <div id="lay-upload-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:9999;display:none;align-items:center;justify-content:center;">
+          <div style="background:#fff;border-radius:10px;padding:28px 32px;max-width:480px;width:90%;box-shadow:0 10px 40px rgba(0,0,0,.25);">
+            <h3 id="lay-modal-title" style="margin:0 0 16px;color:#1a3558;font-size:16px;">Resultado de la carga</h3>
+            <div id="lay-modal-body"></div>
+            <button onclick="document.getElementById('lay-upload-modal').style.display='none';loadLayouts()"
+                    style="margin-top:18px;padding:8px 20px;background:#1a3558;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:14px;">
+              Cerrar
+            </button>
+          </div>
+        </div>
+
+        <!-- Modal comparación de versiones -->
+        <div id="lay-comp-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:10000;align-items:flex-start;justify-content:center;padding-top:40px;overflow:auto;">
+          <div style="background:#fff;border-radius:10px;width:92%;max-width:900px;box-shadow:0 10px 40px rgba(0,0,0,.3);margin-bottom:40px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:18px 24px;border-bottom:1px solid #eee;">
+              <h3 id="lay-comp-title" style="margin:0;color:#1a3558;font-size:15px;">Comparación de versiones</h3>
+              <button onclick="document.getElementById('lay-comp-modal').style.display='none'" style="background:none;border:none;font-size:20px;cursor:pointer;color:#888;">✕</button>
+            </div>
+            <div id="lay-comp-body" style="padding:20px 24px;"></div>
+          </div>
+        </div>
+
+        <div class="status-bar" style="margin-bottom:8px;">
           <span class="dot dot-warn" id="layouts-dot"></span>
           <span id="layouts-status">Cargando datos...</span>
         </div>
@@ -825,13 +916,63 @@
       <div class="content-section" id="sec-permisos"><h2 class="section-title">Seguridad — Permisos</h2><div class="placeholder-card"><div class="icon">🔑</div>Próximamente</div></div>
       <div class="content-section" id="sec-version"><h2 class="section-title">About — Versión</h2><div class="placeholder-card"><div class="icon">📦</div>Reportware 5.0 · v1.0.7 · BD v1.0.1</div></div>
       <div class="content-section" id="sec-licencia"><h2 class="section-title">About — Licencia</h2><div class="placeholder-card"><div class="icon">📄</div>Próximamente</div></div>
-      <div class="content-section" id="sec-inv-reportes"><h2 class="section-title">Inventario — Reportes</h2><div class="placeholder-card"><div class="icon">📊</div>Próximamente</div></div>
+      <!-- Inventario de Reportes -->
+      <div class="content-section" id="sec-inv-reportes">
+        <h2 class="section-title">Inventario — Reportes</h2>
+        <div class="toolbar" style="flex-wrap:wrap;gap:8px;margin-bottom:14px;">
+          <select id="invr-reg" onchange="loadInvReportes()" style="min-width:160px;">
+            <option value="">Todos los reguladores</option>
+          </select>
+          <select id="invr-entidad" onchange="loadInvReportes()" style="min-width:200px;">
+            <option value="">Todas las entidades</option>
+          </select>
+          <select id="invr-grupo" onchange="loadInvReportes()" style="min-width:160px;">
+            <option value="">Todos los grupos</option>
+          </select>
+          <select id="invr-periodo" onchange="loadInvReportes()" style="min-width:140px;">
+            <option value="">Todos los periodos</option>
+          </select>
+          <input type="text" id="invr-texto" placeholder="Buscar reporte..." oninput="loadInvReportesDebounced()" style="padding:7px 12px;border:1px solid #ddd;border-radius:6px;font-size:13px;min-width:200px;" />
+          <button onclick="loadInvReportes()" style="padding:7px 16px;background:#1a3558;color:#fff;border:none;border-radius:6px;font-size:13px;cursor:pointer;">Buscar</button>
+        </div>
+        <div id="invr-count" style="font-size:12px;color:#888;margin-bottom:8px;"></div>
+        <div class="data-table-wrap" id="invr-content"><div class="loading">Cargando...</div></div>
+      </div>
       <div class="content-section" id="sec-inv-catalogos"><h2 class="section-title">Inventario — Catálogos</h2><div class="placeholder-card"><div class="icon">📚</div>Próximamente</div></div>
+
+      <!-- Estatus de Reportes -->
+      <div class="content-section" id="sec-inv-estatus">
+        <h2 class="section-title">Estatus de Reportes</h2>
+        <div class="toolbar" style="flex-wrap:wrap;gap:8px;margin-bottom:14px;">
+          <select id="est-plat" onchange="loadEstatus()" style="min-width:180px;">
+            <option value="">Todas las plataformas</option>
+          </select>
+          <select id="est-est" onchange="loadEstatus()">
+            <option value="">Todos los estados</option>
+          </select>
+          <input type="text" id="est-texto" placeholder="Buscar..." oninput="loadEstatusDebounced()" style="padding:7px 12px;border:1px solid #ddd;border-radius:6px;font-size:13px;min-width:200px;" />
+          <button onclick="loadEstatus()" style="padding:7px 16px;background:#1a3558;color:#fff;border:none;border-radius:6px;font-size:13px;cursor:pointer;">Buscar</button>
+        </div>
+        <div id="est-count" style="font-size:12px;color:#888;margin-bottom:8px;"></div>
+        <div class="data-table-wrap" id="est-content"><div class="loading">Cargando...</div></div>
+      </div>
       <div class="content-section" id="sec-cont-lista"><h2 class="section-title">Contratos — Lista</h2><div class="placeholder-card"><div class="icon">📝</div>Próximamente</div></div>
       <div class="content-section" id="sec-cont-nuevo"><h2 class="section-title">Contratos — Nuevo</h2><div class="placeholder-card"><div class="icon">➕</div>Próximamente</div></div>
-      <div class="content-section" id="sec-chi-main"><h2 class="section-title">CHI — Consulta</h2><div class="placeholder-card"><div class="icon">〰️</div>Próximamente</div></div>
-      <div class="content-section" id="sec-chi-reportes"><h2 class="section-title">CHI — Reportes</h2><div class="placeholder-card"><div class="icon">📈</div>Próximamente</div></div>
-      <div class="content-section" id="sec-spr-historial"><h2 class="section-title">Sprints — Historial</h2><div class="placeholder-card"><div class="icon">📅</div>Próximamente</div></div>
+      <!-- CHI — Clientes -->
+      <div class="content-section" id="sec-chi-clientes">
+        <h2 class="section-title">CHI — Clientes</h2>
+        <div id="chi-clientes-content"><div class="loading">Cargando...</div></div>
+      </div>
+      <!-- CHI — Proyectos -->
+      <div class="content-section" id="sec-chi-proyectos">
+        <h2 class="section-title">CHI — Proyectos</h2>
+        <div id="chi-proyectos-content"><div class="loading">Cargando...</div></div>
+      </div>
+      <!-- Sprints — Historial -->
+      <div class="content-section" id="sec-spr-historial">
+        <h2 class="section-title">Sprints — Historial</h2>
+        <div id="spr-hist-content"><div class="loading">Cargando historial...</div></div>
+      </div>
       <div class="content-section" id="sec-doc-lista"><h2 class="section-title">Documentación</h2><div class="placeholder-card"><div class="icon">📁</div>Próximamente</div></div>
       <div class="content-section" id="sec-doc-subir"><h2 class="section-title">Documentación — Subir</h2><div class="placeholder-card"><div class="icon">⬆️</div>Próximamente</div></div>
       <div class="content-section" id="sec-prog-tareas"><h2 class="section-title">Programación — Tareas</h2><div class="placeholder-card"><div class="icon">💻</div>Próximamente</div></div>
@@ -871,6 +1012,54 @@
       </div>
       <div class="content-section" id="sec-con-base"><h2 class="section-title">Conocimiento — Base</h2><div class="placeholder-card"><div class="icon">🎓</div>Próximamente</div></div>
       <div class="content-section" id="sec-con-articulos"><h2 class="section-title">Conocimiento — Artículos</h2><div class="placeholder-card"><div class="icon">📖</div>Próximamente</div></div>
+
+      <!-- QA Alertas -->
+      <div class="content-section" id="sec-qa-alertas">
+        <h2 class="section-title">🚨 QA Alertas — Tickets en "Instalados en QA"</h2>
+        <p style="font-size:13px;color:#666;margin:0 0 14px;">
+          Tickets de los proyectos <strong>QD</strong> y <strong>CDL</strong> que llegaron a <em>Instalados en QA</em> y requieren subir un Excel de layout actualizado.
+        </p>
+        <div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap;">
+          <button onclick="loadQaAlertas()"
+            style="padding:7px 16px;background:#1a3558;color:#fff;border:none;border-radius:6px;font-size:13px;cursor:pointer;">
+            ↻ Actualizar
+          </button>
+        </div>
+        <div id="qa-alertas-content"><div class="loading">Cargando alertas...</div></div>
+
+        <!-- Modal: subir Excel desde alerta -->
+        <div id="qa-upload-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:10001;align-items:center;justify-content:center;">
+          <div style="background:#fff;border-radius:10px;padding:28px 32px;max-width:520px;width:90%;box-shadow:0 10px 40px rgba(0,0,0,.3);">
+            <h3 id="qa-modal-title" style="margin:0 0 6px;color:#1a3558;font-size:15px;">Subir Excel para ticket</h3>
+            <p id="qa-modal-summary" style="font-size:12px;color:#888;margin:0 0 16px;"></p>
+            <div id="qa-modal-body"></div>
+            <button onclick="document.getElementById('qa-upload-modal').style.display='none'"
+              style="margin-top:14px;padding:7px 18px;background:#aaa;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:13px;">
+              Cerrar
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Actividad -->
+      <div class="content-section" id="sec-actividad">
+        <h2 class="section-title">Actividad reciente en BD</h2>
+        <div class="toolbar" style="flex-wrap:wrap;gap:8px;margin-bottom:14px;">
+          <select id="act-usuario" onchange="loadActividad()" style="min-width:180px;">
+            <option value="">Todos los usuarios</option>
+          </select>
+          <select id="act-tipo" onchange="loadActividad()" style="min-width:160px;">
+            <option value="">Todos los tipos</option>
+          </select>
+          <select id="act-limit" onchange="loadActividad()">
+            <option value="50">Últimos 50</option>
+            <option value="100">Últimos 100</option>
+            <option value="200">Últimos 200</option>
+          </select>
+          <button onclick="loadActividad()" style="padding:7px 16px;background:#1a3558;color:#fff;border:none;border-radius:6px;font-size:13px;cursor:pointer;">↻ Actualizar</button>
+        </div>
+        <div id="act-content"><div class="loading">Cargando actividad...</div></div>
+      </div>
 
     </div>
   </div>
@@ -923,6 +1112,25 @@
     document.getElementById('header-avatar').textContent = user.nombre.substring(0, 2).toUpperCase();
     loadDashboardStats();
     loadProyectos();
+    loadDashboardActividad();
+    // Verificar conexión BD en status bar
+    fetch('/api/status').then(r => r.json()).then(d => {
+      const dot = document.getElementById('db-dot');
+      const lbl = document.getElementById('db-status');
+      if (d.ok && d.db === 'connected') {
+        dot.className = 'dot dot-ok';
+        lbl.textContent = 'BD conectada · ' + d.database;
+      } else {
+        dot.className = 'dot dot-err';
+        lbl.textContent = 'BD desconectada (¿VPN activo?)';
+      }
+    }).catch(() => {
+      document.getElementById('db-dot').className = 'dot dot-err';
+      document.getElementById('db-status').textContent = 'BD sin conexión';
+    });
+    // Pollear badge de alertas QA cada 5 min
+    pollearBadgeQA();
+    setInterval(pollearBadgeQA, 5 * 60 * 1000);
   }
 
   // ── LOGOUT ────────────────────────────────────────────────
@@ -1052,28 +1260,620 @@
   }
 
   // ── INVENTARIO LAYOUTS ────────────────────────────────────
+  let _layTimer = null;
+  function loadLayoutsDebounced() {
+    clearTimeout(_layTimer);
+    _layTimer = setTimeout(loadLayouts, 350);
+  }
+
+  let _layInited = false;
   async function loadLayouts() {
     const wrap = document.getElementById('layouts-table-wrap');
     const dot  = document.getElementById('layouts-dot');
     const lbl  = document.getElementById('layouts-status');
     wrap.innerHTML = '<div class="loading">Cargando...</div>';
+
+    const entidad = (document.getElementById('lay-entidad') || {}).value || '';
+    const layout  = (document.getElementById('lay-layout')  || {}).value || '';
+    const texto   = (document.getElementById('lay-texto')   || {}).value?.trim() || '';
+
+    let url = '/api/inventario/layouts?x=1';
+    if (entidad) url += '&entidad=' + encodeURIComponent(entidad);
+    if (layout)  url += '&layout='  + encodeURIComponent(layout);
+    if (texto)   url += '&texto='   + encodeURIComponent(texto);
+
     try {
-      const res  = await fetch('/api/inventario/layouts');
+      const res  = await fetch(url);
       const data = await res.json();
       if (!data.ok) throw new Error(data.message);
+
+      // Primera vez: poblar dropdowns con valores únicos
+      if (!_layInited && data.data.length) {
+        _layInited = true;
+        const entidades = [...new Set(data.data.map(r => r.CLAVE_ENTIDADREGULADA).filter(Boolean))].sort();
+        const layouts   = [...new Set(data.data.map(r => r.CLAVE_LAYOUT).filter(Boolean))].sort();
+        const selE = document.getElementById('lay-entidad');
+        const selL = document.getElementById('lay-layout');
+        entidades.forEach(v => { const o = document.createElement('option'); o.value = v; o.textContent = v; selE.appendChild(o); });
+        layouts.forEach(v =>   { const o = document.createElement('option'); o.value = v; o.textContent = v; selL.appendChild(o); });
+      }
+
       dot.className = 'dot dot-ok';
       lbl.textContent = data.data.length + ' registros · ' + new Date().toLocaleTimeString();
-      if (!data.data.length) { wrap.innerHTML = '<div class="loading">Sin registros</div>'; return; }
-      const cols = Object.keys(data.data[0]);
+      if (!data.data.length) { wrap.innerHTML = '<div class="loading">Sin registros para esos filtros</div>'; return; }
+
       wrap.innerHTML = `<table class="data-table">
-        <thead><tr>${cols.map(c => `<th>${c}</th>`).join('')}</tr></thead>
-        <tbody>${data.data.map(row => `<tr>${cols.map(c => `<td>${row[c] ?? ''}</td>`).join('')}</tr>`).join('')}</tbody>
+        <thead><tr>
+          <th>Entidad</th><th>Layout</th><th>Layout CITI</th>
+          <th>#</th><th>Campo</th><th>Llave</th>
+          <th>Tipo</th><th>Formato</th><th>Obligatorio</th><th>Validación</th>
+        </tr></thead>
+        <tbody>${data.data.map(r => `<tr>
+          <td style="font-size:11px;color:#888;">${r.CLAVE_ENTIDADREGULADA ?? ''}</td>
+          <td><strong style="color:#1a3558;">${r.CLAVE_LAYOUT ?? ''}</strong></td>
+          <td style="font-size:11px;color:#888;">${r.CLAVE_LAYOUT_CITI ?? ''}</td>
+          <td style="text-align:center;color:#888;font-size:11px;">${r.ORDEN ?? ''}</td>
+          <td>${r.NOMBRE_CAMPO ?? ''}</td>
+          <td style="text-align:center;">${r.LLAVE === 'SI' || r.LLAVE === '1' ? '🔑' : (r.LLAVE ?? '')}</td>
+          <td><span style="font-size:11px;background:#f0f2f5;padding:1px 6px;border-radius:4px;">${r.TIPO_DATO ?? ''}</span></td>
+          <td style="font-size:11px;color:#888;">${r.FORMATO ?? ''}</td>
+          <td style="text-align:center;">${r.OBLIGATORIO === 'SI' || r.OBLIGATORIO === '1' ? '✓' : (r.OBLIGATORIO ?? '')}</td>
+          <td style="font-size:11px;color:#888;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${r.VALIDACION ?? ''}">${r.VALIDACION ?? ''}</td>
+        </tr>`).join('')}</tbody>
       </table>`;
     } catch (e) {
       dot.className = 'dot dot-err';
       lbl.textContent = 'Error: ' + e.message;
       wrap.innerHTML = '<div class="loading">No se pudieron cargar los datos.</div>';
     }
+  }
+
+  // ── UPLOAD EXCEL → LAYOUTS ───────────────────────────────
+  // PASO 1: subir Excel → mostrar pantalla de mapeo
+  async function uploadLayoutExcel(input) {
+    const file = input.files[0];
+    if (!file) return;
+    input.value = '';
+
+    const modal = document.getElementById('lay-upload-modal');
+    const title = document.getElementById('lay-modal-title');
+    const body  = document.getElementById('lay-modal-body');
+
+    title.textContent = 'Analizando ' + file.name + '…';
+    body.innerHTML    = '<div class="loading">Leyendo el Excel...</div>';
+    modal.style.display = 'flex';
+
+    const fd = new FormData();
+    fd.append('archivo', file);
+
+    try {
+      const res  = await fetch('/api/layouts/preview', { method: 'POST', body: fd });
+      const data = await res.json();
+
+      if (!data.ok) {
+        title.textContent = '⚠️ Error al leer el Excel';
+        const filas = (data.preview || []).map(f =>
+          `<tr><td style="color:#888;padding:3px 8px;font-weight:600;white-space:nowrap;">Fila ${f.fila}</td>` +
+          `<td style="padding:3px 8px;font-family:monospace;font-size:11px;">${f.cols.join(' | ')}</td></tr>`
+        ).join('');
+        body.innerHTML = `
+          <p style="color:#c0392b;margin:0 0 10px;">${data.message}</p>
+          ${filas ? `<p style="font-size:12px;font-weight:600;margin:0 0 4px;">Contenido detectado:</p>
+            <table style="border-collapse:collapse;width:100%;margin-bottom:10px;border:1px solid #eee;">${filas}</table>` : ''}
+          ${data.tip ? `<p style="font-size:12px;color:#555;margin:0;">${data.tip}</p>` : ''}`;
+        return;
+      }
+
+      // Paso 2: mostrar mapeo
+      title.textContent = `📋 Mapeo de layouts — ${data.archivo}`;
+      const bdOpts = data.layouts_bd.map(b => `<option value="${b}">${b}</option>`).join('');
+
+      const filasMapa = data.layouts_excel.map(exLayout => {
+        const sug = data.sugerencias[exLayout];
+        const opts = `<option value="">(ignorar este layout)</option>` +
+          data.layouts_bd.map(b =>
+            `<option value="${b}" ${b === sug ? 'selected' : ''}>${b}</option>`
+          ).join('');
+        const color = sug ? '#27ae60' : '#e67e22';
+        return `<tr>
+          <td style="padding:8px 10px;font-family:monospace;font-size:13px;font-weight:600;color:${color};">${exLayout}</td>
+          <td style="padding:8px 10px;color:#888;font-size:18px;">→</td>
+          <td style="padding:8px 6px;">
+            <select data-excel="${exLayout}" style="width:100%;padding:6px 8px;border:1px solid #ccc;border-radius:6px;font-size:13px;">
+              ${opts}
+            </select>
+          </td>
+        </tr>`;
+      }).join('');
+
+      body.innerHTML = `
+        <p style="font-size:13px;color:#555;margin:0 0 14px;">
+          El Excel tiene <strong>${data.total_filas}</strong> filas.
+          Elige a qué layout de la BD corresponde cada uno:
+        </p>
+        <table style="width:100%;border-collapse:collapse;margin-bottom:16px;">
+          <thead><tr>
+            <th style="text-align:left;padding:6px 10px;font-size:12px;color:#888;border-bottom:1px solid #eee;">En el Excel</th>
+            <th></th>
+            <th style="text-align:left;padding:6px 10px;font-size:12px;color:#888;border-bottom:1px solid #eee;">Layout en la BD</th>
+          </tr></thead>
+          <tbody id="lay-mapeo-rows">${filasMapa}</tbody>
+        </table>
+        <button onclick="confirmarUpload()"
+          style="width:100%;padding:10px;background:#1a3558;color:#fff;border:none;border-radius:7px;font-size:14px;cursor:pointer;font-weight:600;">
+          ✅ Confirmar y cargar
+        </button>`;
+
+    } catch (e) {
+      title.textContent = '❌ Error de comunicación';
+      body.innerHTML    = `<p style="color:#c0392b;">${e.message}</p>`;
+    }
+  }
+
+  // PASO 2: confirmar mapeo → ejecutar upsert
+  async function confirmarUpload() {
+    const modal = document.getElementById('lay-upload-modal');
+    const title = document.getElementById('lay-modal-title');
+    const body  = document.getElementById('lay-modal-body');
+
+    // Leer selects del mapeo
+    const selects = document.querySelectorAll('#lay-mapeo-rows select');
+    const mapeo   = {};
+    selects.forEach(s => {
+      if (s.value) mapeo[s.dataset.excel] = s.value;
+    });
+
+    title.textContent = 'Procesando…';
+    body.innerHTML    = '<div class="loading">Aplicando cambios en la BD...</div>';
+
+    try {
+      const res  = await fetch('/api/layouts/upload', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mapeo })
+      });
+      const data = await res.json();
+
+      if (!data.ok) {
+        title.textContent = '⚠️ Error al procesar';
+        body.innerHTML = `<p style="color:#c0392b;">${data.message}</p>`;
+        return;
+      }
+
+      title.textContent = '✅ Versión ' + data.version + ' guardada localmente';
+      body.innerHTML = `
+        <div style="background:#f0faf5;border-radius:8px;padding:14px;text-align:center;margin-bottom:14px;">
+          <div style="font-size:36px;font-weight:700;color:#27ae60;">${data.filas_procesadas}</div>
+          <div style="font-size:13px;color:#555;">campos procesados del Excel</div>
+        </div>
+        <p style="font-size:13px;margin:0 0 6px;"><strong>Layouts:</strong> ${data.layouts_usados.join(', ')}</p>
+        <p style="font-size:13px;margin:0 0 10px;"><strong>Archivo:</strong> ${data.archivo}</p>
+        <div style="background:#fff8e1;border:1px solid #ffe082;border-radius:7px;padding:10px 12px;font-size:12px;color:#795548;">
+          📋 Los datos están guardados en <code>data/layout-versiones.json</code> (versión ${data.version}).
+          Cuando haya acceso admin a la BD, se aplican directo desde ahí.
+        </div>`;
+
+      if (document.getElementById('lay-versiones-panel').style.display !== 'none') loadVersiones();
+      loadLayouts();
+
+    } catch (e) {
+      title.textContent = '❌ Error de comunicación';
+      body.innerHTML    = `<p style="color:#c0392b;">${e.message}</p>`;
+    }
+  }
+
+  // ── EXPORTAR LAYOUTS A EXCEL ──────────────────────────────
+  function exportarLayoutsExcel() {
+    const tabla = document.querySelector('#layouts-table-wrap table');
+    if (!tabla) { alert('No hay datos para exportar. Carga los layouts primero.'); return; }
+
+    // Leer encabezados
+    const headers = [...tabla.querySelectorAll('thead th')].map(th => th.textContent.trim());
+
+    // Leer filas (texto limpio, sin iconos complicados)
+    const filas = [...tabla.querySelectorAll('tbody tr')].map(tr =>
+      [...tr.querySelectorAll('td')].map(td => td.textContent.trim())
+    );
+
+    const ws = XLSX.utils.aoa_to_sheet([headers, ...filas]);
+
+    // Ancho de columnas automático
+    ws['!cols'] = headers.map((h, i) => {
+      const maxLen = Math.max(h.length, ...filas.map(r => (r[i] || '').length));
+      return { wch: Math.min(maxLen + 2, 40) };
+    });
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Layouts');
+
+    const entidad = document.getElementById('lay-entidad')?.value || 'todos';
+    const layout  = document.getElementById('lay-layout')?.value  || 'todos';
+    const fecha   = new Date().toISOString().slice(0,10);
+    XLSX.writeFile(wb, `layouts_${layout}_${entidad}_${fecha}.xlsx`);
+  }
+
+  function toggleVersiones() {
+    const panel = document.getElementById('lay-versiones-panel');
+    if (panel.style.display === 'none') {
+      panel.style.display = 'block';
+      loadVersiones();
+    } else {
+      panel.style.display = 'none';
+    }
+  }
+
+  async function loadVersiones() {
+    const cont = document.getElementById('lay-versiones-content');
+    cont.innerHTML = '<div class="loading">Cargando versiones...</div>';
+    const layout = (document.getElementById('lay-layout') || {}).value || '';
+    try {
+      const url  = '/api/layouts/versiones' + (layout ? '?layout=' + encodeURIComponent(layout) : '');
+      const res  = await fetch(url);
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.message);
+      if (!data.data.length) {
+        cont.innerHTML = '<p style="color:#888;font-size:13px;">Sin versiones registradas aún.</p>';
+        return;
+      }
+      const fmt = d => d ? new Date(d).toLocaleString('es-MX', { dateStyle: 'short', timeStyle: 'short' }) : '—';
+      // Normalizar: JSON local usa minúsculas, SQL Server usaría MAYÚSCULAS
+      const n = v => ({
+        version:    v.version    ?? v.VERSION,
+        layout:     v.clave_layout ?? v.CLAVE_LAYOUT ?? '(varios)',
+        layouts:    v.layouts,
+        archivo:    v.archivo    ?? v.ARCHIVO_NOMBRE,
+        procesadas: v.filas_procesadas  ?? v.FILAS_PROCESADAS,
+        nuevas:     v.filas_nuevas      ?? v.FILAS_NUEVAS,
+        actualizadas: v.filas_actualizadas ?? v.FILAS_ACTUALIZADAS,
+        usuario:    v.usuario    ?? v.USUARIO,
+        fecha:      v.fecha      ?? v.FECHA_CARGA,
+        mapeo:      v.mapeo,
+      });
+      // Guardar datos en variable global para comparar
+      window._versionesData = data.data;
+
+      const btnComparar = `<button onclick="abrirComparador()"
+        id="btn-comparar-vers"
+        style="display:none;margin-bottom:10px;padding:7px 14px;background:#1a3558;color:#fff;border:none;border-radius:6px;font-size:13px;cursor:pointer;">
+        🔍 Comparar seleccionadas
+      </button>`;
+
+      const filas = data.data.map((raw, idx) => {
+        const v = n(raw);
+        const tieneData = !!(raw.datos && raw.datos.length);
+        return `<tr>
+          <td style="text-align:center;">
+            ${tieneData ? `<input type="checkbox" data-idx="${idx}" onchange="checkComparar()" style="cursor:pointer;">` : '<span title="Sin datos de campos">—</span>'}
+          </td>
+          <td style="text-align:center;font-weight:700;color:#1a3558;">v${v.version}</td>
+          <td><code style="font-size:11px;">${(v.layouts || [v.layout]).join(', ')}</code></td>
+          <td style="color:#555;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${v.archivo}">${v.archivo}</td>
+          <td style="text-align:center;">${v.procesadas ?? '—'}</td>
+          <td style="text-align:center;color:#27ae60;">${v.nuevas ?? '—'}</td>
+          <td style="font-size:11px;color:#888;">${v.mapeo ? Object.entries(v.mapeo).map(([k,val])=>`${k}→${val}`).join(', ') : '—'}</td>
+          <td>${v.usuario}</td>
+          <td style="white-space:nowrap;">${fmt(v.fecha)}</td>
+        </tr>`;
+      }).join('');
+
+      cont.innerHTML = btnComparar + `<table class="data-table" style="font-size:12px;">
+        <thead><tr>
+          <th></th><th>Ver.</th><th>Layout(s)</th><th>Archivo</th>
+          <th>Campos</th><th>Nuevos</th><th>Mapeo</th><th>Usuario</th><th>Fecha</th>
+        </tr></thead>
+        <tbody>${filas}</tbody>
+      </table>`;
+    } catch (e) {
+      cont.innerHTML = `<p style="color:#c0392b;font-size:13px;">Error: ${e.message}</p>`;
+    }
+  }
+
+  // ── COMPARADOR DE VERSIONES ───────────────────────────────
+  function checkComparar() {
+    const checks = [...document.querySelectorAll('#lay-versiones-content input[type=checkbox]')];
+    const sel    = checks.filter(c => c.checked);
+    const btn    = document.getElementById('btn-comparar-vers');
+    if (!btn) return;
+    // Máximo 2 seleccionadas
+    if (sel.length > 2) {
+      // Desmarcar la última que se marcó
+      const last = checks.reverse().find(c => c.checked);
+      if (last) last.checked = false;
+      return;
+    }
+    btn.style.display = sel.length === 2 ? 'inline-block' : 'none';
+  }
+
+  function abrirComparador() {
+    const checks  = [...document.querySelectorAll('#lay-versiones-content input[type=checkbox]:checked')];
+    if (checks.length !== 2) return;
+    const idxA = parseInt(checks[0].dataset.idx);
+    const idxB = parseInt(checks[1].dataset.idx);
+    const verA = window._versionesData[idxA];
+    const verB = window._versionesData[idxB];
+
+    // El más antiguo = base, el más reciente = nuevo
+    const [base, nueva] = verA.id < verB.id ? [verA, verB] : [verB, verA];
+    const datosBase  = base.datos  || [];
+    const datosNueva = nueva.datos || [];
+
+    // Indexar por NOMBRE_CAMPO + CLAVE_LAYOUT
+    const key   = d => `${d.CLAVE_LAYOUT}||${d.NOMBRE_CAMPO}`;
+    const mapBase  = Object.fromEntries(datosBase.map(d  => [key(d), d]));
+    const mapNueva = Object.fromEntries(datosNueva.map(d => [key(d), d]));
+
+    const campos       = ['TIPO_DATO','FORMATO','OBLIGATORIO','LLAVE','VALIDACION','CATALOGO','DESCRIPCION_ESP','ORDEN'];
+    const nuevos       = [];  // en nueva pero no en base
+    const eliminados   = [];  // en base pero no en nueva
+    const modificados  = [];  // en ambas pero con diferencias
+
+    for (const k of Object.keys(mapNueva)) {
+      if (!mapBase[k]) { nuevos.push(mapNueva[k]); continue; }
+      const diffs = campos.filter(c => (mapNueva[k][c]||'') !== (mapBase[k][c]||''));
+      if (diffs.length) modificados.push({ campo: mapNueva[k], diffs, base: mapBase[k] });
+    }
+    for (const k of Object.keys(mapBase)) {
+      if (!mapNueva[k]) eliminados.push(mapBase[k]);
+    }
+
+    const modal = document.getElementById('lay-comp-modal');
+    const title = document.getElementById('lay-comp-title');
+    const body  = document.getElementById('lay-comp-body');
+
+    title.textContent = `Comparación: v${base.version} → v${nueva.version}  (${(base.layouts||[base.clave_layout]).join(', ')})`;
+
+    const seccion = (emoji, color, titulo, filas, cols) => {
+      if (!filas.length) return `<p style="color:#aaa;font-size:12px;margin:0 0 6px;">Sin ${titulo.toLowerCase()}.</p>`;
+      return `<table class="data-table" style="font-size:12px;margin-bottom:4px;">
+        <thead><tr>${cols.map(c=>`<th>${c}</th>`).join('')}</tr></thead>
+        <tbody>${filas}</tbody>
+      </table>`;
+    };
+
+    const filasNuevos = nuevos.map(d =>
+      `<tr><td><code>${d.CLAVE_LAYOUT}</code></td><td>${d.NOMBRE_CAMPO}</td><td>${d.TIPO_DATO||''}</td><td style="text-align:center;">${d.OBLIGATORIO||''}</td></tr>`
+    ).join('');
+
+    const filasEliminados = eliminados.map(d =>
+      `<tr><td><code>${d.CLAVE_LAYOUT}</code></td><td>${d.NOMBRE_CAMPO}</td><td>${d.TIPO_DATO||''}</td><td style="text-align:center;">${d.OBLIGATORIO||''}</td></tr>`
+    ).join('');
+
+    const filasModificados = modificados.map(({ campo, diffs, base: b }) =>
+      diffs.map(col => `<tr>
+        <td><code>${campo.CLAVE_LAYOUT}</code></td>
+        <td>${campo.NOMBRE_CAMPO}</td>
+        <td style="font-weight:600;">${col}</td>
+        <td style="color:#c0392b;text-decoration:line-through;">${b[col]||'(vacío)'}</td>
+        <td style="color:#27ae60;">${campo[col]||'(vacío)'}</td>
+      </tr>`).join('')
+    ).join('');
+
+    body.innerHTML = `
+      <div style="display:flex;gap:16px;margin-bottom:16px;font-size:12px;">
+        <span style="background:#f0faf5;border-radius:20px;padding:4px 12px;color:#27ae60;font-weight:600;">🟢 ${nuevos.length} nuevos</span>
+        <span style="background:#fdf0f0;border-radius:20px;padding:4px 12px;color:#c0392b;font-weight:600;">🔴 ${eliminados.length} eliminados</span>
+        <span style="background:#fef9ec;border-radius:20px;padding:4px 12px;color:#f39c12;font-weight:600;">🟡 ${modificados.reduce((a,m)=>a+m.diffs.length,0)} cambios en ${modificados.length} campos</span>
+      </div>
+
+      ${nuevos.length ? `<h4 style="color:#27ae60;margin:0 0 6px;font-size:13px;">🟢 Campos nuevos</h4>
+        ${seccion('','','nuevos',filasNuevos,['Layout','Campo','Tipo','Obligatorio'])}` : ''}
+
+      ${eliminados.length ? `<h4 style="color:#c0392b;margin:12px 0 6px;font-size:13px;">🔴 Campos eliminados</h4>
+        ${seccion('','','eliminados',filasEliminados,['Layout','Campo','Tipo','Obligatorio'])}` : ''}
+
+      ${modificados.length ? `<h4 style="color:#f39c12;margin:12px 0 6px;font-size:13px;">🟡 Campos modificados</h4>
+        <table class="data-table" style="font-size:12px;">
+          <thead><tr><th>Layout</th><th>Campo</th><th>Propiedad</th><th>Antes (v${base.version})</th><th>Ahora (v${nueva.version})</th></tr></thead>
+          <tbody>${filasModificados}</tbody>
+        </table>` : ''}
+
+      ${!nuevos.length && !eliminados.length && !modificados.length ?
+        '<p style="color:#888;text-align:center;padding:20px;">Las dos versiones son idénticas.</p>' : ''}`;
+
+    modal.style.display = 'flex';
+  }
+
+  // ── QA ALERTAS ───────────────────────────────────────────
+  async function loadQaAlertas() {
+    const wrap = document.getElementById('qa-alertas-content');
+    wrap.innerHTML = '<div class="loading">Cargando alertas...</div>';
+    try {
+      const res  = await fetch('/api/layouts/alertas-qa');
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.message);
+
+      // Actualizar badge en sidebar
+      const badge = document.getElementById('qa-badge');
+      if (data.data.length) {
+        badge.textContent = data.data.length;
+        badge.style.display = 'inline';
+      } else {
+        badge.style.display = 'none';
+      }
+
+      if (!data.data.length) {
+        wrap.innerHTML = `<div class="placeholder-card">
+          <div class="icon">✅</div>
+          Sin alertas pendientes. El monitor revisará Jira cada 5 minutos.
+        </div>`;
+        return;
+      }
+
+      const fmt = d => d ? new Date(d).toLocaleString('es-MX', { dateStyle: 'short', timeStyle: 'short' }) : '—';
+      const nivelColor = n => n === 'MAJOR' ? '#e74c3c' : n === 'MINOR' ? '#f39c12' : '#27ae60';
+
+      wrap.innerHTML = data.data.map(a => `
+        <div style="border:1px solid #e8e8e8;border-radius:10px;padding:16px 20px;margin-bottom:12px;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.06);">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;">
+            <div>
+              <span style="font-weight:700;color:#1a3558;font-size:15px;">${a.JIRA_TICKET}</span>
+              <span style="margin-left:8px;font-size:11px;background:#e8f4fd;color:#1a3558;padding:2px 8px;border-radius:10px;">${a.JIRA_PROJECT}</span>
+              <span style="margin-left:6px;font-size:11px;background:#fdf0f0;color:#c0392b;padding:2px 8px;border-radius:10px;">${a.JIRA_STATUS}</span>
+            </div>
+            <div style="display:flex;gap:8px;">
+              <button onclick="ignorarAlerta(${a.ID_ALERTA})"
+                style="padding:5px 12px;background:#f5f5f5;border:1px solid #ddd;border-radius:6px;font-size:12px;cursor:pointer;color:#888;">
+                Ignorar
+              </button>
+              <button onclick="abrirQaUpload(${a.ID_ALERTA}, '${a.JIRA_TICKET}', ${JSON.stringify(a.JIRA_SUMMARY||'').replace(/"/g,'&quot;')}, '${a.CLAVE_LAYOUT_DETECTADO||''}')"
+                style="padding:5px 14px;background:#27ae60;color:#fff;border:none;border-radius:6px;font-size:12px;cursor:pointer;font-weight:600;">
+                📥 Subir Excel
+              </button>
+            </div>
+          </div>
+          <p style="margin:0 0 8px;font-size:13px;color:#333;">${a.JIRA_SUMMARY || '(sin descripción)'}</p>
+          <div style="display:flex;gap:16px;font-size:12px;color:#888;flex-wrap:wrap;">
+            <span>🧑 ${a.JIRA_ASSIGNEE || 'Sin asignar'}</span>
+            <span>🕐 Detectado: ${fmt(a.FECHA_DETECTADO)}</span>
+            ${a.CLAVE_LAYOUT_DETECTADO
+              ? `<span style="color:#27ae60;font-weight:600;">🎯 Layout detectado: <code>${a.CLAVE_LAYOUT_DETECTADO}</code></span>`
+              : `<span style="color:#e67e22;">⚠️ Layout no detectado automáticamente</span>`}
+          </div>
+        </div>
+      `).join('');
+    } catch (e) {
+      wrap.innerHTML = `<div class="placeholder-card"><div class="icon">⚠️</div>Error: ${e.message}</div>`;
+    }
+  }
+
+  async function ignorarAlerta(id) {
+    if (!confirm('¿Ignorar esta alerta?')) return;
+    await fetch(`/api/layouts/alertas-qa/${id}/ignorar`, { method: 'PUT' });
+    loadQaAlertas();
+  }
+
+  // Estado global para el upload vinculado a un ticket QA
+  let _qaUploadCtx = null;
+
+  function abrirQaUpload(idAlerta, ticket, summary, layoutDetectado) {
+    _qaUploadCtx = { idAlerta, ticket, layoutDetectado };
+    const modal = document.getElementById('qa-upload-modal');
+    document.getElementById('qa-modal-title').textContent  = `📥 Subir Excel para ${ticket}`;
+    document.getElementById('qa-modal-summary').textContent = summary || '';
+
+    document.getElementById('qa-modal-body').innerHTML = `
+      <div style="margin-bottom:12px;">
+        ${layoutDetectado
+          ? `<p style="font-size:13px;margin:0 0 8px;">Layout detectado automáticamente: <code style="background:#f0faf5;padding:2px 6px;border-radius:4px;">${layoutDetectado}</code></p>`
+          : `<p style="font-size:13px;color:#e67e22;margin:0 0 8px;">⚠️ No se detectó el layout automáticamente. Será requerido en el paso de mapeo.</p>`}
+        <p style="font-size:12px;color:#888;margin:0;">El Excel se vinculará al ticket <strong>${ticket}</strong> y la versión semántica se calculará automáticamente.</p>
+      </div>
+      <input type="file" id="qa-excel-input" accept=".xlsx,.xls"
+        style="display:block;width:100%;padding:10px;border:2px dashed #ccc;border-radius:8px;cursor:pointer;font-size:13px;"
+        onchange="uploadQaExcel(this)" />
+      <div id="qa-upload-result" style="margin-top:12px;"></div>`;
+
+    modal.style.display = 'flex';
+  }
+
+  async function uploadQaExcel(input) {
+    const file = input.files[0];
+    if (!file || !_qaUploadCtx) return;
+    input.value = '';
+
+    const result = document.getElementById('qa-upload-result');
+    result.innerHTML = '<div class="loading">Analizando Excel...</div>';
+
+    const fd = new FormData();
+    fd.append('archivo', file);
+
+    try {
+      // Paso 1: preview
+      const res1  = await fetch('/api/layouts/preview', { method: 'POST', body: fd });
+      const data1 = await res1.json();
+      if (!data1.ok) {
+        result.innerHTML = `<p style="color:#c0392b;">${data1.message}</p>`;
+        return;
+      }
+
+      // Construir mapeo con el layout detectado preseleccionado
+      const bdOpts = data1.layouts_bd.map(b => `<option value="${b}">${b}</option>`).join('');
+      const filasMapa = data1.layouts_excel.map(ex => {
+        const sug = _qaUploadCtx.layoutDetectado || data1.sugerencias[ex];
+        const opts = `<option value="">(ignorar)</option>` +
+          data1.layouts_bd.map(b => `<option value="${b}"${b===sug?' selected':''}>${b}</option>`).join('');
+        return `<tr>
+          <td style="padding:6px 8px;font-family:monospace;font-size:12px;color:#c0392b;">${ex}</td>
+          <td style="padding:6px 4px;color:#888;">→</td>
+          <td style="padding:6px 8px;">
+            <select data-excel="${ex}" style="width:100%;padding:5px;border:1px solid #ccc;border-radius:5px;font-size:12px;">${opts}</select>
+          </td>
+        </tr>`;
+      }).join('');
+
+      result.innerHTML = `
+        <p style="font-size:12px;margin:0 0 8px;"><strong>${data1.total_filas}</strong> filas encontradas. Confirma el mapeo:</p>
+        <table style="width:100%;border-collapse:collapse;margin-bottom:10px;">${filasMapa}</table>
+        <button onclick="confirmarQaUpload('${_qaUploadCtx.ticket}')"
+          style="width:100%;padding:9px;background:#1a3558;color:#fff;border:none;border-radius:7px;font-size:13px;cursor:pointer;font-weight:600;">
+          ✅ Confirmar y aplicar versión semántica
+        </button>`;
+    } catch (e) {
+      result.innerHTML = `<p style="color:#c0392b;">${e.message}</p>`;
+    }
+  }
+
+  async function confirmarQaUpload(jiraTicket) {
+    const selects = document.querySelectorAll('#qa-upload-result select');
+    const mapeo   = {};
+    selects.forEach(s => { if (s.value) mapeo[s.dataset.excel] = s.value; });
+
+    const result = document.getElementById('qa-upload-result');
+    result.innerHTML = '<div class="loading">Aplicando cambios y calculando versión...</div>';
+
+    try {
+      const res  = await fetch('/api/layouts/upload', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mapeo, jiraTicket })
+      });
+      const data = await res.json();
+
+      if (!data.ok) { result.innerHTML = `<p style="color:#c0392b;">${data.message}</p>`; return; }
+
+      const r = data.resultados[0] || {};
+      const nivelColor = { MAJOR: '#e74c3c', MINOR: '#f39c12', PATCH: '#27ae60' }[r.nivel_cambio] || '#888';
+
+      result.innerHTML = `
+        <div style="background:#f0faf5;border-radius:8px;padding:14px;text-align:center;margin-bottom:10px;">
+          <div style="font-size:28px;font-weight:800;color:#1a3558;">${r.version}</div>
+          <div style="font-size:12px;margin-top:4px;">
+            <span style="background:${nivelColor};color:#fff;border-radius:10px;padding:2px 10px;font-weight:600;">${r.nivel_cambio}</span>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;font-size:12px;text-align:center;margin-bottom:10px;">
+          <div style="background:#f0faf5;border-radius:6px;padding:8px;">
+            <div style="font-weight:700;color:#27ae60;">${r.campos_nuevos}</div>nuevos
+          </div>
+          <div style="background:#fef9ec;border-radius:6px;padding:8px;">
+            <div style="font-weight:700;color:#f39c12;">${r.campos_actualizados}</div>actualizados
+          </div>
+          <div style="background:#fdf0f0;border-radius:6px;padding:8px;">
+            <div style="font-weight:700;color:#c0392b;">${r.campos_eliminados}</div>eliminados
+          </div>
+        </div>
+        <p style="font-size:12px;color:#888;margin:0;">Ticket <strong>${jiraTicket}</strong> marcado como procesado. Alerta cerrada.</p>`;
+
+      // Refrescar alertas
+      setTimeout(() => { loadQaAlertas(); }, 1500);
+    } catch (e) {
+      result.innerHTML = `<p style="color:#c0392b;">${e.message}</p>`;
+    }
+  }
+
+  // Pollear badge de alertas cada 5 min
+  async function pollearBadgeQA() {
+    try {
+      const res  = await fetch('/api/layouts/alertas-qa');
+      const data = await res.json();
+      const badge = document.getElementById('qa-badge');
+      if (data.ok && data.data.length) {
+        badge.textContent  = data.data.length;
+        badge.style.display = 'inline';
+      } else {
+        badge.style.display = 'none';
+      }
+    } catch (_) {}
   }
 
   // ── SPRINT ACTIVO (desde Jira) ────────────────────────────
@@ -1820,14 +2620,468 @@
     loadPaquetes();
   }
 
+  // ── INVENTARIO REPORTES ───────────────────────────────────
+  let _invrTimer = null;
+  function loadInvReportesDebounced() {
+    clearTimeout(_invrTimer);
+    _invrTimer = setTimeout(loadInvReportes, 400);
+  }
+
+  async function initInvReportes() {
+    // Cargar filtros disponibles
+    try {
+      const res  = await fetch('/api/inventario/filtros');
+      const data = await res.json();
+      if (data.ok) {
+        const f = data.data;
+
+        const addOpts = (selId, items, valKey, labelKey) => {
+          const s = document.getElementById(selId);
+          if (!s) return;
+          items.forEach(item => {
+            if (!item) return;
+            const v = typeof item === 'object' ? item[valKey] : item;
+            const l = typeof item === 'object' ? (item[labelKey] || item[valKey]) : item;
+            if (!v) return;
+            const o = document.createElement('option');
+            o.value = v; o.textContent = l;
+            s.appendChild(o);
+          });
+        };
+
+        // backend devuelve: { regs, entidades, grupos (strings), periodos }
+        addOpts('invr-reg',     f.regs      || [], 'CLAVE_REG',           'REGULADOR');
+        addOpts('invr-entidad', f.entidades  || [], 'CLAVE_ENTIDADREGULADA', 'ENTIDAD_REGULADA');
+        addOpts('invr-grupo',   f.grupos     || [], null, null);   // ya son strings
+        addOpts('invr-periodo', f.periodos   || [], 'CLAVE_PERIODO',       'PERIODO');
+      }
+    } catch (_) {}
+    loadInvReportes();
+  }
+
+  async function loadInvReportes() {
+    const wrap = document.getElementById('invr-content');
+    const count = document.getElementById('invr-count');
+    wrap.innerHTML = '<div class="loading">Buscando...</div>';
+
+    const reg     = document.getElementById('invr-reg').value;
+    const entidad = document.getElementById('invr-entidad').value;
+    const grupo   = document.getElementById('invr-grupo').value;
+    const periodo = document.getElementById('invr-periodo').value;
+    const texto   = document.getElementById('invr-texto').value.trim();
+
+    let url = '/api/inventario/reportes?x=1';
+    if (reg)     url += '&reg='     + encodeURIComponent(reg);
+    if (entidad) url += '&entidad=' + encodeURIComponent(entidad);
+    if (grupo)   url += '&grupo='   + encodeURIComponent(grupo);
+    if (periodo) url += '&periodo=' + encodeURIComponent(periodo);
+    if (texto)   url += '&texto='   + encodeURIComponent(texto);
+
+    try {
+      const res  = await fetch(url);
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.message);
+
+      count.textContent = data.data.length + ' reportes encontrados';
+
+      if (!data.data.length) {
+        wrap.innerHTML = '<div class="loading">Sin resultados para esos filtros.</div>';
+        return;
+      }
+
+      const cols = Object.keys(data.data[0]);
+      wrap.innerHTML = `<table class="data-table">
+        <thead><tr>${cols.map(c => `<th>${c}</th>`).join('')}</tr></thead>
+        <tbody>${data.data.map(row => `<tr>${cols.map(c => `<td>${row[c] ?? ''}</td>`).join('')}</tr>`).join('')}</tbody>
+      </table>`;
+    } catch (e) {
+      count.textContent = '';
+      wrap.innerHTML = '<div class="loading">Error: ' + e.message + '</div>';
+    }
+  }
+
+  // ── ESTATUS DE REPORTES ───────────────────────────────────
+  let _estTimer = null;
+  function loadEstatusDebounced() {
+    clearTimeout(_estTimer);
+    _estTimer = setTimeout(loadEstatus, 400);
+  }
+
+  async function initEstatus() {
+    try {
+      const [platRes, estRes] = await Promise.all([
+        fetch('/api/estatus-reportes/plataformas'),
+        fetch('/api/estatus-reportes/estatus-valores')
+      ]);
+      const platData = await platRes.json();
+      const estData  = await estRes.json();
+      if (platData.ok) {
+        const sel = document.getElementById('est-plat');
+        platData.data.forEach(p => {
+          if (!p) return;
+          const o = document.createElement('option'); o.value = p; o.textContent = p; sel.appendChild(o);
+        });
+      }
+      if (estData.ok) {
+        const sel = document.getElementById('est-est');
+        estData.data.forEach(v => {
+          if (!v) return;
+          const o = document.createElement('option'); o.value = v; o.textContent = v; sel.appendChild(o);
+        });
+      }
+    } catch (_) {}
+    loadEstatus();
+  }
+
+  async function loadEstatus() {
+    const wrap  = document.getElementById('est-content');
+    const count = document.getElementById('est-count');
+    wrap.innerHTML = '<div class="loading">Cargando estatus de reportes...</div>';
+
+    const plat  = document.getElementById('est-plat').value;
+    const est   = document.getElementById('est-est').value;
+    const texto = document.getElementById('est-texto').value.trim();
+
+    let url = '/api/estatus-reportes?x=1';
+    if (plat)  url += '&plataforma=' + encodeURIComponent(plat);
+    if (est)   url += '&estatus='    + encodeURIComponent(est);
+    if (texto) url += '&texto='      + encodeURIComponent(texto);
+
+    try {
+      const res  = await fetch(url);
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.message);
+
+      count.textContent = data.data.length + ' registros';
+      if (!data.data.length) { wrap.innerHTML = '<div class="loading">Sin resultados.</div>'; return; }
+
+      const fdate = v => v ? new Date(v).toLocaleDateString('es-MX') : '—';
+      const cell3 = (flag, est, real, user) => {
+        const done = flag === 'SI' || flag === '1';
+        const onTime = done && real && est && new Date(real) <= new Date(est);
+        const late   = done && real && est && new Date(real) >  new Date(est);
+        const color  = !done ? '#e74c3c' : onTime ? '#27ae60' : late ? '#f39c12' : '#27ae60';
+        const icon   = done ? '✓' : '✗';
+        return `<td style="text-align:center;">
+          <span style="color:${color};font-weight:700;">${icon}</span>
+          <div style="font-size:10px;color:#aaa;line-height:1.3;">
+            ${done && real ? fdate(real) : (est ? '<span style="color:#bbb;">est: ' + fdate(est) + '</span>' : '')}
+          </div>
+          ${user ? `<div style="font-size:10px;color:#bbb;">${user}</div>` : ''}
+        </td>`;
+      };
+
+      const estatusBadge = v => {
+        if (!v) return '<span style="color:#ccc;">—</span>';
+        const cls = v.includes('CERR') || v.includes('COMP') ? 'badge-green'
+                  : v.includes('ACTIV') || v.includes('PROG') ? 'badge-yellow'
+                  : 'badge-red';
+        return `<span class="badge ${cls}" style="font-size:10px;">${v}</span>`;
+      };
+
+      wrap.innerHTML = `<table class="data-table">
+        <thead><tr>
+          <th>Reporte</th><th>Plataforma</th><th>Versión</th><th>Estatus</th>
+          <th style="text-align:center;">DOC</th>
+          <th style="text-align:center;">PROG</th>
+          <th style="text-align:center;">CERT</th>
+          <th>QA Alpha</th><th>QA Beta</th>
+        </tr></thead>
+        <tbody>${data.data.map(r => `<tr>
+          <td><strong style="color:#1a3558;">${r.CLAVE_REP ?? '—'}</strong></td>
+          <td><span style="font-size:11px;background:#f0f2f5;padding:1px 6px;border-radius:4px;">${r.CLAVE_PLATAFORMA ?? '—'}</span></td>
+          <td style="font-size:11px;color:#888;">${r.VERSION ?? '—'}</td>
+          <td>${estatusBadge(r.ESTATUS)}</td>
+          ${cell3(r.DOCUMENTADO,  r.DOC_FECHA_ESTIMADA,  r.DOC_FECHA_REAL,  r.USER_DOC)}
+          ${cell3(r.PROGRAMADO,   r.PROG_FECHA_ESTIMADA, r.PROG_FECHA_REAL,  r.USER_PROG)}
+          ${cell3(r.CERTIFICADO,  r.CERT_FECHA_ESTIMADA, r.CERT_FECHA_REAL,  r.USER_CERT)}
+          <td style="font-size:11px;color:#888;">${r.QA_ALPHA ?? '—'}</td>
+          <td style="font-size:11px;color:#888;">${r.QA_BETA ?? '—'}</td>
+        </tr>`).join('')}</tbody>
+      </table>`;
+    } catch (e) {
+      count.textContent = '';
+      wrap.innerHTML = '<div class="loading">Error: ' + e.message + '</div>';
+    }
+  }
+
+  // ── HISTORIAL DE SPRINTS ──────────────────────────────────
+  async function loadSprHistorial() {
+    const wrap = document.getElementById('spr-hist-content');
+    wrap.innerHTML = '<div class="loading">Cargando historial de sprints...</div>';
+    try {
+      const res  = await fetch('/api/sprints/historial');
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.message);
+
+      if (!data.data.length) {
+        wrap.innerHTML = '<div class="loading">Sin historial de sprints.</div>';
+        return;
+      }
+
+      // Velocidad = DOC_REAL + PROG_REAL + CERT_REAL por sprint
+      const vel = s => (s.DOC_REAL || 0) + (s.PROG_REAL || 0) + (s.CERT_REAL || 0);
+      const maxVel = Math.max(...data.data.map(vel), 1);
+
+      const cell = (est, real) => {
+        const ok = real != null && est != null && real >= est;
+        return `<td style="text-align:center;font-size:12px;">
+          <span style="color:#aaa;">${est ?? '—'}</span> /
+          <span style="color:${real == null ? '#aaa' : ok ? '#27ae60' : '#e74c3c'};font-weight:600;">${real ?? '—'}</span>
+        </td>`;
+      };
+
+      wrap.innerHTML = `
+        <div style="font-size:12px;color:#888;margin-bottom:12px;">${data.data.length} sprints en historial</div>
+        <table class="data-table">
+          <thead><tr>
+            <th>Sprint</th><th>Inicio</th><th>Fin</th>
+            <th style="text-align:center;">DOC est/real</th>
+            <th style="text-align:center;">PROG est/real</th>
+            <th style="text-align:center;">CERT est/real</th>
+            <th>Velocidad</th>
+          </tr></thead>
+          <tbody>
+            ${data.data.map(s => {
+              const v   = vel(s);
+              const pct = Math.round((v / maxVel) * 100);
+              const inicio = s.FECHA_INICIO_SPRINT ? new Date(s.FECHA_INICIO_SPRINT).toLocaleDateString('es-MX') : '—';
+              const fin    = s.FECHA_FIN_SPRINT    ? new Date(s.FECHA_FIN_SPRINT).toLocaleDateString('es-MX')    : '—';
+              return `<tr>
+                <td><strong style="color:#1a3558;">${s.DESC_SPRINT}</strong></td>
+                <td style="font-size:12px;color:#888;">${inicio}</td>
+                <td style="font-size:12px;color:#888;">${fin}</td>
+                ${cell(s.DOC_ESTIMADOS,  s.DOC_REAL)}
+                ${cell(s.PROG_ESTIMADOS, s.PROG_REAL)}
+                ${cell(s.CERT_ESTIMADOS, s.CERT_REAL)}
+                <td style="min-width:120px;">
+                  <div style="display:flex;align-items:center;gap:6px;">
+                    <div style="background:#e8edf3;border-radius:4px;height:8px;flex:1;">
+                      <div style="background:#1a3558;width:${pct}%;height:8px;border-radius:4px;"></div>
+                    </div>
+                    <span style="font-size:11px;color:#888;">${v}</span>
+                  </div>
+                </td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>`;
+    } catch (e) {
+      wrap.innerHTML = '<div class="loading">Error: ' + e.message + '</div>';
+    }
+  }
+
+  // ── ACTIVIDAD ─────────────────────────────────────────────
+  async function loadActividad() {
+    const wrap  = document.getElementById('act-content');
+    if (!wrap) return;
+    wrap.innerHTML = '<div class="loading">Cargando actividad...</div>';
+
+    const usuario = (document.getElementById('act-usuario') || {}).value || '';
+    const tipo    = (document.getElementById('act-tipo')    || {}).value || '';
+    const limit   = (document.getElementById('act-limit')   || {}).value || 50;
+
+    let url = `/api/actividad?limit=${limit}`;
+    if (usuario) url += '&usuario=' + encodeURIComponent(usuario);
+    if (tipo)    url += '&tipo='    + encodeURIComponent(tipo);
+
+    try {
+      const res  = await fetch(url);
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.message);
+
+      if (!data.data.length) {
+        wrap.innerHTML = '<div class="loading">Sin actividad registrada.</div>';
+        return;
+      }
+
+      wrap.innerHTML = data.data.map(c => {
+        const fecha = c.FECHA ? new Date(c.FECHA).toLocaleString('es-MX') : '—';
+        return `
+          <div style="display:flex;align-items:flex-start;gap:12px;padding:10px 0;border-bottom:1px solid #f0f2f5;">
+            <div style="width:36px;height:36px;border-radius:50%;background:#e8edf3;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#1a3558;flex-shrink:0;">
+              ${(c.USER_NAME || '?').substring(0,2).toUpperCase()}
+            </div>
+            <div style="flex:1;min-width:0;">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px;">
+                <span style="font-size:13px;font-weight:600;color:#333;">${c.USER_NAME || '—'}</span>
+                <span style="font-size:11px;color:#aaa;white-space:nowrap;">${fecha}</span>
+              </div>
+              <div style="font-size:12px;color:#555;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${c.DESCRIPCION || c.CLAVE || ''}">
+                ${c.TIPO_CAMBIO ? `<span style="background:#e8edf3;color:#1a3558;padding:1px 6px;border-radius:4px;font-size:10px;margin-right:6px;">${c.TIPO_CAMBIO}</span>` : ''}
+                ${c.CLAVE ? `<span style="font-size:10px;color:#aaa;margin-right:4px;">[${c.CLAVE}]</span>` : ''}
+                ${c.DESCRIPCION || '—'}
+              </div>
+            </div>
+          </div>`;
+      }).join('');
+    } catch (e) {
+      wrap.innerHTML = '<div class="loading">Error: ' + e.message + '</div>';
+    }
+  }
+
+  async function initActividad() {
+    // Poblar filtros únicos desde primera carga
+    try {
+      const res  = await fetch('/api/actividad?limit=200');
+      const data = await res.json();
+      if (data.ok && data.data.length) {
+        const usuarios = [...new Set(data.data.map(c => c.USER_NAME).filter(Boolean))].sort();
+        const tipos    = [...new Set(data.data.map(c => c.TIPO_CAMBIO).filter(Boolean))].sort();
+        const selU = document.getElementById('act-usuario');
+        const selT = document.getElementById('act-tipo');
+        usuarios.forEach(u => { const o = document.createElement('option'); o.value = u; o.textContent = u; selU.appendChild(o); });
+        tipos.forEach(t => { const o = document.createElement('option'); o.value = t; o.textContent = t; selT.appendChild(o); });
+      }
+    } catch (_) {}
+    loadActividad();
+  }
+
+  // ── ACTIVIDAD en DASHBOARD ────────────────────────────────
+  async function loadDashboardActividad() {
+    const el = document.getElementById('dashboard-actividad');
+    if (!el) return;
+    try {
+      const [actRes, paqRes, sopRes] = await Promise.all([
+        fetch('/api/actividad?limit=5'),
+        fetch('/api/paquetes?x=1'),
+        fetch('/api/soporte/clientes')
+      ]);
+      const act = await actRes.json();
+      const paq = await paqRes.json();
+      const sop = await sopRes.json();
+
+      // BD stats
+      if (paq.ok) {
+        const activos  = paq.data.filter(t => t.cerrados < t.total).reduce((a,t) => a + (t.total - t.cerrados), 0);
+        const cerrados = paq.data.filter(t => t.cerrados === t.total && t.total > 0).length;
+        document.getElementById('stat-paq-activos').textContent  = activos;
+        document.getElementById('stat-paq-cerrados').textContent = cerrados;
+      }
+      if (sop.ok) {
+        document.getElementById('stat-sop-clientes').textContent = sop.data.length;
+      }
+      if (act.ok) {
+        // Cambios de hoy
+        const hoy   = new Date().toLocaleDateString('es-MX');
+        const today = act.data.filter(c => c.FECHA && new Date(c.FECHA).toLocaleDateString('es-MX') === hoy).length;
+        document.getElementById('stat-cambios-hoy').textContent = today;
+
+        if (!act.data.length) {
+          el.innerHTML = '<div style="font-size:12px;color:#aaa;">Sin actividad reciente.</div>';
+          return;
+        }
+        el.innerHTML = act.data.slice(0, 5).map(c => {
+          const fecha = c.FECHA ? new Date(c.FECHA).toLocaleString('es-MX') : '—';
+          return `<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid #f5f7fa;font-size:12px;">
+            <span style="color:#333;">${c.USER_NAME || '—'} ${c.TIPO_CAMBIO ? `· ${c.TIPO_CAMBIO}` : ''}</span>
+            <span style="color:#aaa;">${fecha}</span>
+          </div>`;
+        }).join('');
+      }
+    } catch (e) {
+      document.getElementById('dashboard-actividad').innerHTML = '<div style="font-size:12px;color:#aaa;">No disponible (¿VPN conectado?)</div>';
+    }
+  }
+
+  // ── CHI ───────────────────────────────────────────────────
+  async function loadChiClientes() {
+    const wrap = document.getElementById('chi-clientes-content');
+    wrap.innerHTML = '<div class="loading">Cargando CHI clientes...</div>';
+    try {
+      const res  = await fetch('/api/chi/clientes');
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.message);
+      if (!data.data.length) { wrap.innerHTML = '<div class="loading">Sin datos CHI.</div>'; return; }
+
+      const max = data.data[0].SUMA || 1;
+      wrap.innerHTML = `
+        <div style="font-size:12px;color:#888;margin-bottom:12px;">${data.data.length} clientes con CHI</div>
+        <table class="data-table">
+          <thead><tr><th>Cliente</th><th>Nombre</th><th>Score CHI</th><th>Nivel</th></tr></thead>
+          <tbody>
+            ${data.data.map(c => {
+              const pct   = Math.round(((c.SUMA || 0) / max) * 100);
+              const color = pct > 66 ? '#27ae60' : pct > 33 ? '#f39c12' : '#e74c3c';
+              const nivel = pct > 66 ? 'Alto' : pct > 33 ? 'Medio' : 'Bajo';
+              const badgeCls = pct > 66 ? 'badge-green' : pct > 33 ? 'badge-yellow' : 'badge-red';
+              return `<tr>
+                <td><strong style="color:#1a3558;">${c.CLAVE_CLIENTE || '—'}</strong></td>
+                <td>${c.NOMBRE_CLIENTE || c.NOMBRE || '—'}</td>
+                <td>
+                  <div style="display:flex;align-items:center;gap:8px;">
+                    <div style="background:#e8edf3;border-radius:4px;height:8px;width:80px;">
+                      <div style="background:${color};width:${pct}%;height:8px;border-radius:4px;"></div>
+                    </div>
+                    <span style="font-size:12px;">${c.SUMA ?? '—'}</span>
+                  </div>
+                </td>
+                <td><span class="badge ${badgeCls}">${nivel}</span></td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>`;
+    } catch (e) {
+      wrap.innerHTML = '<div class="loading">Error: ' + e.message + '</div>';
+    }
+  }
+
+  async function loadChiProyectos() {
+    const wrap = document.getElementById('chi-proyectos-content');
+    wrap.innerHTML = '<div class="loading">Cargando CHI proyectos...</div>';
+    try {
+      const res  = await fetch('/api/chi/proyectos');
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.message);
+      if (!data.data.length) { wrap.innerHTML = '<div class="loading">Sin datos CHI de proyectos.</div>'; return; }
+
+      const max = data.data[0].SUMA || 1;
+      wrap.innerHTML = `
+        <div style="font-size:12px;color:#888;margin-bottom:12px;">${data.data.length} proyectos</div>
+        <table class="data-table">
+          <thead><tr><th>Proyecto</th><th>Nombre</th><th>Score CHI</th><th>Nivel</th></tr></thead>
+          <tbody>
+            ${data.data.map(p => {
+              const pct   = Math.round(((p.SUMA || 0) / max) * 100);
+              const color = pct > 66 ? '#27ae60' : pct > 33 ? '#f39c12' : '#e74c3c';
+              const nivel = pct > 66 ? 'Alto' : pct > 33 ? 'Medio' : 'Bajo';
+              const badgeCls = pct > 66 ? 'badge-green' : pct > 33 ? 'badge-yellow' : 'badge-red';
+              return `<tr>
+                <td><strong style="color:#1a3558;">${p.CLAVE_CONTRATO || p.CLAVE || '—'}</strong></td>
+                <td>${p.NOMBRE_CONTRATO || p.NOMBRE || '—'}</td>
+                <td>
+                  <div style="display:flex;align-items:center;gap:8px;">
+                    <div style="background:#e8edf3;border-radius:4px;height:8px;width:80px;">
+                      <div style="background:${color};width:${pct}%;height:8px;border-radius:4px;"></div>
+                    </div>
+                    <span style="font-size:12px;">${p.SUMA ?? '—'}</span>
+                  </div>
+                </td>
+                <td><span class="badge ${badgeCls}">${nivel}</span></td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>`;
+    } catch (e) {
+      wrap.innerHTML = '<div class="loading">Error: ' + e.message + '</div>';
+    }
+  }
+
   const lazyLoaders = {
     'inv-layouts':    loadLayouts,
+    'inv-reportes':   initInvReportes,
+    'inv-estatus':    initEstatus,
     'spr-activo':     loadSprintActivo,
+    'spr-historial':  loadSprHistorial,
     'spr-tickets':    loadJiraTickets,
     'usuarios':       loadUsuarios,
     'paquetes':       initPaquetes,
     'sop-cliente':    () => initSoporte('sop-cliente'),
-    'sop-fixes':      () => initSoporte('sop-fixes')
+    'sop-fixes':      () => initSoporte('sop-fixes'),
+    'actividad':      initActividad,
+    'chi-clientes':   loadChiClientes,
+    'chi-proyectos':  loadChiProyectos,
+    'qa-alertas':     loadQaAlertas,
   };
   const loaded = {};
 

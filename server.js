@@ -3,11 +3,13 @@ const express = require('express');
 const session = require('express-session');
 const path = require('path');
 
-const authRoutes  = require('./routes/auth');
-const apiRoutes   = require('./routes/api');
-const jiraRoutes  = require('./routes/jira');
-const usersRoutes = require('./routes/users');
-const monitor     = require('./services/monitor');
+const authRoutes    = require('./routes/auth');
+const apiRoutes     = require('./routes/api');
+const jiraRoutes    = require('./routes/jira');
+const usersRoutes   = require('./routes/users');
+const layoutsRoutes = require('./routes/layouts');
+const monitor       = require('./services/monitor');
+const { setup }     = require('./db/setup');
 
 const app  = express();
 const PORT = process.env.PORT || 3000;
@@ -26,10 +28,11 @@ app.use(session({
 app.use(express.static(path.join(__dirname, 'public')));
 
 // ── Rutas ─────────────────────────────────────────────────
-app.use('/auth',         authRoutes);
-app.use('/api',          apiRoutes);
-app.use('/api/jira',     jiraRoutes);
-app.use('/api/usuarios', usersRoutes);
+app.use('/auth',           authRoutes);
+app.use('/api',            apiRoutes);
+app.use('/api/jira',       jiraRoutes);
+app.use('/api/usuarios',   usersRoutes);
+app.use('/api/layouts',    layoutsRoutes);
 
 // ── Fallback → SPA ────────────────────────────────────────
 app.get('*', (req, res) => {
@@ -37,7 +40,8 @@ app.get('*', (req, res) => {
 });
 
 // ── Arranque ──────────────────────────────────────────────
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
   console.log(`Bajaware corriendo en http://localhost:${PORT}`);
+  try { await setup(); } catch (e) { console.warn('⚠ Setup DB:', e.message); }
   monitor.iniciar();
 });
