@@ -113,6 +113,87 @@ async function setup() {
       PRINT 'Tabla QA_ALERTAS ya existe.'
   `);
 
+  // ── SOFIPO_LAYOUT_DESC ────────────────────────────────────
+  await query(`
+    IF NOT EXISTS (
+      SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'SOFIPO_LAYOUT_DESC'
+    )
+    BEGIN
+      CREATE TABLE SOFIPO_LAYOUT_DESC (
+        ID               INT IDENTITY(1,1) PRIMARY KEY,
+        EMPRESA          VARCHAR(20)   NULL,
+        PAIS             VARCHAR(10)   NULL,
+        CLAVE_LAYOUT     VARCHAR(100)  NOT NULL,
+        ORDEN            INT           NULL,
+        LLAVE            VARCHAR(10)   NULL,
+        NOMBRE_CAMPO     VARCHAR(200)  NOT NULL,
+        TIPO_DATO        VARCHAR(50)   NULL,
+        FORMATO          VARCHAR(100)  NULL,
+        OBLIGATORIO      VARCHAR(10)   NULL,
+        VALIDACION       VARCHAR(500)  NULL,
+        CATALOGO         VARCHAR(200)  NULL,
+        DESCRIPCION      VARCHAR(1000) NULL,
+        DESCRIPCION_EN   VARCHAR(1000) NULL,
+        OBSERVACIONES    VARCHAR(1000) NULL,
+        VALIDEZ_INFO     VARCHAR(500)  NULL,
+        FUENTE           VARCHAR(200)  NULL,
+        FECHA_CARGA      DATETIME      NOT NULL DEFAULT GETDATE()
+      )
+      CREATE INDEX IX_SLD_LAYOUT ON SOFIPO_LAYOUT_DESC (CLAVE_LAYOUT)
+      CREATE INDEX IX_SLD_CAMPO  ON SOFIPO_LAYOUT_DESC (NOMBRE_CAMPO)
+      PRINT 'Tabla SOFIPO_LAYOUT_DESC creada.'
+    END
+    ELSE PRINT 'Tabla SOFIPO_LAYOUT_DESC ya existe.'
+  `);
+
+  // ── SOFIPO_LAYOUT_USO ─────────────────────────────────────
+  await query(`
+    IF NOT EXISTS (
+      SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'SOFIPO_LAYOUT_USO'
+    )
+    BEGIN
+      CREATE TABLE SOFIPO_LAYOUT_USO (
+        ID               INT IDENTITY(1,1) PRIMARY KEY,
+        EMPRESA          VARCHAR(20)   NULL,
+        PAIS             VARCHAR(10)   NULL,
+        CLAVE_LAYOUT     VARCHAR(100)  NOT NULL,
+        NOMBRE_CAMPO     VARCHAR(200)  NOT NULL,
+        ID_REPORTE       VARCHAR(100)  NULL,
+        COLUMNA_REPORTE  INT           NULL,
+        FECHA_CARGA      DATETIME      NOT NULL DEFAULT GETDATE()
+      )
+      CREATE INDEX IX_SLU_LAYOUT  ON SOFIPO_LAYOUT_USO (CLAVE_LAYOUT)
+      CREATE INDEX IX_SLU_CAMPO   ON SOFIPO_LAYOUT_USO (NOMBRE_CAMPO)
+      CREATE INDEX IX_SLU_REPORTE ON SOFIPO_LAYOUT_USO (ID_REPORTE)
+      PRINT 'Tabla SOFIPO_LAYOUT_USO creada.'
+    END
+    ELSE PRINT 'Tabla SOFIPO_LAYOUT_USO ya existe.'
+  `);
+
+  // ── SOFIPO_REPORTES ───────────────────────────────────────
+  await query(`
+    IF NOT EXISTS (
+      SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'SOFIPO_REPORTES'
+    )
+    BEGIN
+      CREATE TABLE SOFIPO_REPORTES (
+        ID               INT IDENTITY(1,1) PRIMARY KEY,
+        ID_REPORTE       VARCHAR(100)  NOT NULL,
+        ORDEN            INT           NULL,
+        NOMBRE_CAMPO     VARCHAR(300)  NULL,
+        TIPO_DATO        VARCHAR(50)   NULL,
+        LONGITUD         INT           NULL,
+        DECIMALES        INT           NULL,
+        FORMATO_CAPTURA  VARCHAR(100)  NULL,
+        CATALOGO         VARCHAR(200)  NULL,
+        FECHA_CARGA      DATETIME      NOT NULL DEFAULT GETDATE()
+      )
+      CREATE INDEX IX_SR_REPORTE ON SOFIPO_REPORTES (ID_REPORTE)
+      PRINT 'Tabla SOFIPO_REPORTES creada.'
+    END
+    ELSE PRINT 'Tabla SOFIPO_REPORTES ya existe.'
+  `);
+
   console.log('✅ Setup de tablas completado.');
 }
 

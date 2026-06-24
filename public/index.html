@@ -596,6 +596,16 @@
         <div class="nav-item-left"><span class="nav-icon">📦</span> Paquetes</div>
       </div>
 
+      <div class="nav-item" onclick="toggleMenu('sofipo')">
+        <div class="nav-item-left"><span class="nav-icon">🗂️</span> SOFIPO</div>
+        <span class="nav-arrow" id="arr-sofipo">▼</span>
+      </div>
+      <div class="sub-menu" id="sub-sofipo">
+        <div class="sub-item" onclick="showSection('sofipo-layouts')">Layouts</div>
+        <div class="sub-item" onclick="showSection('sofipo-reportes')">Reportes</div>
+        <div class="sub-item" onclick="showSection('sofipo-cruce')">Cruce campo↔reporte</div>
+      </div>
+
       <div class="nav-item nav-salir" onclick="doLogout()">
         <div class="nav-item-left"><span class="nav-icon">🚪</span> Salir</div>
       </div>
@@ -1012,6 +1022,73 @@
       </div>
       <div class="content-section" id="sec-con-base"><h2 class="section-title">Conocimiento — Base</h2><div class="placeholder-card"><div class="icon">🎓</div>Próximamente</div></div>
       <div class="content-section" id="sec-con-articulos"><h2 class="section-title">Conocimiento — Artículos</h2><div class="placeholder-card"><div class="icon">📖</div>Próximamente</div></div>
+
+      <!-- SOFIPO: Layouts -->
+      <div class="content-section" id="sec-sofipo-layouts">
+        <h2 class="section-title">🗂️ SOFIPO — Layouts</h2>
+        <div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap;align-items:center;">
+          <input id="sofipo-layouts-search" type="text" placeholder="Buscar layout..." oninput="filtrarSofipoLayouts()"
+            style="padding:7px 12px;border:1px solid #ddd;border-radius:6px;font-size:13px;width:260px;">
+          <button onclick="loadSofipoLayouts()"
+            style="padding:7px 16px;background:#1a3558;color:#fff;border:none;border-radius:6px;font-size:13px;cursor:pointer;">
+            ↻ Actualizar
+          </button>
+        </div>
+        <div id="sofipo-layouts-content"><div class="loading">Cargando layouts...</div></div>
+        <!-- Detalle de layout seleccionado -->
+        <div id="sofipo-layout-detalle" style="display:none;margin-top:20px;">
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">
+            <button onclick="document.getElementById('sofipo-layout-detalle').style.display='none'"
+              style="padding:5px 12px;background:#aaa;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:12px;">
+              ← Volver
+            </button>
+            <h3 id="sofipo-layout-detalle-titulo" style="color:#1a3558;font-size:15px;margin:0;"></h3>
+          </div>
+          <div id="sofipo-layout-detalle-reportes" style="margin-bottom:16px;"></div>
+          <div id="sofipo-layout-detalle-campos"></div>
+        </div>
+      </div>
+
+      <!-- SOFIPO: Reportes -->
+      <div class="content-section" id="sec-sofipo-reportes">
+        <h2 class="section-title">📊 SOFIPO — Reportes</h2>
+        <div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap;align-items:center;">
+          <input id="sofipo-reportes-search" type="text" placeholder="Buscar reporte..." oninput="filtrarSofipoReportes()"
+            style="padding:7px 12px;border:1px solid #ddd;border-radius:6px;font-size:13px;width:300px;">
+          <button onclick="loadSofipoReportes()"
+            style="padding:7px 16px;background:#1a3558;color:#fff;border:none;border-radius:6px;font-size:13px;cursor:pointer;">
+            ↻ Actualizar
+          </button>
+        </div>
+        <div id="sofipo-reportes-content"><div class="loading">Cargando reportes...</div></div>
+        <!-- Detalle de reporte -->
+        <div id="sofipo-reporte-detalle" style="display:none;margin-top:20px;">
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">
+            <button onclick="document.getElementById('sofipo-reporte-detalle').style.display='none';document.getElementById('sofipo-reportes-content').style.display=''"
+              style="padding:5px 12px;background:#aaa;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:12px;">
+              ← Volver
+            </button>
+            <h3 id="sofipo-reporte-detalle-titulo" style="color:#1a3558;font-size:15px;margin:0;"></h3>
+          </div>
+          <div id="sofipo-reporte-detalle-campos"></div>
+        </div>
+      </div>
+
+      <!-- SOFIPO: Cruce campo↔reporte -->
+      <div class="content-section" id="sec-sofipo-cruce">
+        <h2 class="section-title">🔗 SOFIPO — Cruce campo ↔ reporte</h2>
+        <p style="font-size:13px;color:#666;margin:0 0 14px;">Busca un campo y descubre en qué reportes y layouts aparece.</p>
+        <div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap;align-items:center;">
+          <input id="sofipo-cruce-campo" type="text" placeholder="Nombre del campo (ej. RFC, CODIGOCLIENTE)..."
+            style="padding:7px 12px;border:1px solid #ddd;border-radius:6px;font-size:13px;width:320px;"
+            onkeydown="if(event.key==='Enter') buscarCruce()">
+          <button onclick="buscarCruce()"
+            style="padding:7px 16px;background:#1a3558;color:#fff;border:none;border-radius:6px;font-size:13px;cursor:pointer;">
+            🔍 Buscar
+          </button>
+        </div>
+        <div id="sofipo-cruce-content"></div>
+      </div>
 
       <!-- QA Alertas -->
       <div class="content-section" id="sec-qa-alertas">
@@ -3067,6 +3144,218 @@
     }
   }
 
+  // ── SOFIPO: Layouts ────────────────────────────────────────
+  let sofipoLayoutsData = [];
+  async function loadSofipoLayouts() {
+    const wrap = document.getElementById('sofipo-layouts-content');
+    document.getElementById('sofipo-layout-detalle').style.display = 'none';
+    wrap.style.display = '';
+    wrap.innerHTML = '<div class="loading">Cargando layouts...</div>';
+    try {
+      const r = await fetch('/api/reportes/layouts').then(x => x.json());
+      sofipoLayoutsData = r.data || [];
+      renderSofipoLayouts(sofipoLayoutsData);
+    } catch(e) {
+      wrap.innerHTML = '<div class="loading">Error: ' + e.message + '</div>';
+    }
+  }
+  function filtrarSofipoLayouts() {
+    const q = document.getElementById('sofipo-layouts-search').value.toLowerCase();
+    renderSofipoLayouts(sofipoLayoutsData.filter(l => l.CLAVE_LAYOUT.toLowerCase().includes(q)));
+  }
+  function renderSofipoLayouts(data) {
+    const wrap = document.getElementById('sofipo-layouts-content');
+    if (!data.length) { wrap.innerHTML = '<div class="loading">Sin datos.</div>'; return; }
+    wrap.innerHTML = `<table style="width:100%;border-collapse:collapse;font-size:13px;">
+      <thead><tr style="background:#1a3558;color:#fff;">
+        <th style="padding:8px 12px;text-align:left;">Layout</th>
+        <th style="padding:8px 12px;text-align:left;">Empresa</th>
+        <th style="padding:8px 12px;text-align:center;">Campos</th>
+        <th style="padding:8px 12px;text-align:center;">Obligatorios</th>
+        <th style="padding:8px 12px;text-align:center;">Acción</th>
+      </tr></thead>
+      <tbody>${data.map((l,i) => `
+        <tr style="background:${i%2===0?'#fff':'#f8f9fa'};">
+          <td style="padding:7px 12px;font-weight:600;color:#1a3558;">${l.CLAVE_LAYOUT}</td>
+          <td style="padding:7px 12px;">${l.EMPRESA||''} / ${l.PAIS||''}</td>
+          <td style="padding:7px 12px;text-align:center;">${l.TOTAL_CAMPOS}</td>
+          <td style="padding:7px 12px;text-align:center;">${l.CAMPOS_OBLIGATORIOS}</td>
+          <td style="padding:7px 12px;text-align:center;">
+            <button onclick="verDetalleLayout('${l.CLAVE_LAYOUT}')"
+              style="padding:4px 10px;background:#1a3558;color:#fff;border:none;border-radius:5px;cursor:pointer;font-size:12px;">
+              Ver reportes
+            </button>
+          </td>
+        </tr>`).join('')}
+      </tbody></table>`;
+  }
+  async function verDetalleLayout(clave) {
+    document.getElementById('sofipo-layouts-content').style.display = 'none';
+    const det = document.getElementById('sofipo-layout-detalle');
+    det.style.display = '';
+    document.getElementById('sofipo-layout-detalle-titulo').textContent = '🗂️ ' + clave;
+    document.getElementById('sofipo-layout-detalle-reportes').innerHTML = '<div class="loading">Cargando...</div>';
+    document.getElementById('sofipo-layout-detalle-campos').innerHTML = '';
+    try {
+      const r = await fetch('/api/reportes/layout/' + encodeURIComponent(clave)).then(x => x.json());
+      const reportes = r.reportes || [];
+      if (!reportes.length) {
+        document.getElementById('sofipo-layout-detalle-reportes').innerHTML = '<p style="color:#888;font-size:13px;">Este layout no tiene reportes asociados.</p>';
+        return;
+      }
+      document.getElementById('sofipo-layout-detalle-reportes').innerHTML =
+        `<p style="font-size:13px;color:#555;margin-bottom:10px;">Este layout alimenta <strong>${reportes.length}</strong> reporte(s):</p>
+         <div style="display:flex;flex-wrap:wrap;gap:8px;">${reportes.map(r =>
+           `<span onclick="verDetalleReporte('${r.id_reporte}')" title="Ver detalle"
+             style="background:#e8f0fe;color:#1a3558;padding:5px 12px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;">${r.id_reporte} (${r.campos.length} campos)</span>`
+         ).join('')}</div>`;
+      // Tabla de campos
+      const allCampos = reportes.flatMap(r => r.campos.map(c => ({...c, reporte: r.id_reporte})));
+      document.getElementById('sofipo-layout-detalle-campos').innerHTML =
+        `<h4 style="margin:16px 0 8px;color:#1a3558;font-size:13px;">Campos y sus reportes</h4>
+         <table style="width:100%;border-collapse:collapse;font-size:12px;">
+           <thead><tr style="background:#1a3558;color:#fff;">
+             <th style="padding:6px 10px;text-align:left;">Campo</th>
+             <th style="padding:6px 10px;text-align:left;">Reporte</th>
+             <th style="padding:6px 10px;text-align:center;">Col.</th>
+             <th style="padding:6px 10px;text-align:center;">Tipo</th>
+             <th style="padding:6px 10px;text-align:center;">Oblig.</th>
+           </tr></thead>
+           <tbody>${allCampos.map((c,i) => `
+             <tr style="background:${i%2===0?'#fff':'#f8f9fa'};">
+               <td style="padding:5px 10px;font-weight:600;">${c.nombre}</td>
+               <td style="padding:5px 10px;color:#555;font-size:11px;">${c.reporte}</td>
+               <td style="padding:5px 10px;text-align:center;">${c.columna||''}</td>
+               <td style="padding:5px 10px;text-align:center;">${c.tipo||''}</td>
+               <td style="padding:5px 10px;text-align:center;">${c.obligatorio==='Si'?'✅':''}</td>
+             </tr>`).join('')}
+           </tbody></table>`;
+    } catch(e) {
+      document.getElementById('sofipo-layout-detalle-reportes').innerHTML = '<div class="loading">Error: ' + e.message + '</div>';
+    }
+  }
+
+  // ── SOFIPO: Reportes ───────────────────────────────────────
+  let sofipoReportesData = [];
+  async function loadSofipoReportes() {
+    const wrap = document.getElementById('sofipo-reportes-content');
+    document.getElementById('sofipo-reporte-detalle').style.display = 'none';
+    wrap.style.display = '';
+    wrap.innerHTML = '<div class="loading">Cargando reportes...</div>';
+    try {
+      const r = await fetch('/api/reportes').then(x => x.json());
+      sofipoReportesData = r.data || [];
+      renderSofipoReportes(sofipoReportesData);
+    } catch(e) {
+      wrap.innerHTML = '<div class="loading">Error: ' + e.message + '</div>';
+    }
+  }
+  function filtrarSofipoReportes() {
+    const q = document.getElementById('sofipo-reportes-search').value.toLowerCase();
+    renderSofipoReportes(sofipoReportesData.filter(r => r.ID_REPORTE.toLowerCase().includes(q)));
+  }
+  function renderSofipoReportes(data) {
+    const wrap = document.getElementById('sofipo-reportes-content');
+    if (!data.length) { wrap.innerHTML = '<div class="loading">Sin datos.</div>'; return; }
+    wrap.innerHTML = `<table style="width:100%;border-collapse:collapse;font-size:13px;">
+      <thead><tr style="background:#1a3558;color:#fff;">
+        <th style="padding:8px 12px;text-align:left;">ID Reporte</th>
+        <th style="padding:8px 12px;text-align:center;">Total campos</th>
+        <th style="padding:8px 12px;text-align:center;">Acción</th>
+      </tr></thead>
+      <tbody>${data.map((r,i) => `
+        <tr style="background:${i%2===0?'#fff':'#f8f9fa'};">
+          <td style="padding:7px 12px;font-weight:600;color:#1a3558;">${r.ID_REPORTE}</td>
+          <td style="padding:7px 12px;text-align:center;">${r.TOTAL_CAMPOS}</td>
+          <td style="padding:7px 12px;text-align:center;">
+            <button onclick="verDetalleReporte('${r.ID_REPORTE}')"
+              style="padding:4px 10px;background:#1a3558;color:#fff;border:none;border-radius:5px;cursor:pointer;font-size:12px;">
+              Ver campos
+            </button>
+          </td>
+        </tr>`).join('')}
+      </tbody></table>`;
+  }
+  async function verDetalleReporte(id) {
+    document.getElementById('sofipo-reportes-content').style.display = 'none';
+    const det = document.getElementById('sofipo-reporte-detalle');
+    det.style.display = '';
+    document.getElementById('sofipo-reporte-detalle-titulo').textContent = '📊 ' + id;
+    document.getElementById('sofipo-reporte-detalle-campos').innerHTML = '<div class="loading">Cargando...</div>';
+    try {
+      const r = await fetch('/api/reportes/' + encodeURIComponent(id) + '/campos').then(x => x.json());
+      const campos = r.data || [];
+      document.getElementById('sofipo-reporte-detalle-campos').innerHTML = campos.length ? `
+        <table style="width:100%;border-collapse:collapse;font-size:12px;">
+          <thead><tr style="background:#1a3558;color:#fff;">
+            <th style="padding:6px 10px;text-align:center;">#</th>
+            <th style="padding:6px 10px;text-align:left;">Campo</th>
+            <th style="padding:6px 10px;text-align:left;">Tipo</th>
+            <th style="padding:6px 10px;text-align:center;">Longitud</th>
+            <th style="padding:6px 10px;text-align:center;">Decimales</th>
+            <th style="padding:6px 10px;text-align:left;">Formato</th>
+            <th style="padding:6px 10px;text-align:left;">Layouts</th>
+          </tr></thead>
+          <tbody>${campos.map((c,i) => `
+            <tr style="background:${i%2===0?'#fff':'#f8f9fa'};">
+              <td style="padding:5px 10px;text-align:center;color:#888;">${c.ORDEN}</td>
+              <td style="padding:5px 10px;font-weight:600;">${c.NOMBRE_CAMPO||''}</td>
+              <td style="padding:5px 10px;">${c.TIPO_DATO||''}</td>
+              <td style="padding:5px 10px;text-align:center;">${c.LONGITUD||''}</td>
+              <td style="padding:5px 10px;text-align:center;">${c.DECIMALES||''}</td>
+              <td style="padding:5px 10px;">${c.FORMATO_CAPTURA||''}</td>
+              <td style="padding:5px 10px;font-size:11px;color:#555;">${c.LAYOUTS_QUE_USAN||'—'}</td>
+            </tr>`).join('')}
+          </tbody></table>` : '<p style="color:#888;font-size:13px;">Sin campos.</p>';
+    } catch(e) {
+      document.getElementById('sofipo-reporte-detalle-campos').innerHTML = '<div class="loading">Error: ' + e.message + '</div>';
+    }
+  }
+
+  // ── SOFIPO: Cruce campo↔reporte ────────────────────────────
+  async function buscarCruce() {
+    const campo = document.getElementById('sofipo-cruce-campo').value.trim();
+    const wrap  = document.getElementById('sofipo-cruce-content');
+    if (!campo) return;
+    wrap.innerHTML = '<div class="loading">Buscando...</div>';
+    try {
+      const r = await fetch('/api/reportes/campo/' + encodeURIComponent(campo)).then(x => x.json());
+      const data = r.data || [];
+      if (!data.length) { wrap.innerHTML = '<div class="loading">No se encontró el campo "' + campo + '".</div>'; return; }
+      // Agrupar por reporte
+      const porReporte = {};
+      data.forEach(d => {
+        if (!porReporte[d.ID_REPORTE]) porReporte[d.ID_REPORTE] = [];
+        porReporte[d.ID_REPORTE].push(d);
+      });
+      wrap.innerHTML = `<p style="font-size:13px;color:#555;margin-bottom:12px;">
+        El campo <strong>${campo}</strong> aparece en <strong>${Object.keys(porReporte).length}</strong> reporte(s) a través de <strong>${data.length}</strong> layout(s).</p>
+        ${Object.entries(porReporte).map(([rep, rows]) => `
+          <div style="background:#fff;border:1px solid #e0e6ed;border-radius:8px;padding:14px;margin-bottom:10px;">
+            <div style="font-weight:700;color:#1a3558;margin-bottom:8px;">📊 ${rep}</div>
+            <table style="width:100%;border-collapse:collapse;font-size:12px;">
+              <thead><tr style="background:#f0f4f8;">
+                <th style="padding:5px 10px;text-align:left;">Layout</th>
+                <th style="padding:5px 10px;text-align:center;">Columna</th>
+                <th style="padding:5px 10px;text-align:left;">Tipo</th>
+                <th style="padding:5px 10px;text-align:center;">Oblig.</th>
+                <th style="padding:5px 10px;text-align:left;">Descripción</th>
+              </tr></thead>
+              <tbody>${rows.map((row,i) => `
+                <tr style="background:${i%2===0?'#fff':'#f8f9fa'};">
+                  <td style="padding:4px 10px;font-weight:600;color:#1a3558;">${row.CLAVE_LAYOUT}</td>
+                  <td style="padding:4px 10px;text-align:center;">${row.COLUMNA_REPORTE||''}</td>
+                  <td style="padding:4px 10px;">${row.TIPO_DATO||''}</td>
+                  <td style="padding:4px 10px;text-align:center;">${row.OBLIGATORIO==='Si'?'✅':''}</td>
+                  <td style="padding:4px 10px;font-size:11px;color:#555;">${row.DESCRIPCION||''}</td>
+                </tr>`).join('')}
+              </tbody></table>
+          </div>`).join('')}`;
+    } catch(e) {
+      wrap.innerHTML = '<div class="loading">Error: ' + e.message + '</div>';
+    }
+  }
+
   const lazyLoaders = {
     'inv-layouts':    loadLayouts,
     'inv-reportes':   initInvReportes,
@@ -3081,7 +3370,10 @@
     'actividad':      initActividad,
     'chi-clientes':   loadChiClientes,
     'chi-proyectos':  loadChiProyectos,
-    'qa-alertas':     loadQaAlertas,
+    'qa-alertas':       loadQaAlertas,
+    'sofipo-layouts':   loadSofipoLayouts,
+    'sofipo-reportes':  loadSofipoReportes,
+    'sofipo-cruce':     () => {},
   };
   const loaded = {};
 
