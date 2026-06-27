@@ -48,6 +48,7 @@ router.get('/contratos/:clave/reportes', requireAuth, async (req, res) => {
         cr.FECHA_INSTALADO_PROD,
         ir.DESCRIPCION_ESP,
         ir.CLAVE_ENTIDADREGULADA,
+        COALESCE(ir.REPORTE, cr.CLAVE_REP) AS REPORTE,
         er.DOCUMENTADO,
         er.DOC_FECHA_REAL,
         er.PROGRAMADO,
@@ -55,11 +56,13 @@ router.get('/contratos/:clave/reportes', requireAuth, async (req, res) => {
         er.CERTIFICADO,
         er.CERT_FECHA_REAL,
         er.ESTATUS,
-        er.CLAVE_PLATAFORMA,
+        COALESCE(er.CLAVE_PLATAFORMA, c.CLAVE_PLATAFORMA) AS CLAVE_PLATAFORMA,
         er.VERSION
       FROM CONTRATOS_REPORTES cr
+      LEFT JOIN CONTRATOS c            ON c.CLAVE_CONTRATO = cr.CLAVE_CONTRATO
       LEFT JOIN INVENTARIO_REPORTES ir ON ir.CLAVE_REP = cr.CLAVE_REP
       LEFT JOIN ESTATUS_REPORTE er     ON er.CLAVE_REP = cr.CLAVE_REP
+                                      AND er.CLAVE_PLATAFORMA = c.CLAVE_PLATAFORMA
       WHERE cr.CLAVE_CONTRATO=${esc(req.params.clave)}
       ORDER BY cr.CLAVE_REP
     `);
