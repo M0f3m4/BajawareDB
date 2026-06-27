@@ -3381,6 +3381,17 @@
     const color = e==='CERTIFICADO'?'#27ae60':e==='PROGRAMADO'?'#2980b9':e==='DOCUMENTADO'?'#8e44ad':'#aaa';
     return e ? `<span style="background:${color};color:#fff;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;">${e}</span>` : '';
   }
+  function etapaPill(e) {
+    if (!e) return '<span style="color:#ccc;font-size:11px;">—</span>';
+    const map = {
+      'QA':   { bg:'#e67e22', label:'QA' },
+      'CERT': { bg:'#2980b9', label:'CERT' },
+      'PROD': { bg:'#27ae60', label:'PROD' },
+      'DOC':  { bg:'#8e44ad', label:'DOC' },
+    };
+    const c = map[e] || { bg:'#95a5a6', label: e };
+    return `<span style="background:${c.bg};color:#fff;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;">${c.label}</span>`;
+  }
 
   async function initBC() {
     // Cargar clientes en ambos selects
@@ -3453,6 +3464,7 @@
         <th style="padding:7px 10px;text-align:left;">Clave Reporte</th>
         <th style="padding:7px 10px;text-align:left;">Descripción</th>
         <th style="padding:7px 10px;text-align:left;">Plataforma</th>
+        <th style="padding:7px 10px;text-align:center;">Etapa Contrato</th>
         <th style="padding:7px 10px;text-align:center;">Doc</th>
         <th style="padding:7px 10px;text-align:center;">Prog</th>
         <th style="padding:7px 10px;text-align:center;">Cert</th>
@@ -3462,8 +3474,9 @@
       <tbody>${data.map((r,i) => `
         <tr style="background:${i%2===0?'#fff':'#f8f9fa'};">
           <td style="padding:6px 10px;font-weight:600;color:#1a3558;">${r.CLAVE_REP}</td>
-          <td style="padding:6px 10px;font-size:11px;">${r.DESCRIPCION_ESP||''}</td>
+          <td style="padding:6px 10px;font-size:11px;">${r.DESCRIPCION_ESP||'<span style="color:#bbb;font-style:italic;">Sin descripción</span>'}</td>
           <td style="padding:6px 10px;">${r.CLAVE_PLATAFORMA||''}</td>
+          <td style="padding:6px 10px;text-align:center;">${etapaPill(r.ETAPA)}</td>
           <td style="padding:6px 10px;text-align:center;">${etapaBadge(r.DOCUMENTADO)}</td>
           <td style="padding:6px 10px;text-align:center;">${etapaBadge(r.PROGRAMADO)}</td>
           <td style="padding:6px 10px;text-align:center;">${etapaBadge(r.CERTIFICADO)}</td>
