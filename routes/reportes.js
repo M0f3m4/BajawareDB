@@ -92,25 +92,48 @@ router.get('/layout/:clave', requireAuth, async (req, res) => {
 });
 
 // ── GET /api/reportes/campo/:nombre ──────────────────────
-// En qué reportes aparece un campo específico
+// En qué reportes aparece un campo (busca en LAYOUT_USO y REPORTES)
 router.get('/campo/:nombre', requireAuth, async (req, res) => {
   try {
-    const nombre = req.params.nombre;
-    const rows = await query(`
+    const nombre = req.params.nombre.replace(/'/g,"''");
+
+    // Buscar en SOFIPO_LAYOUT_USO (campos vinculados a layouts)
+    const porLayout = await query(`
       SELECT DISTINCT
         u.ID_REPORTE,
         u.CLAVE_LAYOUT,
         u.COLUMNA_REPORTE,
+        u.NOMBRE_CAMPO,
         d.TIPO_DATO,
         d.OBLIGATORIO,
-        d.DESCRIPCION
+        d.DESCRIPCION,
+        'layout' AS FUENTE
       FROM SOFIPO_LAYOUT_USO u
       LEFT JOIN SOFIPO_LAYOUT_DESC d
-        ON d.CLAVE_LAYOUT = u.CLAVE_LAYOUT AND d.NOMBRE_CAMPO = u.NOMBRE_CAMPO
-      WHERE u.NOMBRE_CAMPO = '${nombre.replace(/'/g,"''")}'
+        ON d.CLAVE_LAYOUT = u.CLAVE_LAYOUT
+        AND UPPER(d.NOMBRE_CAMPO) = UPPER(u.NOMBRE_CAMPO)
+      WHERE UPPER(u.NOMBRE_CAMPO) LIKE UPPER('%${nombre}%')
       ORDER BY u.ID_REPORTE
     `);
-    res.json({ ok: true, campo: nombre, data: rows });
+
+    // Buscar también en SOFIPO_REPORTES (estructura directa de reportes)
+    const porReporte = await query(`
+      SELECT DISTINCT
+        r.ID_REPORTE,
+        NULL AS CLAVE_LAYOUT,
+        r.ORDEN AS COLUMNA_REPORTE,
+        r.NOMBRE_CAMPO,
+        r.TIPO_DATO,
+        NULL AS OBLIGATORIO,
+        NULL AS DESCRIPCION,
+        'reporte' AS FUENTE
+      FROM SOFIPO_REPORTES r
+      WHERE UPPER(r.NOMBRE_CAMPO) LIKE UPPER('%${nombre}%')
+      ORDER BY r.ID_REPORTE
+    `);
+
+    const data = [...porLayout, ...porReporte];
+    res.json({ ok: true, campo: req.params.nombre, data });
   } catch (e) {
     res.status(500).json({ ok: false, message: e.message });
   }

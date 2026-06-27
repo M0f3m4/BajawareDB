@@ -596,6 +596,18 @@
         <div class="nav-item-left"><span class="nav-icon">📦</span> Paquetes</div>
       </div>
 
+      <div class="nav-item" onclick="toggleMenu('bc')">
+        <div class="nav-item-left"><span class="nav-icon">📋</span> Base Conocimiento</div>
+        <span class="nav-arrow" id="arr-bc">▼</span>
+      </div>
+      <div class="sub-menu" id="sub-bc">
+        <div class="sub-item" onclick="showSection('bc-consulta-rep')">Estatus por Contrato</div>
+        <div class="sub-item" onclick="showSection('bc-consulta-val')">Validaciones por Contrato</div>
+        <div class="sub-item" onclick="showSection('bc-actualizar-rep')">Actualizar Estatus Reporte</div>
+        <div class="sub-item" onclick="showSection('bc-actualizar-val')">Actualizar Estatus Validación</div>
+        <div class="sub-item" onclick="showSection('bc-carga-inv')">Cargar Inventario</div>
+      </div>
+
       <div class="nav-item" onclick="toggleMenu('sofipo')">
         <div class="nav-item-left"><span class="nav-icon">🗂️</span> SOFIPO</div>
         <span class="nav-arrow" id="arr-sofipo">▼</span>
@@ -1022,6 +1034,160 @@
       </div>
       <div class="content-section" id="sec-con-base"><h2 class="section-title">Conocimiento — Base</h2><div class="placeholder-card"><div class="icon">🎓</div>Próximamente</div></div>
       <div class="content-section" id="sec-con-articulos"><h2 class="section-title">Conocimiento — Artículos</h2><div class="placeholder-card"><div class="icon">📖</div>Próximamente</div></div>
+
+      <!-- BC: Consulta Estatus por Contrato -->
+      <div class="content-section" id="sec-bc-consulta-rep">
+        <h2 class="section-title">📋 Estatus de Reportes por Contrato</h2>
+        <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;align-items:flex-end;">
+          <div>
+            <label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px;">Cliente</label>
+            <select id="bc-rep-cliente" onchange="loadContratosRep()" style="padding:7px 12px;border:1px solid #ddd;border-radius:6px;font-size:13px;min-width:200px;">
+              <option value="">— Selecciona cliente —</option>
+            </select>
+          </div>
+          <div>
+            <label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px;">Contrato</label>
+            <select id="bc-rep-contrato" onchange="loadReportesContrato()" style="padding:7px 12px;border:1px solid #ddd;border-radius:6px;font-size:13px;min-width:220px;">
+              <option value="">— Selecciona contrato —</option>
+            </select>
+          </div>
+          <input id="bc-rep-search" type="text" placeholder="Buscar reporte..." oninput="filtrarReportesContrato()"
+            style="padding:7px 12px;border:1px solid #ddd;border-radius:6px;font-size:13px;width:220px;">
+        </div>
+        <!-- Resumen badges -->
+        <div id="bc-rep-resumen" style="display:none;margin-bottom:14px;display:flex;gap:10px;flex-wrap:wrap;"></div>
+        <div id="bc-rep-content"><p style="color:#aaa;font-size:13px;">Selecciona un cliente y contrato.</p></div>
+      </div>
+
+      <!-- BC: Consulta Validaciones por Contrato -->
+      <div class="content-section" id="sec-bc-consulta-val">
+        <h2 class="section-title">✅ Validaciones por Contrato</h2>
+        <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;align-items:flex-end;">
+          <div>
+            <label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px;">Cliente</label>
+            <select id="bc-val-cliente" onchange="loadContratosVal()" style="padding:7px 12px;border:1px solid #ddd;border-radius:6px;font-size:13px;min-width:200px;">
+              <option value="">— Selecciona cliente —</option>
+            </select>
+          </div>
+          <div>
+            <label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px;">Contrato</label>
+            <select id="bc-val-contrato" onchange="loadValidacionesContrato()" style="padding:7px 12px;border:1px solid #ddd;border-radius:6px;font-size:13px;min-width:220px;">
+              <option value="">— Selecciona contrato —</option>
+            </select>
+          </div>
+          <input id="bc-val-search" type="text" placeholder="Buscar validación o reporte..." oninput="filtrarValidacionesContrato()"
+            style="padding:7px 12px;border:1px solid #ddd;border-radius:6px;font-size:13px;width:240px;">
+        </div>
+        <div id="bc-val-content"><p style="color:#aaa;font-size:13px;">Selecciona un cliente y contrato.</p></div>
+      </div>
+
+      <!-- BC: Actualizar Estatus Reporte -->
+      <div class="content-section" id="sec-bc-actualizar-rep">
+        <h2 class="section-title">✏️ Actualizar Estatus de Reporte</h2>
+        <div style="background:#fff;border-radius:10px;padding:24px;max-width:600px;box-shadow:0 2px 8px rgba(0,0,0,.06);">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;">
+            <div>
+              <label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px;">Clave Reporte</label>
+              <input id="upd-rep-clave" type="text" placeholder="Ej. MX_BM_CUP_01_21"
+                style="width:100%;padding:7px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;">
+            </div>
+            <div>
+              <label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px;">Plataforma</label>
+              <input id="upd-rep-plataforma" type="text" placeholder="Ej. JAVA, NET, PY"
+                style="width:100%;padding:7px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;">
+            </div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;">
+            <div>
+              <label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px;">Nueva Etapa</label>
+              <select id="upd-rep-etapa" style="width:100%;padding:7px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;">
+                <option value="DOCUMENTADO">DOCUMENTADO</option>
+                <option value="PROGRAMADO">PROGRAMADO</option>
+                <option value="CERTIFICADO">CERTIFICADO</option>
+              </select>
+            </div>
+            <div>
+              <label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px;">Fecha Real</label>
+              <input id="upd-rep-fecha" type="date"
+                style="width:100%;padding:7px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;">
+            </div>
+          </div>
+          <button onclick="actualizarEstatusReporte()"
+            style="padding:8px 24px;background:#1a3558;color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;">
+            Actualizar Estatus
+          </button>
+          <div id="upd-rep-msg" style="margin-top:12px;font-size:13px;"></div>
+          <!-- Búsqueda rápida de reporte -->
+          <hr style="margin:20px 0;border:none;border-top:1px solid #eee;">
+          <p style="font-size:12px;color:#888;margin-bottom:8px;">O busca un reporte del inventario:</p>
+          <div style="display:flex;gap:8px;">
+            <input id="upd-rep-buscar" type="text" placeholder="Buscar por clave o descripción..."
+              style="flex:1;padding:7px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;"
+              oninput="buscarReporteUpd()">
+          </div>
+          <div id="upd-rep-resultados" style="margin-top:8px;max-height:200px;overflow-y:auto;font-size:12px;"></div>
+        </div>
+      </div>
+
+      <!-- BC: Actualizar Estatus Validación -->
+      <div class="content-section" id="sec-bc-actualizar-val">
+        <h2 class="section-title">✏️ Actualizar Estatus de Validación</h2>
+        <div style="background:#fff;border-radius:10px;padding:24px;max-width:600px;box-shadow:0 2px 8px rgba(0,0,0,.06);">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;">
+            <div>
+              <label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px;">Clave Validación</label>
+              <input id="upd-val-clave" type="text" placeholder="Ej. VAL-0001"
+                style="width:100%;padding:7px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;">
+            </div>
+            <div>
+              <label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px;">Clave Reporte</label>
+              <input id="upd-val-rep" type="text" placeholder="Ej. MX_BM_CUP_01_21"
+                style="width:100%;padding:7px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;">
+            </div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin-bottom:14px;">
+            <div>
+              <label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px;">Plataforma</label>
+              <input id="upd-val-plataforma" type="text" placeholder="Ej. JAVA"
+                style="width:100%;padding:7px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;">
+            </div>
+            <div>
+              <label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px;">Nueva Etapa</label>
+              <select id="upd-val-etapa" style="width:100%;padding:7px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;">
+                <option value="DOCUMENTADO">DOCUMENTADO</option>
+                <option value="PROGRAMADO">PROGRAMADO</option>
+                <option value="CERTIFICADO">CERTIFICADO</option>
+              </select>
+            </div>
+            <div>
+              <label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px;">Fecha Real</label>
+              <input id="upd-val-fecha" type="date"
+                style="width:100%;padding:7px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;">
+            </div>
+          </div>
+          <button onclick="actualizarEstatusValidacion()"
+            style="padding:8px 24px;background:#1a3558;color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;">
+            Actualizar Estatus
+          </button>
+          <div id="upd-val-msg" style="margin-top:12px;font-size:13px;"></div>
+        </div>
+      </div>
+
+      <!-- BC: Carga de Inventario -->
+      <div class="content-section" id="sec-bc-carga-inv">
+        <h2 class="section-title">📤 Cargar Inventario de Reportes</h2>
+        <p style="font-size:13px;color:#666;margin-bottom:16px;">Sube un Excel con reportes nuevos. Columnas requeridas: CLAVE_REP, CLAVE_PAIS, CLAVE_ENTIDADREGULADA, REPORTE, DESCRIPCION_ESP.</p>
+        <div style="background:#fff;border-radius:10px;padding:24px;max-width:500px;box-shadow:0 2px 8px rgba(0,0,0,.06);">
+          <label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:8px;">Archivo Excel (.xlsx)</label>
+          <input id="bc-inv-file" type="file" accept=".xlsx,.xls"
+            style="display:block;margin-bottom:16px;font-size:13px;">
+          <button onclick="cargarInventario()"
+            style="padding:8px 24px;background:#1a3558;color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;">
+            📤 Cargar
+          </button>
+          <div id="bc-inv-msg" style="margin-top:12px;font-size:13px;"></div>
+        </div>
+      </div>
 
       <!-- SOFIPO: Layouts -->
       <div class="content-section" id="sec-sofipo-layouts">
@@ -3144,6 +3310,255 @@
     }
   }
 
+  // ── BASE CONOCIMIENTO ─────────────────────────────────────
+  let bcRepData = [], bcValData = [];
+
+  function etapaBadge(val) {
+    if (!val || val !== 'S') return '<span style="color:#ccc;font-size:11px;">—</span>';
+    return '<span style="color:#27ae60;font-weight:700;">✓</span>';
+  }
+  function estatusPill(e) {
+    const color = e==='CERTIFICADO'?'#27ae60':e==='PROGRAMADO'?'#2980b9':e==='DOCUMENTADO'?'#8e44ad':'#aaa';
+    return e ? `<span style="background:${color};color:#fff;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;">${e}</span>` : '';
+  }
+
+  async function initBC() {
+    // Cargar clientes en ambos selects
+    try {
+      const r = await fetch('/api/contratos/clientes').then(x => x.json());
+      ['bc-rep-cliente','bc-val-cliente'].forEach(id => {
+        const sel = document.getElementById(id);
+        sel.innerHTML = '<option value="">— Selecciona cliente —</option>';
+        (r.data||[]).forEach(c => {
+          sel.innerHTML += `<option value="${c.CLAVE_CLIENTE}">${c.NOMBRE_CLIENTE}</option>`;
+        });
+      });
+    } catch(e) { console.error(e); }
+  }
+
+  async function loadContratosRep() {
+    const clave = document.getElementById('bc-rep-cliente').value;
+    const sel = document.getElementById('bc-rep-contrato');
+    sel.innerHTML = '<option value="">— Selecciona contrato —</option>';
+    document.getElementById('bc-rep-content').innerHTML = '<p style="color:#aaa;font-size:13px;">Selecciona un contrato.</p>';
+    if (!clave) return;
+    const r = await fetch(`/api/contratos/clientes/${encodeURIComponent(clave)}/contratos`).then(x => x.json());
+    (r.data||[]).forEach(c => { sel.innerHTML += `<option value="${c.CLAVE_CONTRATO}">${c.NOMBRE_CONTRATO} (${c.CLAVE_CONTRATO})</option>`; });
+  }
+
+  async function loadContratosVal() {
+    const clave = document.getElementById('bc-val-cliente').value;
+    const sel = document.getElementById('bc-val-contrato');
+    sel.innerHTML = '<option value="">— Selecciona contrato —</option>';
+    document.getElementById('bc-val-content').innerHTML = '<p style="color:#aaa;font-size:13px;">Selecciona un contrato.</p>';
+    if (!clave) return;
+    const r = await fetch(`/api/contratos/clientes/${encodeURIComponent(clave)}/contratos`).then(x => x.json());
+    (r.data||[]).forEach(c => { sel.innerHTML += `<option value="${c.CLAVE_CONTRATO}">${c.NOMBRE_CONTRATO} (${c.CLAVE_CONTRATO})</option>`; });
+  }
+
+  async function loadReportesContrato() {
+    const clave = document.getElementById('bc-rep-contrato').value;
+    const wrap  = document.getElementById('bc-rep-content');
+    if (!clave) { wrap.innerHTML = '<p style="color:#aaa;font-size:13px;">Selecciona un contrato.</p>'; return; }
+    wrap.innerHTML = '<div class="loading">Cargando...</div>';
+    try {
+      const [rRep, rRes] = await Promise.all([
+        fetch(`/api/contratos/contratos/${encodeURIComponent(clave)}/reportes`).then(x => x.json()),
+        fetch(`/api/contratos/contratos/${encodeURIComponent(clave)}/resumen`).then(x => x.json()),
+      ]);
+      bcRepData = rRep.data || [];
+      // Badge resumen
+      const res = rRes.data || {};
+      document.getElementById('bc-rep-resumen').style.display = 'flex';
+      document.getElementById('bc-rep-resumen').innerHTML = `
+        <span style="background:#8e44ad;color:#fff;padding:4px 12px;border-radius:12px;font-size:12px;">📝 Documentados: ${res.documentados||0}/${res.total||0}</span>
+        <span style="background:#2980b9;color:#fff;padding:4px 12px;border-radius:12px;font-size:12px;">💻 Programados: ${res.programados||0}/${res.total||0}</span>
+        <span style="background:#27ae60;color:#fff;padding:4px 12px;border-radius:12px;font-size:12px;">✅ Certificados: ${res.certificados||0}/${res.total||0}</span>`;
+      renderReportesContrato(bcRepData);
+    } catch(e) { wrap.innerHTML = '<div class="loading">Error: ' + e.message + '</div>'; }
+  }
+
+  function filtrarReportesContrato() {
+    const q = document.getElementById('bc-rep-search').value.toLowerCase();
+    renderReportesContrato(bcRepData.filter(r =>
+      (r.CLAVE_REP||'').toLowerCase().includes(q) || (r.DESCRIPCION_ESP||'').toLowerCase().includes(q)
+    ));
+  }
+
+  function renderReportesContrato(data) {
+    const wrap = document.getElementById('bc-rep-content');
+    if (!data.length) { wrap.innerHTML = '<p style="color:#aaa;font-size:13px;">Sin reportes.</p>'; return; }
+    wrap.innerHTML = `<table style="width:100%;border-collapse:collapse;font-size:12px;">
+      <thead><tr style="background:#1a3558;color:#fff;">
+        <th style="padding:7px 10px;text-align:left;">Clave Reporte</th>
+        <th style="padding:7px 10px;text-align:left;">Descripción</th>
+        <th style="padding:7px 10px;text-align:left;">Plataforma</th>
+        <th style="padding:7px 10px;text-align:center;">Doc</th>
+        <th style="padding:7px 10px;text-align:center;">Prog</th>
+        <th style="padding:7px 10px;text-align:center;">Cert</th>
+        <th style="padding:7px 10px;text-align:center;">Estatus</th>
+        <th style="padding:7px 10px;text-align:center;">Acción</th>
+      </tr></thead>
+      <tbody>${data.map((r,i) => `
+        <tr style="background:${i%2===0?'#fff':'#f8f9fa'};">
+          <td style="padding:6px 10px;font-weight:600;color:#1a3558;">${r.CLAVE_REP}</td>
+          <td style="padding:6px 10px;font-size:11px;">${r.DESCRIPCION_ESP||''}</td>
+          <td style="padding:6px 10px;">${r.CLAVE_PLATAFORMA||''}</td>
+          <td style="padding:6px 10px;text-align:center;">${etapaBadge(r.DOCUMENTADO)}</td>
+          <td style="padding:6px 10px;text-align:center;">${etapaBadge(r.PROGRAMADO)}</td>
+          <td style="padding:6px 10px;text-align:center;">${etapaBadge(r.CERTIFICADO)}</td>
+          <td style="padding:6px 10px;text-align:center;">${estatusPill(r.ESTATUS)}</td>
+          <td style="padding:6px 10px;text-align:center;">
+            <button onclick="precargarActualizarRep('${r.CLAVE_REP}','${r.CLAVE_PLATAFORMA||''}')"
+              style="padding:3px 8px;background:#1a3558;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:11px;">
+              Actualizar
+            </button>
+          </td>
+        </tr>`).join('')}
+      </tbody></table>`;
+  }
+
+  async function loadValidacionesContrato() {
+    const clave = document.getElementById('bc-val-contrato').value;
+    const wrap  = document.getElementById('bc-val-content');
+    if (!clave) { wrap.innerHTML = '<p style="color:#aaa;font-size:13px;">Selecciona un contrato.</p>'; return; }
+    wrap.innerHTML = '<div class="loading">Cargando...</div>';
+    try {
+      const r = await fetch(`/api/contratos/contratos/${encodeURIComponent(clave)}/validaciones`).then(x => x.json());
+      bcValData = r.data || [];
+      renderValidacionesContrato(bcValData);
+    } catch(e) { wrap.innerHTML = '<div class="loading">Error: ' + e.message + '</div>'; }
+  }
+
+  function filtrarValidacionesContrato() {
+    const q = document.getElementById('bc-val-search').value.toLowerCase();
+    renderValidacionesContrato(bcValData.filter(v =>
+      (v.CLAVE_VALIDACION||'').toLowerCase().includes(q) || (v.CLAVE_REP||'').toLowerCase().includes(q) || (v.DESCRIPCION||'').toLowerCase().includes(q)
+    ));
+  }
+
+  function renderValidacionesContrato(data) {
+    const wrap = document.getElementById('bc-val-content');
+    if (!data.length) { wrap.innerHTML = '<p style="color:#aaa;font-size:13px;">Sin validaciones.</p>'; return; }
+    // Agrupar por reporte
+    const porRep = {};
+    data.forEach(v => { if (!porRep[v.CLAVE_REP]) porRep[v.CLAVE_REP]=[]; porRep[v.CLAVE_REP].push(v); });
+    wrap.innerHTML = Object.entries(porRep).map(([rep, vals]) => `
+      <div style="background:#fff;border:1px solid #e0e6ed;border-radius:8px;margin-bottom:12px;overflow:hidden;">
+        <div style="background:#1a3558;color:#fff;padding:8px 14px;font-weight:700;font-size:13px;">📊 ${rep} <span style="font-weight:400;font-size:12px;">(${vals.length} validaciones)</span></div>
+        <table style="width:100%;border-collapse:collapse;font-size:12px;">
+          <thead><tr style="background:#f0f4f8;">
+            <th style="padding:5px 10px;text-align:left;">Clave Val.</th>
+            <th style="padding:5px 10px;text-align:left;">Descripción</th>
+            <th style="padding:5px 10px;text-align:center;">Doc</th>
+            <th style="padding:5px 10px;text-align:center;">Prog</th>
+            <th style="padding:5px 10px;text-align:center;">Cert</th>
+            <th style="padding:5px 10px;text-align:center;">Estatus</th>
+            <th style="padding:5px 10px;text-align:center;">Acción</th>
+          </tr></thead>
+          <tbody>${vals.map((v,i) => `
+            <tr style="background:${i%2===0?'#fff':'#f8f9fa'};">
+              <td style="padding:5px 10px;font-weight:600;color:#1a3558;">${v.CLAVE_VALIDACION}</td>
+              <td style="padding:5px 10px;">${v.DESCRIPCION||''}</td>
+              <td style="padding:5px 10px;text-align:center;">${etapaBadge(v.DOCUMENTADO)}</td>
+              <td style="padding:5px 10px;text-align:center;">${etapaBadge(v.PROGRAMADO)}</td>
+              <td style="padding:5px 10px;text-align:center;">${etapaBadge(v.CERTIFICADO)}</td>
+              <td style="padding:5px 10px;text-align:center;">${estatusPill(v.ESTATUS)}</td>
+              <td style="padding:5px 10px;text-align:center;">
+                <button onclick="precargarActualizarVal('${v.CLAVE_VALIDACION}','${v.CLAVE_REP}','${v.CLAVE_PLATAFORMA||''}')"
+                  style="padding:3px 8px;background:#1a3558;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:11px;">
+                  Actualizar
+                </button>
+              </td>
+            </tr>`).join('')}
+          </tbody></table>
+      </div>`).join('');
+  }
+
+  function precargarActualizarRep(clave, plataforma) {
+    showSection('bc-actualizar-rep');
+    document.getElementById('upd-rep-clave').value = clave;
+    document.getElementById('upd-rep-plataforma').value = plataforma;
+  }
+
+  function precargarActualizarVal(clave, rep, plataforma) {
+    showSection('bc-actualizar-val');
+    document.getElementById('upd-val-clave').value = clave;
+    document.getElementById('upd-val-rep').value = rep;
+    document.getElementById('upd-val-plataforma').value = plataforma;
+  }
+
+  async function actualizarEstatusReporte() {
+    const clave_rep       = document.getElementById('upd-rep-clave').value.trim();
+    const clave_plataforma= document.getElementById('upd-rep-plataforma').value.trim();
+    const etapa           = document.getElementById('upd-rep-etapa').value;
+    const fecha           = document.getElementById('upd-rep-fecha').value;
+    const msg             = document.getElementById('upd-rep-msg');
+    if (!clave_rep || !clave_plataforma) { msg.innerHTML = '<span style="color:#e74c3c;">Completa clave y plataforma.</span>'; return; }
+    msg.innerHTML = 'Guardando...';
+    try {
+      const r = await fetch('/api/contratos/estatus-reporte', {
+        method: 'PUT',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ clave_rep, clave_plataforma, etapa, fecha })
+      }).then(x => x.json());
+      msg.innerHTML = r.ok ? '<span style="color:#27ae60;">✅ Estatus actualizado correctamente.</span>' : `<span style="color:#e74c3c;">❌ ${r.message}</span>`;
+    } catch(e) { msg.innerHTML = '<span style="color:#e74c3c;">Error: ' + e.message + '</span>'; }
+  }
+
+  async function actualizarEstatusValidacion() {
+    const clave_validacion = document.getElementById('upd-val-clave').value.trim();
+    const clave_rep        = document.getElementById('upd-val-rep').value.trim();
+    const clave_plataforma = document.getElementById('upd-val-plataforma').value.trim();
+    const etapa            = document.getElementById('upd-val-etapa').value;
+    const fecha            = document.getElementById('upd-val-fecha').value;
+    const msg              = document.getElementById('upd-val-msg');
+    if (!clave_validacion || !clave_plataforma) { msg.innerHTML = '<span style="color:#e74c3c;">Completa clave validación y plataforma.</span>'; return; }
+    msg.innerHTML = 'Guardando...';
+    try {
+      const r = await fetch('/api/contratos/estatus-validacion', {
+        method: 'PUT',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ clave_validacion, clave_rep, clave_plataforma, etapa, fecha })
+      }).then(x => x.json());
+      msg.innerHTML = r.ok ? '<span style="color:#27ae60;">✅ Estatus actualizado correctamente.</span>' : `<span style="color:#e74c3c;">❌ ${r.message}</span>`;
+    } catch(e) { msg.innerHTML = '<span style="color:#e74c3c;">Error: ' + e.message + '</span>'; }
+  }
+
+  let updRepTimer;
+  async function buscarReporteUpd() {
+    clearTimeout(updRepTimer);
+    updRepTimer = setTimeout(async () => {
+      const q = document.getElementById('upd-rep-buscar').value.trim();
+      const wrap = document.getElementById('upd-rep-resultados');
+      if (!q || q.length < 2) { wrap.innerHTML = ''; return; }
+      try {
+        const r = await fetch('/api/inventario/reportes?q=' + encodeURIComponent(q)).then(x => x.json());
+        const data = r.data || [];
+        wrap.innerHTML = data.slice(0,10).map(rep => `
+          <div onclick="document.getElementById('upd-rep-clave').value='${rep.CLAVE_REP}'"
+            style="padding:5px 8px;cursor:pointer;border-bottom:1px solid #f0f0f0;hover:background:#f8f9fa;">
+            <strong>${rep.CLAVE_REP}</strong> — <span style="color:#888;">${rep.DESCRIPCION_ESP||''}</span>
+          </div>`).join('') || '<div style="color:#aaa;padding:5px;">Sin resultados.</div>';
+      } catch(e) {}
+    }, 300);
+  }
+
+  async function cargarInventario() {
+    const file = document.getElementById('bc-inv-file').files[0];
+    const msg  = document.getElementById('bc-inv-msg');
+    if (!file) { msg.innerHTML = '<span style="color:#e74c3c;">Selecciona un archivo.</span>'; return; }
+    msg.innerHTML = 'Cargando...';
+    const fd = new FormData();
+    fd.append('archivo', file);
+    try {
+      const r = await fetch('/api/contratos/inventario-reportes/upload', { method: 'POST', body: fd }).then(x => x.json());
+      msg.innerHTML = r.ok
+        ? `<span style="color:#27ae60;">✅ ${r.insertados} reportes insertados, ${r.errores} errores.</span>`
+        : `<span style="color:#e74c3c;">❌ ${r.message}</span>`;
+    } catch(e) { msg.innerHTML = '<span style="color:#e74c3c;">Error: ' + e.message + '</span>'; }
+  }
+
   // ── SOFIPO: Layouts ────────────────────────────────────────
   let sofipoLayoutsData = [];
   async function loadSofipoLayouts() {
@@ -3322,28 +3737,35 @@
       const r = await fetch('/api/reportes/campo/' + encodeURIComponent(campo)).then(x => x.json());
       const data = r.data || [];
       if (!data.length) { wrap.innerHTML = '<div class="loading">No se encontró el campo "' + campo + '".</div>'; return; }
-      // Agrupar por reporte
+      // Agrupar por reporte, deduplicando
       const porReporte = {};
+      const seen = new Set();
       data.forEach(d => {
-        if (!porReporte[d.ID_REPORTE]) porReporte[d.ID_REPORTE] = [];
-        porReporte[d.ID_REPORTE].push(d);
+        const key = `${d.ID_REPORTE}||${d.NOMBRE_CAMPO}||${d.CLAVE_LAYOUT||''}`;
+        if (!seen.has(key)) {
+          seen.add(key);
+          if (!porReporte[d.ID_REPORTE]) porReporte[d.ID_REPORTE] = [];
+          porReporte[d.ID_REPORTE].push(d);
+        }
       });
       wrap.innerHTML = `<p style="font-size:13px;color:#555;margin-bottom:12px;">
-        El campo <strong>${campo}</strong> aparece en <strong>${Object.keys(porReporte).length}</strong> reporte(s) a través de <strong>${data.length}</strong> layout(s).</p>
+        El campo <strong>${campo}</strong> aparece en <strong>${Object.keys(porReporte).length}</strong> reporte(s).</p>
         ${Object.entries(porReporte).map(([rep, rows]) => `
           <div style="background:#fff;border:1px solid #e0e6ed;border-radius:8px;padding:14px;margin-bottom:10px;">
             <div style="font-weight:700;color:#1a3558;margin-bottom:8px;">📊 ${rep}</div>
             <table style="width:100%;border-collapse:collapse;font-size:12px;">
               <thead><tr style="background:#f0f4f8;">
+                <th style="padding:5px 10px;text-align:left;">Campo</th>
                 <th style="padding:5px 10px;text-align:left;">Layout</th>
-                <th style="padding:5px 10px;text-align:center;">Columna</th>
+                <th style="padding:5px 10px;text-align:center;">Col.</th>
                 <th style="padding:5px 10px;text-align:left;">Tipo</th>
                 <th style="padding:5px 10px;text-align:center;">Oblig.</th>
                 <th style="padding:5px 10px;text-align:left;">Descripción</th>
               </tr></thead>
               <tbody>${rows.map((row,i) => `
                 <tr style="background:${i%2===0?'#fff':'#f8f9fa'};">
-                  <td style="padding:4px 10px;font-weight:600;color:#1a3558;">${row.CLAVE_LAYOUT}</td>
+                  <td style="padding:4px 10px;font-weight:600;">${row.NOMBRE_CAMPO||campo}</td>
+                  <td style="padding:4px 10px;font-size:11px;color:#1a3558;">${row.CLAVE_LAYOUT||'<span style="color:#aaa">reporte directo</span>'}</td>
                   <td style="padding:4px 10px;text-align:center;">${row.COLUMNA_REPORTE||''}</td>
                   <td style="padding:4px 10px;">${row.TIPO_DATO||''}</td>
                   <td style="padding:4px 10px;text-align:center;">${row.OBLIGATORIO==='Si'?'✅':''}</td>
@@ -3371,7 +3793,12 @@
     'chi-clientes':   loadChiClientes,
     'chi-proyectos':  loadChiProyectos,
     'qa-alertas':       loadQaAlertas,
-    'sofipo-layouts':   loadSofipoLayouts,
+    'bc-consulta-rep':    () => { initBC(); },
+    'bc-consulta-val':    () => { initBC(); },
+    'bc-actualizar-rep':  () => {},
+    'bc-actualizar-val':  () => {},
+    'bc-carga-inv':       () => {},
+    'sofipo-layouts':     loadSofipoLayouts,
     'sofipo-reportes':  loadSofipoReportes,
     'sofipo-cruce':     () => {},
   };

@@ -7,8 +7,9 @@ const authRoutes    = require('./routes/auth');
 const apiRoutes     = require('./routes/api');
 const jiraRoutes    = require('./routes/jira');
 const usersRoutes   = require('./routes/users');
-const layoutsRoutes  = require('./routes/layouts');
-const reportesRoutes = require('./routes/reportes');
+const layoutsRoutes   = require('./routes/layouts');
+const reportesRoutes  = require('./routes/reportes');
+const contratosRoutes = require('./routes/contratos');
 const monitor        = require('./services/monitor');
 const { setup }     = require('./db/setup');
 
@@ -35,6 +36,8 @@ app.use('/api/jira',       jiraRoutes);
 app.use('/api/usuarios',   usersRoutes);
 app.use('/api/layouts',    layoutsRoutes);
 app.use('/api/reportes',   reportesRoutes);
+app.use('/api/contratos',  contratosRoutes);
+app.use('/api/inventario', contratosRoutes);
 
 // ── Fallback → SPA ────────────────────────────────────────
 app.get('*', (req, res) => {
