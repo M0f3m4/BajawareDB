@@ -184,22 +184,151 @@ router.post('/inventario-reportes/upload', requireAuth, upload.single('archivo')
     const wb   = XLSX.read(req.file.buffer, { type: 'buffer' });
     const ws   = wb.Sheets[wb.SheetNames[0]];
     const rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
-    let ok = 0, err = 0;
+    let insertados = 0, actualizados = 0, errores = 0;
     for (const r of rows) {
-      const clave = r.CLAVE_REP || r['CLAVE REP'] || '';
+      const clave = String(r.CLAVE_REP || '').trim();
       if (!clave) continue;
       try {
         const existe = await query(`SELECT 1 FROM INVENTARIO_REPORTES WHERE CLAVE_REP=${esc(clave)}`);
         if (!existe.length) {
           await query(`
-            INSERT INTO INVENTARIO_REPORTES (CLAVE_REP, CLAVE_PAIS, CLAVE_ENTIDADREGULADA, CLAVE_REG, REPORTE, DESCRIPCION_ESP, FECHA_ALTA, VIGENTE)
-            VALUES (${esc(clave)}, ${esc(r.CLAVE_PAIS||r.PAIS)}, ${esc(r.CLAVE_ENTIDADREGULADA||r.ENTIDAD)}, ${esc(r.CLAVE_REG||r.REGULACION)}, ${esc(r.REPORTE||clave)}, ${esc(r.DESCRIPCION_ESP||r.DESCRIPCION)}, GETDATE(), 1)
+            INSERT INTO INVENTARIO_REPORTES (
+              CLAVE_REP, CLAVE_PAIS, CLAVE_ENTIDADREGULADA, CLAVE_REG,
+              CLAVE_SERIE, SUBSERIE, CLAVE_GRUPO, REPORTE,
+              CLAVE_SECCION_REP, CLAVE_VERSION_REPORTE, CLAVE_PERIODO,
+              DESCRIPCION_ESP, CLAVE_FECHA_ENT_REP, CARACTERISTICAS,
+              CLAVE_REGULACION_REP, CLAVE_REP_GENERAL, FECHA_REGULACION,
+              FECHA_ALTA, FECHA_ACTUALIZADA, VIGENTE
+            ) VALUES (
+              ${esc(clave)}, ${esc(r.CLAVE_PAIS)}, ${esc(r.CLAVE_ENTIDADREGULADA)}, ${esc(r.CLAVE_REG)},
+              ${esc(r.CLAVE_SERIE)}, ${esc(r.SUBSERIE)}, ${esc(r.CLAVE_GRUPO)}, ${esc(r.REPORTE)},
+              ${esc(r.CLAVE_SECCION_REP)}, ${esc(r.CLAVE_VERSION_REPORTE)}, ${esc(r.CLAVE_PERIODO)},
+              ${esc(r.DESCRIPCION_ESP)}, ${esc(r.CLAVE_FECHA_ENT_REP)}, ${esc(r.CARACTERISTICAS)},
+              ${esc(r.CLAVE_REGULACION_REP)}, ${esc(r.CLAVE_REP_GENERAL)},
+              ${r.FECHA_REGULACION ? esc(r.FECHA_REGULACION) : 'NULL'},
+              GETDATE(), GETDATE(), 1
+            )
           `);
-          ok++;
+          insertados++;
+        } else {
+          await query(`
+            UPDATE INVENTARIO_REPORTES SET
+              CLAVE_PAIS=${esc(r.CLAVE_PAIS)}, CLAVE_ENTIDADREGULADA=${esc(r.CLAVE_ENTIDADREGULADA)},
+              CLAVE_REG=${esc(r.CLAVE_REG)}, CLAVE_SERIE=${esc(r.CLAVE_SERIE)},
+              CLAVE_GRUPO=${esc(r.CLAVE_GRUPO)}, REPORTE=${esc(r.REPORTE)},
+              CLAVE_SECCION_REP=${esc(r.CLAVE_SECCION_REP)}, CLAVE_VERSION_REPORTE=${esc(r.CLAVE_VERSION_REPORTE)},
+              CLAVE_PERIODO=${esc(r.CLAVE_PERIODO)}, DESCRIPCION_ESP=${esc(r.DESCRIPCION_ESP)},
+              CLAVE_REGULACION_REP=${esc(r.CLAVE_REGULACION_REP)}, CLAVE_REP_GENERAL=${esc(r.CLAVE_REP_GENERAL)},
+              FECHA_ACTUALIZADA=GETDATE()
+            WHERE CLAVE_REP=${esc(clave)}
+          `);
+          actualizados++;
         }
-      } catch(e2) { err++; }
+      } catch(e2) { errores++; }
     }
-    res.json({ ok: true, insertados: ok, errores: err });
+    res.json({ ok: true, insertados, actualizados, errores });
+  } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
+});
+
+// ── POST carga Excel inventario validaciones ───────────────
+router.post('/inventario-validaciones/upload', requireAuth, upload.single('archivo'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ ok: false, message: 'No se recibió archivo' });
+  try {
+    const wb   = XLSX.read(req.file.buffer, { type: 'buffer' });
+    const ws   = wb.Sheets[wb.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
+    let insertados = 0, actualizados = 0, errores = 0;
+    for (const r of rows) {
+      const clave = String(r.CLAVE_VALIDACION || '').trim();
+      if (!clave) continue;
+      try {
+        const existe = await query(`SELECT 1 FROM INVENTARIO_VALIDACIONES WHERE CLAVE_VALIDACION=${esc(clave)}`);
+        if (!existe.length) {
+          await query(`
+            INSERT INTO INVENTARIO_VALIDACIONES (
+              CLAVE_VALIDACION, CLAVE_PAIS, CLAVE_ENTIDADREGULADA, CLAVE_REG,
+              CLAVE_REP, ID_VALIDACION_ANT, DESCRIPCION_VALIDACION,
+              TIPO_VALIDACION, TIPO_VALIDACION_CALC, FECHA_ALTA
+            ) VALUES (
+              ${esc(clave)}, ${esc(r.CLAVE_PAIS)}, ${esc(r.CLAVE_ENTIDADREGULADA)}, ${esc(r.CLAVE_REG)},
+              ${esc(r.CLAVE_REP)}, ${esc(r.ID_VALIDACION_ANT)}, ${esc(r.DESCRIPCION_VALIDACION)},
+              ${esc(r.TIPO_VALIDACION)}, ${esc(r.TIPO_VALIDACION_CALC)}, GETDATE()
+            )
+          `);
+          insertados++;
+        } else {
+          await query(`
+            UPDATE INVENTARIO_VALIDACIONES SET
+              CLAVE_REP=${esc(r.CLAVE_REP)},
+              DESCRIPCION_VALIDACION=${esc(r.DESCRIPCION_VALIDACION)},
+              TIPO_VALIDACION=${esc(r.TIPO_VALIDACION)},
+              TIPO_VALIDACION_CALC=${esc(r.TIPO_VALIDACION_CALC)},
+              FECHA_ACTUALIZADA=GETDATE()
+            WHERE CLAVE_VALIDACION=${esc(clave)}
+          `);
+          actualizados++;
+        }
+      } catch(e2) { errores++; }
+    }
+    res.json({ ok: true, insertados, actualizados, errores });
+  } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
+});
+
+// ── POST carga Excel contratos (2 hojas) ──────────────────
+// Hoja "CONTRATO": CLAVE_CONTRATO, NOMBRE_CONTRATO, CLAVE_CLIENTE, CLAVE_PLATAFORMA
+// Hoja "REPORTES": CLAVE_CONTRATO, CLAVE_REP, FECHA_ESTIMADA_QA, FECHA_ESTIMADA_CERT, FECHA_ESTIMADA_PROD
+router.post('/contratos/upload', requireAuth, upload.single('archivo'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ ok: false, message: 'No se recibió archivo' });
+  try {
+    const wb = XLSX.read(req.file.buffer, { type: 'buffer' });
+
+    // Hoja CONTRATO
+    const wsC  = wb.Sheets['CONTRATO'] || wb.Sheets[wb.SheetNames[0]];
+    const cont = XLSX.utils.sheet_to_json(wsC, { defval: '' });
+    let contInsert = 0, contErr = 0;
+    for (const r of cont) {
+      const clave = String(r.CLAVE_CONTRATO || '').trim();
+      if (!clave) continue;
+      try {
+        const existe = await query(`SELECT 1 FROM CONTRATOS WHERE CLAVE_CONTRATO=${esc(clave)}`);
+        if (!existe.length) {
+          await query(`
+            INSERT INTO CONTRATOS (CLAVE_CONTRATO, NOMBRE_CONTRATO, CLAVE_CLIENTE, CLAVE_PLATAFORMA, FECHA_ALTA, FECHA_MODIFICA)
+            VALUES (${esc(clave)}, ${esc(r.NOMBRE_CONTRATO)}, ${esc(r.CLAVE_CLIENTE)}, ${esc(r.CLAVE_PLATAFORMA)}, GETDATE(), GETDATE())
+          `);
+          contInsert++;
+        }
+      } catch(e2) { contErr++; }
+    }
+
+    // Hoja REPORTES
+    const wsR  = wb.Sheets['REPORTES'] || wb.Sheets[wb.SheetNames[1]];
+    let repInsert = 0, repErr = 0;
+    if (wsR) {
+      const reps = XLSX.utils.sheet_to_json(wsR, { defval: '' });
+      for (const r of reps) {
+        const claveC = String(r.CLAVE_CONTRATO || '').trim();
+        const claveR = String(r.CLAVE_REP || '').trim();
+        if (!claveC || !claveR) continue;
+        try {
+          const existe = await query(`SELECT 1 FROM CONTRATOS_REPORTES WHERE CLAVE_CONTRATO=${esc(claveC)} AND CLAVE_REP=${esc(claveR)}`);
+          if (!existe.length) {
+            await query(`
+              INSERT INTO CONTRATOS_REPORTES (CLAVE_CONTRATO, CLAVE_REP, FECHA_ESTIMADA_QA, FECHA_ESTIMADA_CERT, FECHA_ESTIMADA_PROD)
+              VALUES (
+                ${esc(claveC)}, ${esc(claveR)},
+                ${r.FECHA_ESTIMADA_QA  ? esc(r.FECHA_ESTIMADA_QA)  : 'NULL'},
+                ${r.FECHA_ESTIMADA_CERT ? esc(r.FECHA_ESTIMADA_CERT) : 'NULL'},
+                ${r.FECHA_ESTIMADA_PROD ? esc(r.FECHA_ESTIMADA_PROD) : 'NULL'}
+              )
+            `);
+            repInsert++;
+          }
+        } catch(e2) { repErr++; }
+      }
+    }
+
+    res.json({ ok: true, contratos: { insertados: contInsert, errores: contErr }, reportes: { insertados: repInsert, errores: repErr } });
   } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
 });
 

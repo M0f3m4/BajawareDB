@@ -1175,17 +1175,77 @@
 
       <!-- BC: Carga de Inventario -->
       <div class="content-section" id="sec-bc-carga-inv">
-        <h2 class="section-title">📤 Cargar Inventario de Reportes</h2>
-        <p style="font-size:13px;color:#666;margin-bottom:16px;">Sube un Excel con reportes nuevos. Columnas requeridas: CLAVE_REP, CLAVE_PAIS, CLAVE_ENTIDADREGULADA, REPORTE, DESCRIPCION_ESP.</p>
-        <div style="background:#fff;border-radius:10px;padding:24px;max-width:500px;box-shadow:0 2px 8px rgba(0,0,0,.06);">
-          <label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:8px;">Archivo Excel (.xlsx)</label>
-          <input id="bc-inv-file" type="file" accept=".xlsx,.xls"
-            style="display:block;margin-bottom:16px;font-size:13px;">
-          <button onclick="cargarInventario()"
+        <h2 class="section-title">📤 Cargar Inventario</h2>
+
+        <!-- Tabs -->
+        <div style="display:flex;gap:0;margin-bottom:20px;border-bottom:2px solid #e0e6ed;">
+          <button id="tab-inv-rep" onclick="switchTabInv('rep')"
+            style="padding:8px 20px;border:none;border-bottom:2px solid #1a3558;margin-bottom:-2px;background:none;font-size:13px;font-weight:600;color:#1a3558;cursor:pointer;">
+            📊 Reportes
+          </button>
+          <button id="tab-inv-val" onclick="switchTabInv('val')"
+            style="padding:8px 20px;border:none;border-bottom:2px solid transparent;margin-bottom:-2px;background:none;font-size:13px;font-weight:600;color:#888;cursor:pointer;">
+            ✅ Validaciones
+          </button>
+          <button id="tab-inv-cont" onclick="switchTabInv('cont')"
+            style="padding:8px 20px;border:none;border-bottom:2px solid transparent;margin-bottom:-2px;background:none;font-size:13px;font-weight:600;color:#888;cursor:pointer;">
+            📋 Contratos
+          </button>
+        </div>
+
+        <!-- Tab: Reportes -->
+        <div id="panel-inv-rep">
+          <p style="font-size:13px;color:#666;margin-bottom:4px;">Columnas del Excel (mismo nombre que la BD):</p>
+          <p style="font-size:11px;color:#aaa;font-family:monospace;margin-bottom:16px;">CLAVE_REP | CLAVE_PAIS | CLAVE_ENTIDADREGULADA | CLAVE_REG | CLAVE_SERIE | SUBSERIE | CLAVE_GRUPO | REPORTE | CLAVE_SECCION_REP | CLAVE_VERSION_REPORTE | CLAVE_PERIODO | DESCRIPCION_ESP | CLAVE_FECHA_ENT_REP | CARACTERISTICAS | CLAVE_REGULACION_REP | CLAVE_REP_GENERAL | FECHA_REGULACION | VIGENTE</p>
+          <div style="display:flex;gap:10px;align-items:center;margin-bottom:12px;">
+            <input id="bc-inv-rep-file" type="file" accept=".xlsx,.xls" style="font-size:13px;">
+            <button onclick="descargarTemplate('reportes')"
+              style="padding:6px 14px;background:#f0f4f8;color:#1a3558;border:1px solid #c0cfe0;border-radius:6px;font-size:12px;cursor:pointer;">
+              📥 Template
+            </button>
+          </div>
+          <button onclick="cargarInventarioReportes()"
             style="padding:8px 24px;background:#1a3558;color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;">
             📤 Cargar
           </button>
-          <div id="bc-inv-msg" style="margin-top:12px;font-size:13px;"></div>
+          <div id="bc-inv-rep-msg" style="margin-top:12px;font-size:13px;"></div>
+        </div>
+
+        <!-- Tab: Validaciones -->
+        <div id="panel-inv-val" style="display:none;">
+          <p style="font-size:13px;color:#666;margin-bottom:4px;">Columnas del Excel:</p>
+          <p style="font-size:11px;color:#aaa;font-family:monospace;margin-bottom:16px;">CLAVE_VALIDACION | CLAVE_PAIS | CLAVE_ENTIDADREGULADA | CLAVE_REG | CLAVE_REP | ID_VALIDACION_ANT | DESCRIPCION_VALIDACION | TIPO_VALIDACION | TIPO_VALIDACION_CALC</p>
+          <div style="display:flex;gap:10px;align-items:center;margin-bottom:12px;">
+            <input id="bc-inv-val-file" type="file" accept=".xlsx,.xls" style="font-size:13px;">
+            <button onclick="descargarTemplate('validaciones')"
+              style="padding:6px 14px;background:#f0f4f8;color:#1a3558;border:1px solid #c0cfe0;border-radius:6px;font-size:12px;cursor:pointer;">
+              📥 Template
+            </button>
+          </div>
+          <button onclick="cargarInventarioValidaciones()"
+            style="padding:8px 24px;background:#1a3558;color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;">
+            📤 Cargar
+          </button>
+          <div id="bc-inv-val-msg" style="margin-top:12px;font-size:13px;"></div>
+        </div>
+
+        <!-- Tab: Contratos -->
+        <div id="panel-inv-cont" style="display:none;">
+          <p style="font-size:13px;color:#666;margin-bottom:4px;">Excel con 2 hojas:</p>
+          <p style="font-size:11px;color:#aaa;font-family:monospace;margin-bottom:4px;">Hoja <strong>CONTRATO</strong>: CLAVE_CONTRATO | NOMBRE_CONTRATO | CLAVE_CLIENTE | CLAVE_PLATAFORMA</p>
+          <p style="font-size:11px;color:#aaa;font-family:monospace;margin-bottom:16px;">Hoja <strong>REPORTES</strong>: CLAVE_CONTRATO | CLAVE_REP | FECHA_ESTIMADA_QA | FECHA_ESTIMADA_CERT | FECHA_ESTIMADA_PROD</p>
+          <div style="display:flex;gap:10px;align-items:center;margin-bottom:12px;">
+            <input id="bc-inv-cont-file" type="file" accept=".xlsx,.xls" style="font-size:13px;">
+            <button onclick="descargarTemplate('contratos')"
+              style="padding:6px 14px;background:#f0f4f8;color:#1a3558;border:1px solid #c0cfe0;border-radius:6px;font-size:12px;cursor:pointer;">
+              📥 Template
+            </button>
+          </div>
+          <button onclick="cargarContratos()"
+            style="padding:8px 24px;background:#1a3558;color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;">
+            📤 Cargar
+          </button>
+          <div id="bc-inv-cont-msg" style="margin-top:12px;font-size:13px;"></div>
         </div>
       </div>
 
@@ -3544,19 +3604,94 @@
     }, 300);
   }
 
-  async function cargarInventario() {
-    const file = document.getElementById('bc-inv-file').files[0];
-    const msg  = document.getElementById('bc-inv-msg');
+  function switchTabInv(tab) {
+    ['rep','val','cont'].forEach(t => {
+      document.getElementById('panel-inv-' + t).style.display = t === tab ? '' : 'none';
+      const btn = document.getElementById('tab-inv-' + t);
+      btn.style.borderBottomColor = t === tab ? '#1a3558' : 'transparent';
+      btn.style.color = t === tab ? '#1a3558' : '#888';
+    });
+  }
+
+  async function cargarInventarioReportes() {
+    const file = document.getElementById('bc-inv-rep-file').files[0];
+    const msg  = document.getElementById('bc-inv-rep-msg');
     if (!file) { msg.innerHTML = '<span style="color:#e74c3c;">Selecciona un archivo.</span>'; return; }
     msg.innerHTML = 'Cargando...';
-    const fd = new FormData();
-    fd.append('archivo', file);
+    const fd = new FormData(); fd.append('archivo', file);
     try {
       const r = await fetch('/api/contratos/inventario-reportes/upload', { method: 'POST', body: fd }).then(x => x.json());
       msg.innerHTML = r.ok
-        ? `<span style="color:#27ae60;">✅ ${r.insertados} reportes insertados, ${r.errores} errores.</span>`
+        ? `<span style="color:#27ae60;">✅ ${r.insertados} insertados, ${r.actualizados} actualizados, ${r.errores} errores.</span>`
         : `<span style="color:#e74c3c;">❌ ${r.message}</span>`;
     } catch(e) { msg.innerHTML = '<span style="color:#e74c3c;">Error: ' + e.message + '</span>'; }
+  }
+
+  async function cargarInventarioValidaciones() {
+    const file = document.getElementById('bc-inv-val-file').files[0];
+    const msg  = document.getElementById('bc-inv-val-msg');
+    if (!file) { msg.innerHTML = '<span style="color:#e74c3c;">Selecciona un archivo.</span>'; return; }
+    msg.innerHTML = 'Cargando...';
+    const fd = new FormData(); fd.append('archivo', file);
+    try {
+      const r = await fetch('/api/contratos/inventario-validaciones/upload', { method: 'POST', body: fd }).then(x => x.json());
+      msg.innerHTML = r.ok
+        ? `<span style="color:#27ae60;">✅ ${r.insertados} insertados, ${r.actualizados} actualizados, ${r.errores} errores.</span>`
+        : `<span style="color:#e74c3c;">❌ ${r.message}</span>`;
+    } catch(e) { msg.innerHTML = '<span style="color:#e74c3c;">Error: ' + e.message + '</span>'; }
+  }
+
+  async function cargarContratos() {
+    const file = document.getElementById('bc-inv-cont-file').files[0];
+    const msg  = document.getElementById('bc-inv-cont-msg');
+    if (!file) { msg.innerHTML = '<span style="color:#e74c3c;">Selecciona un archivo.</span>'; return; }
+    msg.innerHTML = 'Cargando...';
+    const fd = new FormData(); fd.append('archivo', file);
+    try {
+      const r = await fetch('/api/contratos/contratos/upload', { method: 'POST', body: fd }).then(x => x.json());
+      msg.innerHTML = r.ok
+        ? `<span style="color:#27ae60;">✅ Contratos: ${r.contratos.insertados} nuevos. Reportes: ${r.reportes.insertados} nuevos.</span>`
+        : `<span style="color:#e74c3c;">❌ ${r.message}</span>`;
+    } catch(e) { msg.innerHTML = '<span style="color:#e74c3c;">Error: ' + e.message + '</span>'; }
+  }
+
+  function descargarTemplate(tipo) {
+    const templates = {
+      reportes: {
+        nombre: 'template_inventario_reportes.xlsx',
+        cols: ['CLAVE_REP','CLAVE_PAIS','CLAVE_ENTIDADREGULADA','CLAVE_REG','CLAVE_SERIE','SUBSERIE','CLAVE_GRUPO','REPORTE','CLAVE_SECCION_REP','CLAVE_VERSION_REPORTE','CLAVE_PERIODO','DESCRIPCION_ESP','CLAVE_FECHA_ENT_REP','CARACTERISTICAS','CLAVE_REGULACION_REP','CLAVE_REP_GENERAL','FECHA_REGULACION','VIGENTE'],
+        ejemplo: ['MX_BM_XX_XX_00_24','MX','BM','SUPER','XX',null,'OPERATIVOS','XX','00','24','03-TRIMESTRAL','Descripción del reporte',null,null,'REG_001','MX_BM_XX_XX_00',null,1]
+      },
+      validaciones: {
+        nombre: 'template_inventario_validaciones.xlsx',
+        cols: ['CLAVE_VALIDACION','CLAVE_PAIS','CLAVE_ENTIDADREGULADA','CLAVE_REG','CLAVE_REP','ID_VALIDACION_ANT','DESCRIPCION_VALIDACION','TIPO_VALIDACION','TIPO_VALIDACION_CALC'],
+        ejemplo: ['MX_BM_XX_XX_00_24_A_1_01_01','MX','BM','SUPER','MX_BM_XX_XX_00_24','XX_01','Valida que el campo no sea nulo','Intra','NULO']
+      },
+      contratos: null
+    };
+
+    if (tipo === 'contratos') {
+      // 2 hojas
+      const wb = XLSX.utils.book_new();
+      const ws1 = XLSX.utils.aoa_to_sheet([
+        ['CLAVE_CONTRATO','NOMBRE_CONTRATO','CLAVE_CLIENTE','CLAVE_PLATAFORMA'],
+        ['CONT-001','Contrato Ejemplo','CLI-001','JAVA']
+      ]);
+      const ws2 = XLSX.utils.aoa_to_sheet([
+        ['CLAVE_CONTRATO','CLAVE_REP','FECHA_ESTIMADA_QA','FECHA_ESTIMADA_CERT','FECHA_ESTIMADA_PROD'],
+        ['CONT-001','MX_BM_XX_XX_00_24','2024-03-01','2024-04-01','2024-05-01']
+      ]);
+      XLSX.utils.book_append_sheet(wb, ws1, 'CONTRATO');
+      XLSX.utils.book_append_sheet(wb, ws2, 'REPORTES');
+      XLSX.writeFile(wb, 'template_contratos.xlsx');
+      return;
+    }
+
+    const t = templates[tipo];
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.aoa_to_sheet([t.cols, t.ejemplo]);
+    XLSX.utils.book_append_sheet(wb, ws, 'Datos');
+    XLSX.writeFile(wb, t.nombre);
   }
 
   // ── SOFIPO: Layouts ────────────────────────────────────────
