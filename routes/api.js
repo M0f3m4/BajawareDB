@@ -78,6 +78,21 @@ router.get('/explorar', async (req, res) => {
   }
 });
 
+// ── GET /api/debug-tabla/:tabla ───────────────────────────
+// Ver primeras filas + columnas de cualquier tabla (solo admin)
+router.get('/debug-tabla/:tabla', requireAuth, async (req, res) => {
+  const tabla = req.params.tabla.replace(/[^a-zA-Z0-9_]/g, '');
+  try {
+    const cols = await query(`
+      SELECT COLUMN_NAME, DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS
+      WHERE TABLE_NAME = '${tabla}' ORDER BY ORDINAL_POSITION
+    `);
+    const filas = await query(`SELECT TOP 10 * FROM [${tabla}]`);
+    const count = await query(`SELECT COUNT(*) AS total FROM [${tabla}]`);
+    res.json({ ok: true, tabla, total: count[0].total, columnas: cols, data: filas });
+  } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
+});
+
 // ── GET /api/paquetes ─────────────────────────────────────
 // Paquetes agrupados por ticket con progreso por cliente
 router.get('/paquetes', requireAuth, async (req, res) => {
