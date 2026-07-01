@@ -286,37 +286,73 @@ router.put('/estatus-reporte', requireAuth, async (req, res) => {
 });
 
 // ── PUT actualizar estatus de validación ──────────────────
+// Cascada MARCAR:    DOC→doc | PROG→doc+prog | CERT→doc+prog+cert
+// Cascada DESMARCAR: DOC→los 3 | PROG→prog+cert | CERT→cert
 router.put('/estatus-validacion', requireAuth, async (req, res) => {
   try {
-    const { clave_validacion, clave_rep, clave_plataforma, etapa, fecha } = req.body;
-    const usuario = req.session.user?.usuario || 'sistema';
+    const { clave_validacion, clave_rep, clave_plataforma, etapa, fecha, desmarcar } = req.body;
+    const usuario  = req.session.user?.usuario || 'sistema';
     const fechaVal = fecha ? esc(fecha) : 'GETDATE()';
 
-    const campoFecha = etapa === 'DOCUMENTADO' ? 'DOC_FECHA_REAL'
-                     : etapa === 'PROGRAMADO'  ? 'PROG_FECHA_REAL'
-                     : 'CERT_FECHA_REAL';
-    const campoUser  = etapa === 'DOCUMENTADO' ? 'USER_DOC'
-                     : etapa === 'PROGRAMADO'  ? 'USER_PROG'
-                     : 'USER_CERT';
+    let docVal, progVal, certVal, nuevoEstatus;
+    if (desmarcar) {
+      docVal       = etapa === 'DOCUMENTADO' ? "'N'" : "'S'";
+      progVal      = (etapa === 'DOCUMENTADO' || etapa === 'PROGRAMADO') ? "'N'" : "'S'";
+      certVal      = "'N'";
+      nuevoEstatus = etapa === 'CERTIFICADO' ? 'PROGRAMADO'
+                   : etapa === 'PROGRAMADO'  ? 'DOCUMENTADO'
+                   : '';
+    } else {
+      docVal       = "'S'";
+      progVal      = (etapa === 'PROGRAMADO' || etapa === 'CERTIFICADO') ? "'S'" : "'N'";
+      certVal      = etapa === 'CERTIFICADO' ? "'S'" : "'N'";
+      nuevoEstatus = etapa;
+    }
 
-    const existe = await query(`SELECT 1 FROM REPORTE_VALIDACION WHERE CLAVE_VALIDACION=${esc(clave_validacion)} AND CLAVE_PLATAFORMA=${esc(clave_plataforma)}`);
+    // Fechas y usuarios: solo se actualizan los campos de la etapa seleccionada
+    const docFecha  = etapa === 'DOCUMENTADO' ? `, DOC_FECHA_REAL=${desmarcar ? 'NULL' : fechaVal}, USER_DOC=${esc(usuario)}` : '';
+    const progFecha = etapa === 'PROGRAMADO'  ? `, PROG_FECHA_REAL=${desmarcar ? 'NULL' : fechaVal}, USER_PROG=${esc(usuario)}` : '';
+    const certFecha = etapa === 'CERTIFICADO' ? `, CERT_FECHA_REAL=${desmarcar ? 'NULL' : fechaVal}, USER_CERT=${esc(usuario)}` : '';
+
+    const existe = await query(`
+      SELECT 1 FROM REPORTE_VALIDACION
+      WHERE CLAVE_VALIDACION=${esc(clave_validacion)} AND CLAVE_PLATAFORMA=${esc(clave_plataforma)}
+    `);
 
     if (existe.length) {
       await query(`
         UPDATE REPORTE_VALIDACION SET
-          ${etapa}='S',
-          ${campoFecha}=${fechaVal},
-          ${campoUser}=${esc(usuario)},
-          ESTATUS=${esc(etapa)}
+          DOCUMENTADO=${docVal}, PROGRAMADO=${progVal}, CERTIFICADO=${certVal},
+          ESTATUS=${esc(nuevoEstatus)}
+          ${docFecha}${progFecha}${certFecha}
         WHERE CLAVE_VALIDACION=${esc(clave_validacion)} AND CLAVE_PLATAFORMA=${esc(clave_plataforma)}
       `);
-    } else {
+    } else if (!desmarcar) {
       await query(`
-        INSERT INTO REPORTE_VALIDACION (CLAVE_VALIDACION, CLAVE_REP, CLAVE_PLATAFORMA, ${etapa}, ${campoFecha}, ${campoUser}, ESTATUS)
-        VALUES (${esc(clave_validacion)}, ${esc(clave_rep)}, ${esc(clave_plataforma)}, 'S', ${fechaVal}, ${esc(usuario)}, ${esc(etapa)})
+        INSERT INTO REPORTE_VALIDACION
+          (CLAVE_VALIDACION, CLAVE_REP, CLAVE_PLATAFORMA, DOCUMENTADO, PROGRAMADO, CERTIFICADO, ESTATUS
+           ${etapa === 'DOCUMENTADO' ? ', DOC_FECHA_REAL, USER_DOC' : etapa === 'PROGRAMADO' ? ', PROG_FECHA_REAL, USER_PROG' : ', CERT_FECHA_REAL, USER_CERT'})
+        VALUES
+          (${esc(clave_validacion)}, ${esc(clave_rep)}, ${esc(clave_plataforma)},
+           ${docVal}, ${progVal}, ${certVal}, ${esc(nuevoEstatus)}, ${fechaVal}, ${esc(usuario)})
       `);
     }
     res.json({ ok: true });
+  } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
+});
+
+// ── GET búsqueda de validaciones (para autocompletar en el form) ──────────
+router.get('/buscar-validacion', requireAuth, async (req, res) => {
+  const q = (req.query.q || '').trim().replace(/'/g, "''");
+  if (q.length < 2) return res.json({ ok: true, data: [] });
+  try {
+    const rows = await query(`
+      SELECT DISTINCT TOP 10 CLAVE_VALIDACION, CLAVE_REP, CLAVE_PLATAFORMA, DESCRIPCION
+      FROM REPORTE_VALIDACION
+      WHERE CLAVE_VALIDACION LIKE '%${q}%' OR DESCRIPCION LIKE '%${q}%'
+      ORDER BY CLAVE_VALIDACION
+    `);
+    res.json({ ok: true, data: rows });
   } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
 });
 
