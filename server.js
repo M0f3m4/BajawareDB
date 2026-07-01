@@ -49,4 +49,8 @@ app.listen(PORT, async () => {
   console.log(`Bajaware corriendo en http://localhost:${PORT}`);
   try { await setup(); } catch (e) { console.warn('⚠ Setup DB:', e.message); }
   monitor.iniciar();
+  // Pre-calentar cache de validaciones en background (no bloquea el arranque)
+  contratosRoutes.warmCache()
+    .then(() => console.log('✔ Cache validaciones listo'))
+    .catch(e  => console.warn('⚠ Cache validaciones:', e.message));
 });

@@ -93,6 +93,31 @@ router.get('/debug-tabla/:tabla', requireAuth, async (req, res) => {
   } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
 });
 
+// ── GET /api/debug-validaciones/:contrato ─────────────────
+// Diagnosticar por qué no hay validaciones para un contrato
+router.get('/debug-validaciones/:contrato', requireAuth, async (req, res) => {
+  const clave = req.params.contrato.replace(/[^a-zA-Z0-9_]/g, '');
+  try {
+    // Claves en CONTRATOS_REPORTES para ese contrato
+    const clavesCR = await query(`
+      SELECT TOP 5 CLAVE_REP FROM CONTRATOS_REPORTES WHERE CLAVE_CONTRATO='${clave}'
+    `);
+    // Muestra de CLAVE_REP en REPORTE_VALIDACION
+    const muestraRV = await query(`SELECT DISTINCT TOP 10 CLAVE_REP FROM REPORTE_VALIDACION`);
+    // Intento de match con LIKE
+    const matchLike = clavesCR.length ? await query(`
+      SELECT TOP 5 rv.CLAVE_REP FROM REPORTE_VALIDACION rv
+      WHERE rv.CLAVE_REP LIKE '${clavesCR[0].CLAVE_REP}%'
+    `) : [];
+    // Match con LEFT
+    const matchLeft = clavesCR.length ? await query(`
+      SELECT TOP 5 rv.CLAVE_REP FROM REPORTE_VALIDACION rv
+      WHERE LEFT(rv.CLAVE_REP, ${clavesCR[0].CLAVE_REP.length}) = '${clavesCR[0].CLAVE_REP}'
+    `) : [];
+    res.json({ ok: true, clavesCR, muestraRV, matchLike, matchLeft });
+  } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
+});
+
 // ── GET /api/paquetes ─────────────────────────────────────
 // Paquetes agrupados por ticket con progreso por cliente
 router.get('/paquetes', requireAuth, async (req, res) => {

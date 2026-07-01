@@ -11,6 +11,7 @@ const config = {
     trustServerCertificate: process.env.DB_TRUST_CERT !== 'false',
     enableArithAbort:     true
   },
+  requestTimeout: 120000,   // 2 min por query (default era 15s)
   pool: {
     max: 10,
     min: 0,

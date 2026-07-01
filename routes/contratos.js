@@ -13,6 +13,21 @@ function requireAuth(req, res, next) {
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
 const esc = v => (v === null || v === undefined || v === '') ? 'NULL' : `'${String(v).trim().replace(/'/g,"''")}'`;
 
+// Cache del DISTINCT CLAVE_REP de REPORTE_VALIDACION (scan lento de 431k filas — se hace UNA vez)
+let _rvClavesCache = null;
+let _rvCacheTime   = 0;
+const RV_TTL = 10 * 60 * 1000; // 10 minutos
+
+async function getRVClaves() {
+  if (_rvClavesCache && Date.now() - _rvCacheTime < RV_TTL) return _rvClavesCache;
+  console.log('[cache] refrescando DISTINCT CLAVE_REP de REPORTE_VALIDACION...');
+  const rows = await query(`SELECT DISTINCT CLAVE_REP FROM REPORTE_VALIDACION`);
+  _rvClavesCache = rows.map(r => r.CLAVE_REP);
+  _rvCacheTime   = Date.now();
+  console.log(`[cache] listo: ${_rvClavesCache.length} claves distintas`);
+  return _rvClavesCache;
+}
+
 // ── CLIENTES ──────────────────────────────────────────────
 router.get('/clientes', requireAuth, async (req, res) => {
   try {
@@ -61,7 +76,7 @@ router.get('/contratos/:clave/reportes', requireAuth, async (req, res) => {
       FROM CONTRATOS_REPORTES cr
       LEFT JOIN CONTRATOS c            ON c.CLAVE_CONTRATO = cr.CLAVE_CONTRATO
       LEFT JOIN INVENTARIO_REPORTES ir ON ir.CLAVE_REP = cr.CLAVE_REP
-      LEFT JOIN ESTATUS_REPORTE er     ON er.CLAVE_REP = cr.CLAVE_REP
+      LEFT JOIN ESTATUS_REPORTE er     ON er.CLAVE_REP_GENERAL = cr.CLAVE_REP
                                       AND er.CLAVE_PLATAFORMA = c.CLAVE_PLATAFORMA
       WHERE cr.CLAVE_CONTRATO=${esc(req.params.clave)}
       ORDER BY cr.CLAVE_REP
@@ -73,28 +88,108 @@ router.get('/contratos/:clave/reportes', requireAuth, async (req, res) => {
 // ── VALIDACIONES por contrato ─────────────────────────────
 router.get('/contratos/:clave/validaciones', requireAuth, async (req, res) => {
   try {
+    // Paso 1: CLAVE_REP base del contrato
+    const claves = await query(`
+      SELECT DISTINCT CLAVE_REP FROM CONTRATOS_REPORTES
+      WHERE CLAVE_CONTRATO=${esc(req.params.clave)}
+    `);
+    if (!claves.length) return res.json({ ok: true, data: [] });
+
+    // Paso 2: todos los CLAVE_REP distintos de REPORTE_VALIDACION (usa cache en memoria)
+    const todosRV = await getRVClaves();
+
+    // Paso 3: filtrar en JS cuáles versiones corresponden a las bases del contrato
+    const baseSet = new Set(claves.map(r => r.CLAVE_REP));
+    const matched = todosRV.filter(c => {
+        if (baseSet.has(c)) return true;          // coincidencia exacta
+        const i = c.lastIndexOf('_');
+        return i > 0 && baseSet.has(c.slice(0, i)); // quitar sufijo _AÑO
+      });
+
+    if (!matched.length) return res.json({ ok: true, data: [] });
+
+    // Paso 4: IN con los claves exactos → rápido aunque no haya índice
+    const inList = matched.map(c => `'${c.replace(/'/g, "''")}'`).join(',');
     const rows = await query(`
       SELECT
-        rv.CLAVE_VALIDACION,
-        rv.CLAVE_REP,
-        rv.TIPO_VALIDACION,
-        rv.DESCRIPCION,
-        rv.DOCUMENTADO,
-        rv.DOC_FECHA_REAL,
-        rv.PROGRAMADO,
-        rv.PROG_FECHA_REAL,
-        rv.CERTIFICADO,
-        rv.CERT_FECHA_REAL,
-        rv.ESTATUS,
-        rv.CLAVE_PLATAFORMA,
-        rv.VERSION
+        rv.CLAVE_VALIDACION, rv.CLAVE_REP, rv.TIPO_VALIDACION, rv.DESCRIPCION,
+        rv.DOCUMENTADO, rv.DOC_FECHA_REAL, rv.PROGRAMADO, rv.PROG_FECHA_REAL,
+        rv.CERTIFICADO, rv.CERT_FECHA_REAL, rv.ESTATUS, rv.CLAVE_PLATAFORMA, rv.VERSION
       FROM REPORTE_VALIDACION rv
-      INNER JOIN CONTRATOS_REPORTES cr ON cr.CLAVE_REP = rv.CLAVE_REP
-      WHERE cr.CLAVE_CONTRATO=${esc(req.params.clave)}
+      WHERE rv.CLAVE_REP IN (${inList})
       ORDER BY rv.CLAVE_REP, rv.CLAVE_VALIDACION
     `);
     res.json({ ok: true, data: rows });
-  } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
+  } catch(e) {
+    console.error('[validaciones]', e.message);
+    res.status(500).json({ ok: false, message: e.message });
+  }
+});
+
+// ── VALIDACIONES por cliente (opcional: filtro por CLAVE_CLIENTE) ────────────
+// GET /clientes/:clave/validaciones  → validaciones del cliente (con CLAVE_UNICA)
+// GET /clientes/todos/validaciones   → todas las validaciones deduplicadas (sin prefijo)
+router.get('/clientes/:clave/validaciones', requireAuth, async (req, res) => {
+  try {
+    const claveCliente = req.params.clave; // puede ser 'todos'
+    const esTodos = claveCliente === 'todos';
+
+    // -- Nombre del cliente (si aplica)
+    let nombreCliente = '';
+    if (!esTodos) {
+      const [cli] = await query(`SELECT NOMBRE_CLIENTE FROM CLIENTE WHERE CLAVE_CLIENTE=${esc(claveCliente)}`);
+      if (!cli) return res.json({ ok: true, data: [], cliente: '' });
+      nombreCliente = cli.NOMBRE_CLIENTE;
+    }
+
+    // -- Claves base del contrato/cliente
+    const clavesBQ = esTodos
+      ? await query(`SELECT DISTINCT CLAVE_REP FROM CONTRATOS_REPORTES`)
+      : await query(`
+          SELECT DISTINCT cr.CLAVE_REP
+          FROM CONTRATOS_REPORTES cr
+          INNER JOIN CONTRATOS con ON con.CLAVE_CONTRATO = cr.CLAVE_CONTRATO
+          WHERE con.CLAVE_CLIENTE=${esc(claveCliente)}
+        `);
+
+    if (!clavesBQ.length) return res.json({ ok: true, data: [], cliente: nombreCliente });
+
+    // -- Todos los CLAVE_REP distintos (usa cache — no vuelve a escanear 431k filas)
+    const todosRV = await getRVClaves();
+
+    // -- Filtrar en JS
+    const baseSet = new Set(clavesBQ.map(r => r.CLAVE_REP));
+    const matched = todosRV.filter(c => {
+        if (baseSet.has(c)) return true;
+        const i = c.lastIndexOf('_');
+        return i > 0 && baseSet.has(c.slice(0, i));
+      });
+
+    if (!matched.length) return res.json({ ok: true, data: [], cliente: nombreCliente });
+
+    // -- Query final con IN (claves exactas, sin wildcards)
+    const inList = matched.map(c => `'${c.replace(/'/g, "''")}'`).join(',');
+    const rows = await query(`
+      SELECT
+        rv.CLAVE_VALIDACION, rv.CLAVE_REP, rv.TIPO_VALIDACION, rv.DESCRIPCION,
+        rv.DOCUMENTADO, rv.DOC_FECHA_REAL, rv.PROGRAMADO, rv.PROG_FECHA_REAL,
+        rv.CERTIFICADO, rv.CERT_FECHA_REAL, rv.ESTATUS, rv.CLAVE_PLATAFORMA, rv.VERSION
+      FROM REPORTE_VALIDACION rv
+      WHERE rv.CLAVE_REP IN (${inList})
+      ORDER BY rv.CLAVE_REP, rv.CLAVE_VALIDACION
+    `);
+
+    // -- Agregar CLAVE_UNICA solo cuando hay cliente seleccionado
+    const data = rows.map(r => ({
+      ...r,
+      CLAVE_UNICA: esTodos ? r.CLAVE_VALIDACION : `${nombreCliente}_${r.CLAVE_VALIDACION}`
+    }));
+
+    res.json({ ok: true, data, cliente: nombreCliente });
+  } catch(e) {
+    console.error('[validaciones-cliente]', e.message);
+    res.status(500).json({ ok: false, message: e.message });
+  }
 });
 
 // ── GET estatus de un reporte ─────────────────────────────
@@ -112,33 +207,47 @@ router.get('/estatus-reporte/:clave', requireAuth, async (req, res) => {
 // etapa: 'DOCUMENTADO' | 'PROGRAMADO' | 'CERTIFICADO'
 router.put('/estatus-reporte', requireAuth, async (req, res) => {
   try {
-    const { clave_rep, clave_plataforma, etapa, fecha } = req.body;
-    const usuario = req.session.user?.usuario || 'sistema';
+    const { clave_rep, clave_plataforma, etapa, fecha, desmarcar } = req.body;
+    const usuario  = req.session.user?.usuario || 'sistema';
     const fechaVal = fecha ? esc(fecha) : 'GETDATE()';
 
-    const campoFecha  = etapa === 'DOCUMENTADO' ? 'DOC_FECHA_REAL'
-                      : etapa === 'PROGRAMADO'  ? 'PROG_FECHA_REAL'
-                      : 'CERT_FECHA_REAL';
-    const campoUser   = etapa === 'DOCUMENTADO' ? 'USER_DOC'
-                      : etapa === 'PROGRAMADO'  ? 'USER_PROG'
-                      : 'USER_CERT';
+    // Cascada MARCAR:    CERT→doc+prog+cert | PROG→doc+prog | DOC→doc
+    // Cascada DESMARCAR: DOC→los3           | PROG→prog+cert | CERT→cert
+    let docVal, progVal, certVal, nuevoEstatus;
+    if (desmarcar) {
+      docVal       = etapa === 'DOCUMENTADO' ? "'NO'" : "'SI'";
+      progVal      = (etapa === 'DOCUMENTADO' || etapa === 'PROGRAMADO') ? "'NO'" : "'SI'";
+      certVal      = "'NO'";
+      nuevoEstatus = etapa === 'CERTIFICADO' ? 'PROGRAMADO'
+                   : etapa === 'PROGRAMADO'  ? 'DOCUMENTADO'
+                   : '';
+    } else {
+      docVal       = "'SI'";
+      progVal      = (etapa === 'PROGRAMADO' || etapa === 'CERTIFICADO') ? "'SI'" : "'NO'";
+      certVal      = etapa === 'CERTIFICADO' ? "'SI'" : "'NO'";
+      nuevoEstatus = etapa;
+    }
 
-    // Verificar si existe registro
-    const existe = await query(`SELECT 1 FROM ESTATUS_REPORTE WHERE CLAVE_REP=${esc(clave_rep)} AND CLAVE_PLATAFORMA=${esc(clave_plataforma)}`);
+    const existe = await query(`
+      SELECT 1 FROM ESTATUS_REPORTE
+      WHERE CLAVE_REP_GENERAL=${esc(clave_rep)} AND CLAVE_PLATAFORMA=${esc(clave_plataforma)}
+    `);
 
     if (existe.length) {
       await query(`
         UPDATE ESTATUS_REPORTE SET
-          ${etapa}='S',
-          ${campoFecha}=${fechaVal},
-          ${campoUser}=${esc(usuario)},
-          ESTATUS=${esc(etapa)}
-        WHERE CLAVE_REP=${esc(clave_rep)} AND CLAVE_PLATAFORMA=${esc(clave_plataforma)}
+          DOCUMENTADO=${docVal}, PROGRAMADO=${progVal}, CERTIFICADO=${certVal},
+          ESTATUS=${esc(nuevoEstatus)}
+        WHERE CLAVE_REP_GENERAL=${esc(clave_rep)} AND CLAVE_PLATAFORMA=${esc(clave_plataforma)}
       `);
     } else {
       await query(`
-        INSERT INTO ESTATUS_REPORTE (CLAVE_REP, CLAVE_PLATAFORMA, ${etapa}, ${campoFecha}, ${campoUser}, ESTATUS)
-        VALUES (${esc(clave_rep)}, ${esc(clave_plataforma)}, 'S', ${fechaVal}, ${esc(usuario)}, ${esc(etapa)})
+        INSERT INTO ESTATUS_REPORTE
+          (CLAVE_REP, CLAVE_REP_GENERAL, CLAVE_PLATAFORMA, VERSION,
+           DOCUMENTADO, PROGRAMADO, CERTIFICADO, ESTATUS)
+        VALUES
+          (${esc(clave_rep)}, ${esc(clave_rep)}, ${esc(clave_plataforma)}, '00',
+           ${docVal}, ${progVal}, ${certVal}, ${esc(nuevoEstatus)})
       `);
     }
     res.json({ ok: true });
@@ -368,3 +477,4 @@ router.get('/contratos/:clave/resumen', requireAuth, async (req, res) => {
 });
 
 module.exports = router;
+module.exports.warmCache = getRVClaves;

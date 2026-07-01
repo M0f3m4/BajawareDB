@@ -603,6 +603,7 @@
       <div class="sub-menu" id="sub-bc">
         <div class="sub-item" onclick="showSection('bc-consulta-rep')">Estatus por Contrato</div>
         <div class="sub-item" onclick="showSection('bc-consulta-val')">Validaciones por Contrato</div>
+        <div class="sub-item" onclick="showSection('bc-val-cliente-view')">Validaciones por Cliente</div>
         <div class="sub-item" onclick="showSection('bc-actualizar-rep')">Actualizar Estatus Reporte</div>
         <div class="sub-item" onclick="showSection('bc-actualizar-val')">Actualizar Estatus Validación</div>
         <div class="sub-item" onclick="showSection('bc-carga-inv')">Cargar Inventario</div>
@@ -1081,6 +1082,32 @@
         <div id="bc-val-content"><p style="color:#aaa;font-size:13px;">Selecciona un cliente y contrato.</p></div>
       </div>
 
+      <!-- BC: Validaciones por Cliente -->
+      <div class="content-section" id="sec-bc-val-cliente-view">
+        <h2 class="section-title">🏢 Validaciones por Cliente</h2>
+        <div style="background:#fff;border-radius:10px;padding:16px;margin-bottom:16px;box-shadow:0 2px 8px rgba(0,0,0,.06);">
+          <p style="font-size:12px;color:#666;margin:0 0 12px;">
+            Selecciona un cliente para ver sus validaciones con clave única <code>CLIENTE_CLAVE</code>.
+            Si dejas el filtro vacío, se muestran todas las validaciones deduplicadas (sin prefijo de cliente).
+            Las validaciones compartidas entre clientes son el mismo registro en BD — actualizar una la actualiza para todos.
+          </p>
+          <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;">
+            <div>
+              <label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px;">Cliente</label>
+              <select id="vcli-select" onchange="loadValCliente()"
+                style="padding:7px 12px;border:1px solid #ddd;border-radius:6px;font-size:13px;min-width:220px;">
+                <option value="todos">— Todas las validaciones —</option>
+              </select>
+            </div>
+            <input id="vcli-search" type="text" placeholder="Buscar clave, reporte o descripción..."
+              oninput="filtrarValCliente()"
+              style="padding:7px 12px;border:1px solid #ddd;border-radius:6px;font-size:13px;width:280px;">
+            <div id="vcli-badge" style="font-size:12px;color:#888;padding:7px 0;"></div>
+          </div>
+        </div>
+        <div id="vcli-content"><p style="color:#aaa;font-size:13px;">Elige un cliente o carga todas las validaciones.</p></div>
+      </div>
+
       <!-- BC: Actualizar Estatus Reporte -->
       <div class="content-section" id="sec-bc-actualizar-rep">
         <h2 class="section-title">✏️ Actualizar Estatus de Reporte</h2>
@@ -1112,10 +1139,16 @@
                 style="width:100%;padding:7px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;">
             </div>
           </div>
-          <button onclick="actualizarEstatusReporte()"
-            style="padding:8px 24px;background:#1a3558;color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;">
-            Actualizar Estatus
-          </button>
+          <div style="display:flex;align-items:center;gap:16px;margin-bottom:8px;">
+            <button onclick="actualizarEstatusReporte(false)"
+              style="padding:8px 24px;background:#1a3558;color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;">
+              ✓ Marcar Etapa
+            </button>
+            <button onclick="actualizarEstatusReporte(true)"
+              style="padding:8px 24px;background:#e74c3c;color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;">
+              ✗ Desmarcar Etapa
+            </button>
+          </div>
           <div id="upd-rep-msg" style="margin-top:12px;font-size:13px;"></div>
           <!-- Búsqueda rápida de reporte -->
           <hr style="margin:20px 0;border:none;border-top:1px solid #eee;">
@@ -3374,7 +3407,7 @@
   let bcRepData = [], bcValData = [];
 
   function etapaBadge(val) {
-    if (!val || val !== 'S') return '<span style="color:#ccc;font-size:11px;">—</span>';
+    if (!val || val === 'NO') return '<span style="color:#ccc;font-size:11px;">—</span>';
     return '<span style="color:#27ae60;font-weight:700;">✓</span>';
   }
   function estatusPill(e) {
@@ -3498,6 +3531,7 @@
     wrap.innerHTML = '<div class="loading">Cargando...</div>';
     try {
       const r = await fetch(`/api/contratos/contratos/${encodeURIComponent(clave)}/validaciones`).then(x => x.json());
+      if (!r.ok) { wrap.innerHTML = `<div class="loading" style="color:#e74c3c;">Error del servidor: ${r.message}</div>`; return; }
       bcValData = r.data || [];
       renderValidacionesContrato(bcValData);
     } catch(e) { wrap.innerHTML = '<div class="loading">Error: ' + e.message + '</div>'; }
@@ -3548,6 +3582,97 @@
       </div>`).join('');
   }
 
+  // ── Validaciones por Cliente ──────────────────────────────
+  let vcliData = [];
+
+  // Poblar select de clientes cuando se abre la sección
+  async function initValCliente() {
+    const sel = document.getElementById('vcli-select');
+    if (sel.options.length > 1) return; // ya poblado
+    try {
+      const r = await fetch('/api/contratos/clientes').then(x => x.json());
+      (r.data || []).forEach(c => {
+        const o = document.createElement('option');
+        o.value = c.CLAVE_CLIENTE;
+        o.textContent = c.NOMBRE_CLIENTE;
+        sel.appendChild(o);
+      });
+    } catch(_) {}
+  }
+
+  async function loadValCliente() {
+    const clave = document.getElementById('vcli-select').value || 'todos';
+    const wrap  = document.getElementById('vcli-content');
+    const badge = document.getElementById('vcli-badge');
+    wrap.innerHTML = '<div class="loading">Cargando… (primera carga puede tardar)</div>';
+    badge.textContent = '';
+    try {
+      const r = await fetch(`/api/contratos/clientes/${encodeURIComponent(clave)}/validaciones`).then(x => x.json());
+      if (!r.ok) { wrap.innerHTML = `<div class="loading" style="color:#e74c3c;">Error: ${r.message}</div>`; return; }
+      vcliData = r.data || [];
+      badge.textContent = `${vcliData.length} validaciones`;
+      renderValCliente(vcliData, r.cliente);
+    } catch(e) { wrap.innerHTML = '<div class="loading">Error: ' + e.message + '</div>'; }
+  }
+
+  function filtrarValCliente() {
+    const q = document.getElementById('vcli-search').value.toLowerCase();
+    renderValCliente(vcliData.filter(v =>
+      (v.CLAVE_UNICA||'').toLowerCase().includes(q) ||
+      (v.CLAVE_REP||'').toLowerCase().includes(q) ||
+      (v.DESCRIPCION||'').toLowerCase().includes(q)
+    ), null);
+  }
+
+  function renderValCliente(data, cliente) {
+    const wrap = document.getElementById('vcli-content');
+    const esTodos = !cliente;
+    if (!data.length) { wrap.innerHTML = '<p style="color:#aaa;font-size:13px;">Sin validaciones.</p>'; return; }
+
+    // Agrupar por reporte
+    const porRep = {};
+    data.forEach(v => { if (!porRep[v.CLAVE_REP]) porRep[v.CLAVE_REP]=[]; porRep[v.CLAVE_REP].push(v); });
+
+    wrap.innerHTML = Object.entries(porRep).map(([rep, vals]) => `
+      <div style="background:#fff;border:1px solid #e0e6ed;border-radius:8px;margin-bottom:12px;overflow:hidden;">
+        <div style="background:#1a3558;color:#fff;padding:8px 14px;font-weight:700;font-size:13px;">
+          📊 ${rep}
+          <span style="font-weight:400;font-size:12px;">(${vals.length} validaciones)</span>
+          ${cliente ? `<span style="margin-left:8px;background:rgba(255,255,255,.2);padding:2px 8px;border-radius:10px;font-size:11px;">🏢 ${cliente}</span>` : ''}
+        </div>
+        <table style="width:100%;border-collapse:collapse;font-size:12px;">
+          <thead><tr style="background:#f0f4f8;">
+            <th style="padding:5px 10px;text-align:left;">${esTodos ? 'Clave Val.' : 'Clave Única'}</th>
+            ${!esTodos ? '<th style="padding:5px 10px;text-align:left;color:#888;font-weight:500;">Clave Original</th>' : ''}
+            <th style="padding:5px 10px;text-align:left;">Descripción</th>
+            <th style="padding:5px 10px;text-align:center;">Doc</th>
+            <th style="padding:5px 10px;text-align:center;">Prog</th>
+            <th style="padding:5px 10px;text-align:center;">Cert</th>
+            <th style="padding:5px 10px;text-align:center;">Estatus</th>
+            <th style="padding:5px 10px;text-align:center;">Acción</th>
+          </tr></thead>
+          <tbody>${vals.map((v,i) => `
+            <tr style="background:${i%2===0?'#fff':'#f8f9fa'};">
+              <td style="padding:5px 10px;font-weight:600;color:#1a3558;font-family:monospace;">${v.CLAVE_UNICA}</td>
+              ${!esTodos ? `<td style="padding:5px 10px;color:#999;font-size:11px;">${v.CLAVE_VALIDACION}</td>` : ''}
+              <td style="padding:5px 10px;">${v.DESCRIPCION||''}</td>
+              <td style="padding:5px 10px;text-align:center;">${etapaBadge(v.DOCUMENTADO)}</td>
+              <td style="padding:5px 10px;text-align:center;">${etapaBadge(v.PROGRAMADO)}</td>
+              <td style="padding:5px 10px;text-align:center;">${etapaBadge(v.CERTIFICADO)}</td>
+              <td style="padding:5px 10px;text-align:center;">${estatusPill(v.ESTATUS)}</td>
+              <td style="padding:5px 10px;text-align:center;">
+                <button onclick="precargarActualizarVal('${v.CLAVE_VALIDACION}','${v.CLAVE_REP}','${v.CLAVE_PLATAFORMA||''}')"
+                  style="padding:3px 8px;background:#1a3558;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:11px;"
+                  title="Actualiza para todos los clientes que compartan esta validación">
+                  Actualizar
+                </button>
+              </td>
+            </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>`).join('');
+  }
+
   function precargarActualizarRep(clave, plataforma) {
     showSection('bc-actualizar-rep');
     document.getElementById('upd-rep-clave').value = clave;
@@ -3561,7 +3686,7 @@
     document.getElementById('upd-val-plataforma').value = plataforma;
   }
 
-  async function actualizarEstatusReporte() {
+  async function actualizarEstatusReporte(desmarcar = false) {
     const clave_rep       = document.getElementById('upd-rep-clave').value.trim();
     const clave_plataforma= document.getElementById('upd-rep-plataforma').value.trim();
     const etapa           = document.getElementById('upd-rep-etapa').value;
@@ -3573,9 +3698,24 @@
       const r = await fetch('/api/contratos/estatus-reporte', {
         method: 'PUT',
         headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({ clave_rep, clave_plataforma, etapa, fecha })
+        body: JSON.stringify({ clave_rep, clave_plataforma, etapa, fecha, desmarcar })
       }).then(x => x.json());
-      msg.innerHTML = r.ok ? '<span style="color:#27ae60;">✅ Estatus actualizado correctamente.</span>' : `<span style="color:#e74c3c;">❌ ${r.message}</span>`;
+      const accion = desmarcar ? 'desmarcado' : 'marcado';
+      msg.innerHTML = r.ok
+        ? `<span style="color:#27ae60;">✅ Etapa ${etapa} ${accion} correctamente.</span>`
+        : `<span style="color:#e74c3c;">❌ ${r.message}</span>`;
+      if (r.ok) {
+        // Recargar tabla de estatus por contrato si hay uno seleccionado
+        const contratoSel = document.getElementById('bc-rep-contrato');
+        if (contratoSel && contratoSel.value) loadReportesContrato();
+        // Limpiar formulario
+        document.getElementById('upd-rep-clave').value = '';
+        document.getElementById('upd-rep-plataforma').value = '';
+        document.getElementById('upd-rep-fecha').value = '';
+        document.getElementById('upd-rep-etapa').selectedIndex = 0;
+        document.getElementById('upd-rep-buscar').value = '';
+        document.getElementById('upd-rep-resultados').innerHTML = '';
+      }
     } catch(e) { msg.innerHTML = '<span style="color:#e74c3c;">Error: ' + e.message + '</span>'; }
   }
 
@@ -3948,7 +4088,8 @@
     'bc-carga-inv':       () => {},
     'sofipo-layouts':     loadSofipoLayouts,
     'sofipo-reportes':  loadSofipoReportes,
-    'sofipo-cruce':     () => {},
+    'sofipo-cruce':         () => {},
+    'bc-val-cliente-view':  () => initValCliente(),
   };
   const loaded = {};
 
