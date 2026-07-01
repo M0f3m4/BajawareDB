@@ -1072,6 +1072,13 @@
               </select>
             </div>
             <div>
+              <label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px;">Contrato</label>
+              <select id="vcli-contrato" onchange="vcliOnContratoChange()"
+                style="padding:7px 12px;border:1px solid #ddd;border-radius:6px;font-size:13px;min-width:240px;" disabled>
+                <option value="">— Todos los contratos —</option>
+              </select>
+            </div>
+            <div>
               <label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px;">Reporte</label>
               <select id="vcli-rep" onchange="loadValCliente()"
                 style="padding:7px 12px;border:1px solid #ddd;border-radius:6px;font-size:13px;min-width:280px;" disabled>
@@ -3513,25 +3520,64 @@
   }
 
   async function vcliOnClienteChange() {
-    const clave = document.getElementById('vcli-select').value;
-    const selRep = document.getElementById('vcli-rep');
-    const wrap   = document.getElementById('vcli-content');
-    selRep.innerHTML = '<option value="">— Cargando reportes… —</option>';
+    const clave      = document.getElementById('vcli-select').value;
+    const selContrato = document.getElementById('vcli-contrato');
+    const selRep     = document.getElementById('vcli-rep');
+    const wrap       = document.getElementById('vcli-content');
+    // Reset contrato y reporte
+    selContrato.innerHTML = '<option value="">— Todos los contratos —</option>';
+    selContrato.disabled = true;
+    selRep.innerHTML = '<option value="">— Selecciona reporte —</option>';
     selRep.disabled = true;
-    wrap.innerHTML = '<p style="color:#aaa;font-size:13px;">Selecciona un reporte.</p>';
+    wrap.innerHTML = '<p style="color:#aaa;font-size:13px;">Selecciona un contrato o ve directo al reporte.</p>';
     document.getElementById('vcli-badge').textContent = '';
     vcliData = [];
     if (!clave) return;
     try {
-      const r = await fetch(`/api/contratos/clientes/${encodeURIComponent(clave)}/reportes`).then(x => x.json());
-      selRep.innerHTML = '<option value="">— Selecciona reporte —</option>';
-      (r.data || []).forEach(rep => {
+      // Cargar contratos del cliente
+      const rC = await fetch(`/api/contratos/clientes/${encodeURIComponent(clave)}/contratos`).then(x => x.json());
+      (rC.data || []).forEach(c => {
         const o = document.createElement('option');
-        o.value = rep;
-        o.textContent = rep;
+        o.value = c.CLAVE_CONTRATO;
+        o.textContent = `${c.NOMBRE_CONTRATO} (${c.CLAVE_CONTRATO})`;
+        selContrato.appendChild(o);
+      });
+      selContrato.disabled = false;
+      // Cargar reportes de todos los contratos del cliente
+      await vcliCargarReportes(clave, '');
+    } catch(e) { console.error(e); }
+  }
+
+  async function vcliOnContratoChange() {
+    const clave    = document.getElementById('vcli-select').value;
+    const contrato = document.getElementById('vcli-contrato').value;
+    const selRep   = document.getElementById('vcli-rep');
+    const wrap     = document.getElementById('vcli-content');
+    selRep.innerHTML = '<option value="">— Selecciona reporte —</option>';
+    selRep.disabled = true;
+    wrap.innerHTML = '<p style="color:#aaa;font-size:13px;">Selecciona un reporte.</p>';
+    document.getElementById('vcli-badge').textContent = '';
+    vcliData = [];
+    await vcliCargarReportes(clave, contrato);
+  }
+
+  async function vcliCargarReportes(clave, contrato) {
+    const selRep = document.getElementById('vcli-rep');
+    try {
+      // Si hay contrato seleccionado: reportes de ese contrato; si no: todos del cliente
+      const url = contrato
+        ? `/api/contratos/contratos/${encodeURIComponent(contrato)}/reportes`
+        : `/api/contratos/clientes/${encodeURIComponent(clave)}/reportes`;
+      const r = await fetch(url).then(x => x.json());
+      selRep.innerHTML = '<option value="">— Selecciona reporte —</option>';
+      // /contratos/:clave/reportes devuelve objetos con CLAVE_REP; /clientes/:clave/reportes devuelve strings
+      const lista = (r.data || []).map(x => typeof x === 'string' ? x : x.CLAVE_REP);
+      lista.forEach(rep => {
+        const o = document.createElement('option');
+        o.value = rep; o.textContent = rep;
         selRep.appendChild(o);
       });
-      selRep.disabled = false;
+      selRep.disabled = lista.length === 0;
     } catch(e) {
       selRep.innerHTML = '<option value="">Error cargando reportes</option>';
     }
