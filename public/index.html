@@ -602,7 +602,6 @@
       </div>
       <div class="sub-menu" id="sub-bc">
         <div class="sub-item" onclick="showSection('bc-consulta-rep')">Estatus por Contrato</div>
-        <div class="sub-item" onclick="showSection('bc-consulta-val')">Validaciones por Contrato</div>
         <div class="sub-item" onclick="showSection('bc-val-cliente-view')">Validaciones por Cliente</div>
         <div class="sub-item" onclick="showSection('bc-actualizar-rep')">Actualizar Estatus Reporte</div>
         <div class="sub-item" onclick="showSection('bc-actualizar-val')">Actualizar Estatus Validación</div>
@@ -1058,28 +1057,6 @@
         <!-- Resumen badges -->
         <div id="bc-rep-resumen" style="display:none;margin-bottom:14px;display:flex;gap:10px;flex-wrap:wrap;"></div>
         <div id="bc-rep-content"><p style="color:#aaa;font-size:13px;">Selecciona un cliente y contrato.</p></div>
-      </div>
-
-      <!-- BC: Consulta Validaciones por Contrato -->
-      <div class="content-section" id="sec-bc-consulta-val">
-        <h2 class="section-title">✅ Validaciones por Contrato</h2>
-        <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;align-items:flex-end;">
-          <div>
-            <label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px;">Cliente</label>
-            <select id="bc-val-cliente" onchange="loadContratosVal()" style="padding:7px 12px;border:1px solid #ddd;border-radius:6px;font-size:13px;min-width:200px;">
-              <option value="">— Selecciona cliente —</option>
-            </select>
-          </div>
-          <div>
-            <label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px;">Contrato</label>
-            <select id="bc-val-contrato" onchange="loadValidacionesContrato()" style="padding:7px 12px;border:1px solid #ddd;border-radius:6px;font-size:13px;min-width:220px;">
-              <option value="">— Selecciona contrato —</option>
-            </select>
-          </div>
-          <input id="bc-val-search" type="text" placeholder="Buscar validación o reporte..." oninput="filtrarValidacionesContrato()"
-            style="padding:7px 12px;border:1px solid #ddd;border-radius:6px;font-size:13px;width:240px;">
-        </div>
-        <div id="bc-val-content"><p style="color:#aaa;font-size:13px;">Selecciona un cliente y contrato.</p></div>
       </div>
 
       <!-- BC: Validaciones por Cliente -->
@@ -3406,7 +3383,7 @@
   }
 
   // ── BASE CONOCIMIENTO ─────────────────────────────────────
-  let bcRepData = [], bcValData = [];
+  let bcRepData = [];
 
   function etapaBadge(val) {
     if (!val || val === 'NO') return '<span style="color:#ccc;font-size:11px;">—</span>';
@@ -3432,7 +3409,7 @@
     // Cargar clientes en ambos selects
     try {
       const r = await fetch('/api/contratos/clientes').then(x => x.json());
-      ['bc-rep-cliente','bc-val-cliente'].forEach(id => {
+      ['bc-rep-cliente'].forEach(id => {
         const sel = document.getElementById(id);
         sel.innerHTML = '<option value="">— Selecciona cliente —</option>';
         (r.data||[]).forEach(c => {
@@ -3452,15 +3429,6 @@
     (r.data||[]).forEach(c => { sel.innerHTML += `<option value="${c.CLAVE_CONTRATO}">${c.NOMBRE_CONTRATO} (${c.CLAVE_CONTRATO})</option>`; });
   }
 
-  async function loadContratosVal() {
-    const clave = document.getElementById('bc-val-cliente').value;
-    const sel = document.getElementById('bc-val-contrato');
-    sel.innerHTML = '<option value="">— Selecciona contrato —</option>';
-    document.getElementById('bc-val-content').innerHTML = '<p style="color:#aaa;font-size:13px;">Selecciona un contrato.</p>';
-    if (!clave) return;
-    const r = await fetch(`/api/contratos/clientes/${encodeURIComponent(clave)}/contratos`).then(x => x.json());
-    (r.data||[]).forEach(c => { sel.innerHTML += `<option value="${c.CLAVE_CONTRATO}">${c.NOMBRE_CONTRATO} (${c.CLAVE_CONTRATO})</option>`; });
-  }
 
   async function loadReportesContrato() {
     const clave = document.getElementById('bc-rep-contrato').value;
@@ -3526,63 +3494,6 @@
       </tbody></table>`;
   }
 
-  async function loadValidacionesContrato() {
-    const clave = document.getElementById('bc-val-contrato').value;
-    const wrap  = document.getElementById('bc-val-content');
-    if (!clave) { wrap.innerHTML = '<p style="color:#aaa;font-size:13px;">Selecciona un contrato.</p>'; return; }
-    wrap.innerHTML = '<div class="loading">Cargando...</div>';
-    try {
-      const r = await fetch(`/api/contratos/contratos/${encodeURIComponent(clave)}/validaciones`).then(x => x.json());
-      if (!r.ok) { wrap.innerHTML = `<div class="loading" style="color:#e74c3c;">Error del servidor: ${r.message}</div>`; return; }
-      bcValData = r.data || [];
-      renderValidacionesContrato(bcValData);
-    } catch(e) { wrap.innerHTML = '<div class="loading">Error: ' + e.message + '</div>'; }
-  }
-
-  function filtrarValidacionesContrato() {
-    const q = document.getElementById('bc-val-search').value.toLowerCase();
-    renderValidacionesContrato(bcValData.filter(v =>
-      (v.CLAVE_VALIDACION||'').toLowerCase().includes(q) || (v.CLAVE_REP||'').toLowerCase().includes(q) || (v.DESCRIPCION||'').toLowerCase().includes(q)
-    ));
-  }
-
-  function renderValidacionesContrato(data) {
-    const wrap = document.getElementById('bc-val-content');
-    if (!data.length) { wrap.innerHTML = '<p style="color:#aaa;font-size:13px;">Sin validaciones.</p>'; return; }
-    // Agrupar por reporte
-    const porRep = {};
-    data.forEach(v => { if (!porRep[v.CLAVE_REP]) porRep[v.CLAVE_REP]=[]; porRep[v.CLAVE_REP].push(v); });
-    wrap.innerHTML = Object.entries(porRep).map(([rep, vals]) => `
-      <div style="background:#fff;border:1px solid #e0e6ed;border-radius:8px;margin-bottom:12px;overflow:hidden;">
-        <div style="background:#1a3558;color:#fff;padding:8px 14px;font-weight:700;font-size:13px;">📊 ${rep} <span style="font-weight:400;font-size:12px;">(${vals.length} validaciones)</span></div>
-        <table style="width:100%;border-collapse:collapse;font-size:12px;">
-          <thead><tr style="background:#f0f4f8;">
-            <th style="padding:5px 10px;text-align:left;">Clave Val.</th>
-            <th style="padding:5px 10px;text-align:left;">Descripción</th>
-            <th style="padding:5px 10px;text-align:center;">Doc</th>
-            <th style="padding:5px 10px;text-align:center;">Prog</th>
-            <th style="padding:5px 10px;text-align:center;">Cert</th>
-            <th style="padding:5px 10px;text-align:center;">Estatus</th>
-            <th style="padding:5px 10px;text-align:center;">Acción</th>
-          </tr></thead>
-          <tbody>${vals.map((v,i) => `
-            <tr style="background:${i%2===0?'#fff':'#f8f9fa'};">
-              <td style="padding:5px 10px;font-weight:600;color:#1a3558;">${v.CLAVE_VALIDACION}</td>
-              <td style="padding:5px 10px;">${v.DESCRIPCION||''}</td>
-              <td style="padding:5px 10px;text-align:center;">${etapaBadge(v.DOCUMENTADO)}</td>
-              <td style="padding:5px 10px;text-align:center;">${etapaBadge(v.PROGRAMADO)}</td>
-              <td style="padding:5px 10px;text-align:center;">${etapaBadge(v.CERTIFICADO)}</td>
-              <td style="padding:5px 10px;text-align:center;">${estatusPill(v.ESTATUS)}</td>
-              <td style="padding:5px 10px;text-align:center;">
-                <button onclick="precargarActualizarVal('${v.CLAVE_VALIDACION}','${v.CLAVE_REP}','${v.CLAVE_PLATAFORMA||''}')"
-                  style="padding:3px 8px;background:#1a3558;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:11px;">
-                  Actualizar
-                </button>
-              </td>
-            </tr>`).join('')}
-          </tbody></table>
-      </div>`).join('');
-  }
 
   // ── Validaciones por Cliente ──────────────────────────────
   let vcliData = [];
@@ -4117,7 +4028,6 @@
     'chi-proyectos':  loadChiProyectos,
     'qa-alertas':       loadQaAlertas,
     'bc-consulta-rep':    () => { initBC(); },
-    'bc-consulta-val':    () => { initBC(); },
     'bc-actualizar-rep':  () => {},
     'bc-actualizar-val':  () => {},
     'bc-carga-inv':       () => {},
