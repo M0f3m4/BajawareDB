@@ -127,11 +127,27 @@ router.get('/contratos/:clave/validaciones', requireAuth, async (req, res) => {
 });
 
 // ── VALIDACIONES por cliente (opcional: filtro por CLAVE_CLIENTE) ────────────
-// GET /clientes/:clave/validaciones  → validaciones del cliente (con CLAVE_UNICA)
-// GET /clientes/todos/validaciones   → todas las validaciones deduplicadas (sin prefijo)
+// ── REPORTES (CLAVE_REP base) por cliente ────────────────
+router.get('/clientes/:clave/reportes', requireAuth, async (req, res) => {
+  try {
+    const rows = await query(`
+      SELECT DISTINCT cr.CLAVE_REP
+      FROM CONTRATOS_REPORTES cr
+      INNER JOIN CONTRATOS con ON con.CLAVE_CONTRATO = cr.CLAVE_CONTRATO
+      WHERE con.CLAVE_CLIENTE=${esc(req.params.clave)}
+      ORDER BY cr.CLAVE_REP
+    `);
+    res.json({ ok: true, data: rows.map(r => r.CLAVE_REP) });
+  } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
+});
+
+// ── VALIDACIONES por cliente, filtradas por reporte ───────
+// ?rep=CLAVE_REP_BASE → solo ese reporte (recomendado, rápido)
+// sin ?rep            → todos los reportes del cliente (lento si hay muchos)
 router.get('/clientes/:clave/validaciones', requireAuth, async (req, res) => {
   try {
-    const claveCliente = req.params.clave; // puede ser 'todos'
+    const claveCliente = req.params.clave;
+    const repFiltro    = req.query.rep || null; // CLAVE_REP base opcional
     const esTodos = claveCliente === 'todos';
 
     // -- Nombre del cliente (si aplica)
@@ -142,42 +158,57 @@ router.get('/clientes/:clave/validaciones', requireAuth, async (req, res) => {
       nombreCliente = cli.NOMBRE_CLIENTE;
     }
 
-    // -- Claves base del contrato/cliente
-    const clavesBQ = esTodos
-      ? await query(`SELECT DISTINCT CLAVE_REP FROM CONTRATOS_REPORTES`)
-      : await query(`
-          SELECT DISTINCT cr.CLAVE_REP
-          FROM CONTRATOS_REPORTES cr
-          INNER JOIN CONTRATOS con ON con.CLAVE_CONTRATO = cr.CLAVE_CONTRATO
-          WHERE con.CLAVE_CLIENTE=${esc(claveCliente)}
-        `);
+    // -- Si viene filtro por reporte, úsalo directo (evita cache + IN grande)
+    let rows;
+    if (repFiltro) {
+      const base = repFiltro.replace(/'/g, "''");
+      const todosRV = await getRVClaves();
+      const matched = todosRV.filter(c =>
+        c === base || (c.lastIndexOf('_') > 0 && c.slice(0, c.lastIndexOf('_')) === base)
+      );
+      if (!matched.length) return res.json({ ok: true, data: [], cliente: nombreCliente });
+      const inList = matched.map(c => `'${c.replace(/'/g, "''")}'`).join(',');
+      rows = await query(`
+        SELECT rv.CLAVE_VALIDACION, rv.CLAVE_REP, rv.TIPO_VALIDACION, rv.DESCRIPCION,
+               rv.DOCUMENTADO, rv.DOC_FECHA_REAL, rv.PROGRAMADO, rv.PROG_FECHA_REAL,
+               rv.CERTIFICADO, rv.CERT_FECHA_REAL, rv.ESTATUS, rv.CLAVE_PLATAFORMA, rv.VERSION
+        FROM REPORTE_VALIDACION rv
+        WHERE rv.CLAVE_REP IN (${inList})
+        ORDER BY rv.CLAVE_REP, rv.CLAVE_VALIDACION
+      `);
+    } else {
+      // -- Sin filtro: todos los reportes del cliente (puede ser lento)
+      const clavesBQ = esTodos
+        ? await query(`SELECT DISTINCT CLAVE_REP FROM CONTRATOS_REPORTES`)
+        : await query(`
+            SELECT DISTINCT cr.CLAVE_REP
+            FROM CONTRATOS_REPORTES cr
+            INNER JOIN CONTRATOS con ON con.CLAVE_CONTRATO = cr.CLAVE_CONTRATO
+            WHERE con.CLAVE_CLIENTE=${esc(claveCliente)}
+          `);
 
-    if (!clavesBQ.length) return res.json({ ok: true, data: [], cliente: nombreCliente });
+      if (!clavesBQ.length) return res.json({ ok: true, data: [], cliente: nombreCliente });
 
-    // -- Todos los CLAVE_REP distintos (usa cache — no vuelve a escanear 431k filas)
-    const todosRV = await getRVClaves();
-
-    // -- Filtrar en JS
-    const baseSet = new Set(clavesBQ.map(r => r.CLAVE_REP));
-    const matched = todosRV.filter(c => {
+      const todosRV = await getRVClaves();
+      const baseSet = new Set(clavesBQ.map(r => r.CLAVE_REP));
+      const matched = todosRV.filter(c => {
         if (baseSet.has(c)) return true;
         const i = c.lastIndexOf('_');
         return i > 0 && baseSet.has(c.slice(0, i));
       });
 
-    if (!matched.length) return res.json({ ok: true, data: [], cliente: nombreCliente });
+      if (!matched.length) return res.json({ ok: true, data: [], cliente: nombreCliente });
 
-    // -- Query final con IN (claves exactas, sin wildcards)
-    const inList = matched.map(c => `'${c.replace(/'/g, "''")}'`).join(',');
-    const rows = await query(`
-      SELECT
-        rv.CLAVE_VALIDACION, rv.CLAVE_REP, rv.TIPO_VALIDACION, rv.DESCRIPCION,
-        rv.DOCUMENTADO, rv.DOC_FECHA_REAL, rv.PROGRAMADO, rv.PROG_FECHA_REAL,
-        rv.CERTIFICADO, rv.CERT_FECHA_REAL, rv.ESTATUS, rv.CLAVE_PLATAFORMA, rv.VERSION
-      FROM REPORTE_VALIDACION rv
-      WHERE rv.CLAVE_REP IN (${inList})
-      ORDER BY rv.CLAVE_REP, rv.CLAVE_VALIDACION
-    `);
+      const inList = matched.map(c => `'${c.replace(/'/g, "''")}'`).join(',');
+      rows = await query(`
+        SELECT rv.CLAVE_VALIDACION, rv.CLAVE_REP, rv.TIPO_VALIDACION, rv.DESCRIPCION,
+               rv.DOCUMENTADO, rv.DOC_FECHA_REAL, rv.PROGRAMADO, rv.PROG_FECHA_REAL,
+               rv.CERTIFICADO, rv.CERT_FECHA_REAL, rv.ESTATUS, rv.CLAVE_PLATAFORMA, rv.VERSION
+        FROM REPORTE_VALIDACION rv
+        WHERE rv.CLAVE_REP IN (${inList})
+        ORDER BY rv.CLAVE_REP, rv.CLAVE_VALIDACION
+      `);
+    }
 
     // -- Agregar CLAVE_UNICA solo cuando hay cliente seleccionado
     const data = rows.map(r => ({
