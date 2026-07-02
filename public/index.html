@@ -1312,6 +1312,51 @@
         </div>
       </div>
 
+      <!-- Modal: versión de carga -->
+      <div id="inv-ver-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;align-items:center;justify-content:center;">
+        <div style="background:#fff;border-radius:12px;padding:28px 32px;width:420px;box-shadow:0 8px 32px rgba(0,0,0,.2);">
+          <h3 style="margin:0 0 6px;font-size:15px;color:#1a3558;">📋 Datos de versión</h3>
+          <p id="inv-ver-filename" style="font-size:12px;color:#888;margin:0 0 20px;"></p>
+          <div style="display:grid;gap:14px;">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+              <div>
+                <label style="font-size:11px;font-weight:600;color:#555;display:block;margin-bottom:4px;">Versión *</label>
+                <input id="inv-ver-version" type="text" value="1.0.0" placeholder="ej. 2.0.0"
+                  style="width:100%;padding:7px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;box-sizing:border-box;">
+              </div>
+              <div>
+                <label style="font-size:11px;font-weight:600;color:#555;display:block;margin-bottom:4px;">Tipo Versión</label>
+                <select id="inv-ver-tipo" style="width:100%;padding:7px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;">
+                  <option value="BASE">BASE</option>
+                  <option value="CAMBIO REG">CAMBIO REG</option>
+                  <option value="FIX">FIX</option>
+                </select>
+              </div>
+            </div>
+            <div>
+              <label style="font-size:11px;font-weight:600;color:#555;display:block;margin-bottom:4px;">Regulación</label>
+              <input id="inv-ver-regulacion" type="text" placeholder="ej. DICIEMBRE 2025"
+                style="width:100%;padding:7px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;box-sizing:border-box;">
+            </div>
+            <div>
+              <label style="font-size:11px;font-weight:600;color:#555;display:block;margin-bottom:4px;">Descripción</label>
+              <input id="inv-ver-desc" type="text" placeholder="ej. Actualización reportes Q4"
+                style="width:100%;padding:7px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;box-sizing:border-box;">
+            </div>
+          </div>
+          <div style="display:flex;gap:10px;margin-top:22px;justify-content:flex-end;">
+            <button onclick="invVerCancelar()"
+              style="padding:8px 20px;background:#f0f4f8;color:#555;border:1px solid #ddd;border-radius:6px;font-size:13px;cursor:pointer;">
+              Cancelar
+            </button>
+            <button onclick="invVerConfirmar()"
+              style="padding:8px 24px;background:#1a3558;color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;">
+              📤 Confirmar carga
+            </button>
+          </div>
+        </div>
+      </div>
+
       <!-- SOFIPO: Layouts -->
       <div class="content-section" id="sec-sofipo-layouts">
         <h2 class="section-title">🗂️ SOFIPO — Layouts</h2>
@@ -4088,30 +4133,58 @@
     });
   }
 
-  async function cargarInventarioReportes() {
+  let _invVerTipo = ''; // 'rep' o 'val'
+
+  function cargarInventarioReportes() {
     const file = document.getElementById('bc-inv-rep-file').files[0];
     const msg  = document.getElementById('bc-inv-rep-msg');
     if (!file) { msg.innerHTML = '<span style="color:#e74c3c;">Selecciona un archivo.</span>'; return; }
-    msg.innerHTML = 'Cargando...';
-    const fd = new FormData(); fd.append('archivo', file);
-    try {
-      const r = await fetch('/api/contratos/inventario-reportes/upload', { method: 'POST', body: fd }).then(x => x.json());
-      msg.innerHTML = r.ok
-        ? `<span style="color:#27ae60;">✅ ${r.insertados} insertados, ${r.actualizados} actualizados, ${r.errores} errores.</span>`
-        : `<span style="color:#e74c3c;">❌ ${r.message}</span>`;
-    } catch(e) { msg.innerHTML = '<span style="color:#e74c3c;">Error: ' + e.message + '</span>'; }
+    _invVerTipo = 'rep';
+    document.getElementById('inv-ver-filename').textContent = '📄 ' + file.name;
+    const m = document.getElementById('inv-ver-modal');
+    m.style.display = 'flex';
   }
 
-  async function cargarInventarioValidaciones() {
+  function cargarInventarioValidaciones() {
     const file = document.getElementById('bc-inv-val-file').files[0];
     const msg  = document.getElementById('bc-inv-val-msg');
     if (!file) { msg.innerHTML = '<span style="color:#e74c3c;">Selecciona un archivo.</span>'; return; }
+    _invVerTipo = 'val';
+    document.getElementById('inv-ver-filename').textContent = '📄 ' + file.name;
+    const m = document.getElementById('inv-ver-modal');
+    m.style.display = 'flex';
+  }
+
+  function invVerCancelar() {
+    document.getElementById('inv-ver-modal').style.display = 'none';
+  }
+
+  async function invVerConfirmar() {
+    const version    = document.getElementById('inv-ver-version').value.trim() || '1.0.0';
+    const regulacion = document.getElementById('inv-ver-regulacion').value.trim();
+    const tipo_ver   = document.getElementById('inv-ver-tipo').value;
+    const descripcion= document.getElementById('inv-ver-desc').value.trim();
+    document.getElementById('inv-ver-modal').style.display = 'none';
+
+    const isRep = _invVerTipo === 'rep';
+    const fileId = isRep ? 'bc-inv-rep-file' : 'bc-inv-val-file';
+    const msgId  = isRep ? 'bc-inv-rep-msg'  : 'bc-inv-val-msg';
+    const endpoint = isRep ? '/api/contratos/inventario-reportes/upload' : '/api/contratos/inventario-validaciones/upload';
+    const file = document.getElementById(fileId).files[0];
+    const msg  = document.getElementById(msgId);
+
     msg.innerHTML = 'Cargando...';
-    const fd = new FormData(); fd.append('archivo', file);
+    const fd = new FormData();
+    fd.append('archivo', file);
+    fd.append('version', version);
+    fd.append('regulacion', regulacion);
+    fd.append('tipo_version', tipo_ver);
+    fd.append('descripcion', descripcion);
+
     try {
-      const r = await fetch('/api/contratos/inventario-validaciones/upload', { method: 'POST', body: fd }).then(x => x.json());
+      const r = await fetch(endpoint, { method: 'POST', body: fd }).then(x => x.json());
       msg.innerHTML = r.ok
-        ? `<span style="color:#27ae60;">✅ ${r.insertados} insertados, ${r.actualizados} actualizados, ${r.errores} errores.</span>`
+        ? `<span style="color:#27ae60;">✅ ${r.insertados} insertados, ${r.actualizados} actualizados, ${r.errores} errores. Versión ${version} registrada.</span>`
         : `<span style="color:#e74c3c;">❌ ${r.message}</span>`;
     } catch(e) { msg.innerHTML = '<span style="color:#e74c3c;">Error: ' + e.message + '</span>'; }
   }

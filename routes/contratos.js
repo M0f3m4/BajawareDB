@@ -521,6 +521,12 @@ router.get('/buscar-validacion', requireAuth, async (req, res) => {
 router.post('/inventario-reportes/upload', requireAuth, upload.single('archivo'), async (req, res) => {
   if (!req.file) return res.status(400).json({ ok: false, message: 'No se recibió archivo' });
   try {
+    const usuario     = req.session.user?.username || 'sistema';
+    const version     = (req.body.version     || '1.0.0').trim();
+    const regulacion  = (req.body.regulacion  || '').trim();
+    const tipo_version= (req.body.tipo_version|| 'BASE').trim();
+    const descripcion = (req.body.descripcion || '').trim();
+
     const wb   = XLSX.read(req.file.buffer, { type: 'buffer' });
     const ws   = wb.Sheets[wb.SheetNames[0]];
     const rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
@@ -564,6 +570,11 @@ router.post('/inventario-reportes/upload', requireAuth, upload.single('archivo')
           `);
           actualizados++;
         }
+        // Registrar versión en INVENTARIO_VERSIONES
+        await query(`
+          INSERT INTO INVENTARIO_VERSIONES (TIPO_OBJETO, CLAVE_OBJ, VERSION, REGULACION, TIPO_VERSION, DESCRIPCION, ESTATUS, USUARIO)
+          VALUES ('REPORTE', ${esc(clave)}, ${esc(version)}, ${esc(regulacion)}, ${esc(tipo_version)}, ${esc(descripcion)}, 'IDENTIFICADO', ${esc(usuario)})
+        `);
       } catch(e2) { errores++; }
     }
     res.json({ ok: true, insertados, actualizados, errores });
@@ -574,12 +585,19 @@ router.post('/inventario-reportes/upload', requireAuth, upload.single('archivo')
 router.post('/inventario-validaciones/upload', requireAuth, upload.single('archivo'), async (req, res) => {
   if (!req.file) return res.status(400).json({ ok: false, message: 'No se recibió archivo' });
   try {
+    const usuario     = req.session.user?.username || 'sistema';
+    const version     = (req.body.version     || '1.0.0').trim();
+    const regulacion  = (req.body.regulacion  || '').trim();
+    const tipo_version= (req.body.tipo_version|| 'BASE').trim();
+    const descripcion = (req.body.descripcion || '').trim();
+
     const wb   = XLSX.read(req.file.buffer, { type: 'buffer' });
     const ws   = wb.Sheets[wb.SheetNames[0]];
     const rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
     let insertados = 0, actualizados = 0, errores = 0;
     for (const r of rows) {
-      const clave = String(r.CLAVE_VALIDACION || '').trim();
+      const clave     = String(r.CLAVE_VALIDACION || '').trim();
+      const claveRep  = String(r.CLAVE_REP || '').trim();
       if (!clave) continue;
       try {
         const existe = await query(`SELECT 1 FROM INVENTARIO_VALIDACIONES WHERE CLAVE_VALIDACION=${esc(clave)}`);
@@ -591,7 +609,7 @@ router.post('/inventario-validaciones/upload', requireAuth, upload.single('archi
               TIPO_VALIDACION, TIPO_VALIDACION_CALC, FECHA_ALTA
             ) VALUES (
               ${esc(clave)}, ${esc(r.CLAVE_PAIS)}, ${esc(r.CLAVE_ENTIDADREGULADA)}, ${esc(r.CLAVE_REG)},
-              ${esc(r.CLAVE_REP)}, ${esc(r.ID_VALIDACION_ANT)}, ${esc(r.DESCRIPCION_VALIDACION)},
+              ${esc(claveRep)}, ${esc(r.ID_VALIDACION_ANT)}, ${esc(r.DESCRIPCION_VALIDACION)},
               ${esc(r.TIPO_VALIDACION)}, ${esc(r.TIPO_VALIDACION_CALC)}, GETDATE()
             )
           `);
@@ -599,7 +617,7 @@ router.post('/inventario-validaciones/upload', requireAuth, upload.single('archi
         } else {
           await query(`
             UPDATE INVENTARIO_VALIDACIONES SET
-              CLAVE_REP=${esc(r.CLAVE_REP)},
+              CLAVE_REP=${esc(claveRep)},
               DESCRIPCION_VALIDACION=${esc(r.DESCRIPCION_VALIDACION)},
               TIPO_VALIDACION=${esc(r.TIPO_VALIDACION)},
               TIPO_VALIDACION_CALC=${esc(r.TIPO_VALIDACION_CALC)},
@@ -608,6 +626,19 @@ router.post('/inventario-validaciones/upload', requireAuth, upload.single('archi
           `);
           actualizados++;
         }
+        // Crear fila IDENTIFICADO en REPORTE_VALIDACION si no existe aún
+        const existeRV = await query(`SELECT 1 FROM REPORTE_VALIDACION WHERE CLAVE_VALIDACION=${esc(clave)}`);
+        if (!existeRV.length && claveRep) {
+          await query(`
+            INSERT INTO REPORTE_VALIDACION (CLAVE_VALIDACION, CLAVE_REP, DOCUMENTADO, PROGRAMADO, CERTIFICADO, ESTATUS)
+            VALUES (${esc(clave)}, ${esc(claveRep)}, 'N', 'N', 'N', 'IDENTIFICADO')
+          `);
+        }
+        // Registrar versión en INVENTARIO_VERSIONES
+        await query(`
+          INSERT INTO INVENTARIO_VERSIONES (TIPO_OBJETO, CLAVE_OBJ, VERSION, REGULACION, TIPO_VERSION, DESCRIPCION, ESTATUS, USUARIO)
+          VALUES ('VALIDACION', ${esc(clave)}, ${esc(version)}, ${esc(regulacion)}, ${esc(tipo_version)}, ${esc(descripcion)}, 'IDENTIFICADO', ${esc(usuario)})
+        `);
       } catch(e2) { errores++; }
     }
     res.json({ ok: true, insertados, actualizados, errores });
