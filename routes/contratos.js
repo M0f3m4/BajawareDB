@@ -369,13 +369,17 @@ router.put('/estatus-validacion', requireAuth, async (req, res) => {
     const fechaVal = fecha ? esc(fecha) : 'GETDATE()';
 
     let docVal, progVal, certVal, nuevoEstatus;
-    if (desmarcar) {
+    if (etapa === 'IDENTIFICADO') {
+      // Regresa al estado inicial: limpia todo
+      docVal = "'N'"; progVal = "'N'"; certVal = "'N'";
+      nuevoEstatus = 'IDENTIFICADO';
+    } else if (desmarcar) {
       docVal       = etapa === 'DOCUMENTADO' ? "'N'" : "'S'";
       progVal      = (etapa === 'DOCUMENTADO' || etapa === 'PROGRAMADO') ? "'N'" : "'S'";
       certVal      = "'N'";
       nuevoEstatus = etapa === 'CERTIFICADO' ? 'PROGRAMADO'
                    : etapa === 'PROGRAMADO'  ? 'DOCUMENTADO'
-                   : '';
+                   : 'IDENTIFICADO';
     } else {
       docVal       = "'S'";
       progVal      = (etapa === 'PROGRAMADO' || etapa === 'CERTIFICADO') ? "'S'" : "'N'";
@@ -383,7 +387,6 @@ router.put('/estatus-validacion', requireAuth, async (req, res) => {
       nuevoEstatus = etapa;
     }
 
-    // Fechas y usuarios: solo se actualizan los campos de la etapa seleccionada
     const docFecha  = etapa === 'DOCUMENTADO' ? `, DOC_FECHA_REAL=${desmarcar ? 'NULL' : fechaVal}, USER_DOC=${esc(usuario)}` : '';
     const progFecha = etapa === 'PROGRAMADO'  ? `, PROG_FECHA_REAL=${desmarcar ? 'NULL' : fechaVal}, USER_PROG=${esc(usuario)}` : '';
     const certFecha = etapa === 'CERTIFICADO' ? `, CERT_FECHA_REAL=${desmarcar ? 'NULL' : fechaVal}, USER_CERT=${esc(usuario)}` : '';
@@ -401,7 +404,7 @@ router.put('/estatus-validacion', requireAuth, async (req, res) => {
           ${docFecha}${progFecha}${certFecha}
         WHERE CLAVE_VALIDACION=${esc(clave_validacion)} AND CLAVE_PLATAFORMA=${esc(clave_plataforma)}
       `);
-    } else if (!desmarcar) {
+    } else if (etapa !== 'IDENTIFICADO' && !desmarcar) {
       await query(`
         INSERT INTO REPORTE_VALIDACION
           (CLAVE_VALIDACION, CLAVE_REP, CLAVE_PLATAFORMA, DOCUMENTADO, PROGRAMADO, CERTIFICADO, ESTATUS
@@ -449,12 +452,15 @@ router.put('/estatus-validacion-bulk', requireAuth, async (req, res) => {
     const fechaVal = fecha ? esc(fecha) : 'GETDATE()';
 
     let docVal, progVal, certVal, nuevoEstatus;
-    if (desmarcar) {
+    if (etapa === 'IDENTIFICADO') {
+      docVal = "'N'"; progVal = "'N'"; certVal = "'N'";
+      nuevoEstatus = 'IDENTIFICADO';
+    } else if (desmarcar) {
       docVal       = etapa === 'DOCUMENTADO' ? "'N'" : "'S'";
       progVal      = (etapa === 'DOCUMENTADO' || etapa === 'PROGRAMADO') ? "'N'" : "'S'";
       certVal      = "'N'";
       nuevoEstatus = etapa === 'CERTIFICADO' ? 'PROGRAMADO'
-                   : etapa === 'PROGRAMADO'  ? 'DOCUMENTADO' : '';
+                   : etapa === 'PROGRAMADO'  ? 'DOCUMENTADO' : 'IDENTIFICADO';
     } else {
       docVal       = "'S'";
       progVal      = (etapa === 'PROGRAMADO' || etapa === 'CERTIFICADO') ? "'S'" : "'N'";
@@ -479,7 +485,7 @@ router.put('/estatus-validacion-bulk', requireAuth, async (req, res) => {
           WHERE CLAVE_VALIDACION=${esc(clave_validacion)} AND CLAVE_PLATAFORMA=${esc(clave_plataforma)}
         `);
         updated++;
-      } else if (!desmarcar) {
+      } else if (etapa !== 'IDENTIFICADO' && !desmarcar) {
         await query(`
           INSERT INTO REPORTE_VALIDACION
             (CLAVE_VALIDACION, CLAVE_REP, CLAVE_PLATAFORMA, DOCUMENTADO, PROGRAMADO, CERTIFICADO, ESTATUS
