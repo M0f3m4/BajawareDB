@@ -13,6 +13,14 @@ function requireAuth(req, res, next) {
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
 const esc = v => (v === null || v === undefined || v === '') ? 'NULL' : `'${String(v).trim().replace(/'/g,"''")}'`;
 
+// ── DEBUG TEMPORAL ────────────────────────────────────────
+router.get('/debug/cat-estatus', requireAuth, async (req, res) => {
+  try {
+    const rows = await query('SELECT * FROM CAT_ESTATUS');
+    res.json(rows);
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
 // Cache del DISTINCT CLAVE_REP de REPORTE_VALIDACION (scan lento de 431k filas — se hace UNA vez)
 let _rvClavesCache = null;
 let _rvCacheTime   = 0;
