@@ -600,25 +600,44 @@ router.post('/inventario-validaciones/upload', requireAuth, upload.single('archi
       const claveRep = String(r.CLAVE_REP || '').trim();
       if (!clave) continue;
       try {
-        const existe = await query(`SELECT 1 FROM REPORTE_VALIDACION WHERE CLAVE_VALIDACION=${esc(clave)}`);
+        const clavePlat = String(r.CLAVE_PLATAFORMA || '').trim() || 'N/A';
+
+        // 1. Upsert en INVENTARIO_VALIDACIONES (tabla maestra, FK parent)
+        const existeInv = await query(`SELECT 1 FROM INVENTARIO_VALIDACIONES WHERE CLAVE_VALIDACION=${esc(clave)}`);
+        if (!existeInv.length) {
+          await query(`
+            INSERT INTO INVENTARIO_VALIDACIONES
+              (CLAVE_VALIDACION, CLAVE_PAIS, CLAVE_ENTIDADREGULADA, CLAVE_REG, CLAVE_REP,
+               ID_VALIDACION_ANT, DESCRIPCION_VALIDACION, TIPO_VALIDACION, TIPO_VALIDACION_CALC, FECHA_ALTA)
+            VALUES
+              (${esc(clave)}, ${esc(r.CLAVE_PAIS)}, ${esc(r.CLAVE_ENTIDADREGULADA)}, ${esc(r.CLAVE_REG)}, ${esc(claveRep)},
+               ${esc(r.ID_VALIDACION_ANT)}, ${esc(r.DESCRIPCION_VALIDACION)}, ${esc(r.TIPO_VALIDACION)}, ${esc(r.TIPO_VALIDACION_CALC)}, GETDATE())
+          `);
+        } else {
+          await query(`
+            UPDATE INVENTARIO_VALIDACIONES SET
+              CLAVE_REP=${esc(claveRep)}, DESCRIPCION_VALIDACION=${esc(r.DESCRIPCION_VALIDACION)},
+              TIPO_VALIDACION=${esc(r.TIPO_VALIDACION)}, FECHA_ACTUALIZADA=GETDATE()
+            WHERE CLAVE_VALIDACION=${esc(clave)}
+          `);
+        }
+
+        // 2. Upsert en REPORTE_VALIDACION (estatus por plataforma)
+        const existe = await query(`SELECT 1 FROM REPORTE_VALIDACION WHERE CLAVE_VALIDACION=${esc(clave)} AND CLAVE_PLATAFORMA=${esc(clavePlat)}`);
         if (!existe.length) {
-          const clavePlat = String(r.CLAVE_PLATAFORMA || '').trim() || 'N/A';
-          const sqlInsert = `
+          await query(`
             INSERT INTO REPORTE_VALIDACION
               (CLAVE_VALIDACION, CLAVE_REP, CLAVE_PLATAFORMA, TIPO_VALIDACION, DESCRIPCION, DOCUMENTADO, PROGRAMADO, CERTIFICADO, ESTATUS, VERSION)
             VALUES
               (${esc(clave)}, ${esc(claveRep)}, ${esc(clavePlat)}, ${esc(r.TIPO_VALIDACION)}, ${esc(r.DESCRIPCION_VALIDACION)},
                'N', 'N', 'N', 'NO DOCUMENTADO', ${esc(version)})
-          `;
-          await query(sqlInsert);
+          `);
           insertados++;
         } else {
           await query(`
             UPDATE REPORTE_VALIDACION SET
-              CLAVE_REP=${esc(claveRep)},
-              TIPO_VALIDACION=${esc(r.TIPO_VALIDACION)},
-              DESCRIPCION=${esc(r.DESCRIPCION_VALIDACION)}
-            WHERE CLAVE_VALIDACION=${esc(clave)}
+              TIPO_VALIDACION=${esc(r.TIPO_VALIDACION)}, DESCRIPCION=${esc(r.DESCRIPCION_VALIDACION)}
+            WHERE CLAVE_VALIDACION=${esc(clave)} AND CLAVE_PLATAFORMA=${esc(clavePlat)}
           `);
           actualizados++;
         }
