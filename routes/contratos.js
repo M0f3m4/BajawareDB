@@ -233,6 +233,41 @@ router.get('/estatus-reporte/:clave', requireAuth, async (req, res) => {
   } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
 });
 
+// ── Helper: insertar en AUDIT_LOG ────────────────────────
+async function auditLog(usuario, seccion, accion, detalle) {
+  try {
+    const det = typeof detalle === 'object' ? JSON.stringify(detalle) : String(detalle);
+    await query(`
+      INSERT INTO AUDIT_LOG (USUARIO, SECCION, ACCION, DETALLE)
+      VALUES (${esc(usuario)}, ${esc(seccion)}, ${esc(accion)}, ${esc(det)})
+    `);
+  } catch(e) { /* no bloquear el flujo principal si audit falla */ }
+}
+
+// ── GET bitácora de movimientos ───────────────────────────
+router.get('/bitacora', requireAuth, async (req, res) => {
+  try {
+    const { usuario, seccion, desde, hasta, limit = 100 } = req.query;
+    let where = [];
+    if (usuario) where.push(`USUARIO = ${esc(usuario)}`);
+    if (seccion) where.push(`SECCION = ${esc(seccion)}`);
+    if (desde)   where.push(`FECHA >= ${esc(desde)}`);
+    if (hasta)   where.push(`FECHA <= ${esc(hasta)} + ' 23:59:59'`);
+    const whereStr = where.length ? 'WHERE ' + where.join(' AND ') : '';
+    const rows = await query(`
+      SELECT TOP ${parseInt(limit) || 100}
+        ID_AUDIT, USUARIO, SECCION, ACCION, DETALLE,
+        CONVERT(VARCHAR(19), FECHA, 120) AS FECHA
+      FROM AUDIT_LOG
+      ${whereStr}
+      ORDER BY FECHA DESC
+    `);
+    // Usuarios únicos para el filtro
+    const usuarios = await query(`SELECT DISTINCT USUARIO FROM AUDIT_LOG ORDER BY USUARIO`);
+    res.json({ ok: true, data: rows, usuarios: usuarios.map(r => r.USUARIO) });
+  } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
+});
+
 // ── PUT actualizar estatus de reporte ─────────────────────
 // Body: { clave_rep, clave_plataforma, etapa, fecha }
 // etapa: 'DOCUMENTADO' | 'PROGRAMADO' | 'CERTIFICADO'
@@ -281,6 +316,8 @@ router.put('/estatus-reporte', requireAuth, async (req, res) => {
            ${docVal}, ${progVal}, ${certVal}, ${esc(nuevoEstatus)})
       `);
     }
+    await auditLog(usuario, 'estatus-reporte', desmarcar ? 'DESMARCAR' : 'MARCAR',
+      { clave_rep, clave_plataforma, etapa, resultado: nuevoEstatus });
     res.json({ ok: true });
   } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
 });
@@ -337,6 +374,8 @@ router.put('/estatus-validacion', requireAuth, async (req, res) => {
            ${docVal}, ${progVal}, ${certVal}, ${esc(nuevoEstatus)}, ${fechaVal}, ${esc(usuario)})
       `);
     }
+    await auditLog(usuario, 'estatus-validacion', desmarcar ? 'DESMARCAR' : 'MARCAR',
+      { clave_validacion, clave_rep, clave_plataforma, etapa, resultado: nuevoEstatus });
     res.json({ ok: true });
   } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
 });

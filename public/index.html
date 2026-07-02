@@ -531,8 +531,13 @@
         <div class="sub-item" onclick="showSection('chi-proyectos')">Proyectos</div>
       </div>
 
-      <div class="nav-item" onclick="showSection('actividad')">
+      <div class="nav-item" onclick="toggleMenu('act')">
         <div class="nav-item-left"><span class="nav-icon">📡</span> Actividad</div>
+        <span class="nav-arrow" id="arr-act">▼</span>
+      </div>
+      <div class="sub-menu" id="sub-act">
+        <div class="sub-item" onclick="showSection('actividad')">Feed</div>
+        <div class="sub-item" onclick="showSection('bitacora')">Bitácora</div>
       </div>
 
       <div class="nav-item" onclick="showSection('qa-alertas')" id="nav-qa-alertas">
@@ -1382,6 +1387,34 @@
       </div>
 
       <!-- Actividad -->
+      <!-- ── Bitácora de Movimientos ─────────────────────────── -->
+      <div class="content-section" id="sec-bitacora">
+        <h2 class="section-title">Bitácora de Movimientos</h2>
+        <div class="toolbar" style="flex-wrap:wrap;gap:8px;margin-bottom:14px;">
+          <select id="bit-usuario" style="min-width:160px;">
+            <option value="">Todos los usuarios</option>
+          </select>
+          <select id="bit-seccion" style="min-width:160px;">
+            <option value="">Todas las secciones</option>
+            <option value="estatus-reporte">Estatus Reporte</option>
+            <option value="estatus-validacion">Estatus Validación</option>
+            <option value="upload-contratos">Carga Contratos</option>
+            <option value="upload-reportes">Carga Reportes</option>
+            <option value="upload-validaciones">Carga Validaciones</option>
+          </select>
+          <input type="date" id="bit-desde" style="padding:6px 10px;border:1px solid #ccc;border-radius:6px;font-size:13px;" placeholder="Desde">
+          <input type="date" id="bit-hasta" style="padding:6px 10px;border:1px solid #ccc;border-radius:6px;font-size:13px;" placeholder="Hasta">
+          <select id="bit-limit">
+            <option value="50">Últimos 50</option>
+            <option value="100" selected>Últimos 100</option>
+            <option value="200">Últimos 200</option>
+            <option value="500">Últimos 500</option>
+          </select>
+          <button onclick="loadBitacora()" style="padding:7px 16px;background:#1a3558;color:#fff;border:none;border-radius:6px;font-size:13px;cursor:pointer;">↻ Buscar</button>
+        </div>
+        <div id="bit-content"><div class="loading">Cargando bitácora...</div></div>
+      </div>
+
       <div class="content-section" id="sec-actividad">
         <h2 class="section-title">Actividad reciente en BD</h2>
         <div class="toolbar" style="flex-wrap:wrap;gap:8px;margin-bottom:14px;">
@@ -3260,6 +3293,99 @@
     }
   }
 
+  // ── Bitácora de Movimientos ───────────────────────────────
+  async function loadBitacora() {
+    const wrap = document.getElementById('bit-content');
+    if (!wrap) return;
+    wrap.innerHTML = '<div class="loading">Cargando...</div>';
+
+    const usuario = document.getElementById('bit-usuario').value;
+    const seccion = document.getElementById('bit-seccion').value;
+    const desde   = document.getElementById('bit-desde').value;
+    const hasta   = document.getElementById('bit-hasta').value;
+    const limit   = document.getElementById('bit-limit').value;
+
+    let url = `/api/contratos/bitacora?limit=${limit}`;
+    if (usuario) url += '&usuario=' + encodeURIComponent(usuario);
+    if (seccion) url += '&seccion=' + encodeURIComponent(seccion);
+    if (desde)   url += '&desde='   + encodeURIComponent(desde);
+    if (hasta)   url += '&hasta='   + encodeURIComponent(hasta);
+
+    try {
+      const r = await fetch(url);
+      const d = await r.json();
+      if (!d.ok) throw new Error(d.message);
+
+      // Poblar selector de usuarios
+      const selU = document.getElementById('bit-usuario');
+      const prev = selU.value;
+      selU.innerHTML = '<option value="">Todos los usuarios</option>';
+      (d.usuarios || []).forEach(u => {
+        const o = document.createElement('option');
+        o.value = u; o.textContent = u;
+        selU.appendChild(o);
+      });
+      selU.value = prev;
+
+      if (!d.data.length) {
+        wrap.innerHTML = '<div class="loading">Sin registros.</div>'; return;
+      }
+
+      const SECCION_LABEL = {
+        'estatus-reporte': 'Estatus Reporte',
+        'estatus-validacion': 'Estatus Validación',
+        'upload-contratos': 'Carga Contratos',
+        'upload-reportes': 'Carga Reportes',
+        'upload-validaciones': 'Carga Validaciones',
+      };
+      const ACCION_COLOR = {
+        'MARCAR': '#2e7d32', 'DESMARCAR': '#c62828',
+        'UPLOAD': '#1565c0', 'LOGIN': '#6a1b9a',
+      };
+
+      wrap.innerHTML = `
+        <div style="overflow:auto;max-height:70vh;">
+        <table style="width:100%;border-collapse:collapse;font-size:12px;">
+          <thead style="position:sticky;top:0;background:#1a3558;color:#fff;">
+            <tr>
+              <th style="padding:8px 10px;text-align:left;white-space:nowrap;">Fecha</th>
+              <th style="padding:8px 10px;text-align:left;">Usuario</th>
+              <th style="padding:8px 10px;text-align:left;">Sección</th>
+              <th style="padding:8px 10px;text-align:left;">Acción</th>
+              <th style="padding:8px 10px;text-align:left;">Detalle</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${d.data.map((row, i) => {
+              let detalle = row.DETALLE || '';
+              try {
+                const obj = JSON.parse(detalle);
+                detalle = Object.entries(obj)
+                  .filter(([,v]) => v !== null && v !== undefined && v !== '')
+                  .map(([k,v]) => `<span style="color:#555;">${k}:</span> <b>${v}</b>`)
+                  .join(' &nbsp;·&nbsp; ');
+              } catch(e) { /* no es JSON, usar como string */ }
+              const color = ACCION_COLOR[row.ACCION] || '#555';
+              const bg = i % 2 === 0 ? '#fff' : '#f8f9fa';
+              return `<tr style="background:${bg};border-bottom:1px solid #eee;">
+                <td style="padding:7px 10px;white-space:nowrap;color:#666;">${row.FECHA || '—'}</td>
+                <td style="padding:7px 10px;font-weight:600;">${row.USUARIO || '—'}</td>
+                <td style="padding:7px 10px;color:#444;">${SECCION_LABEL[row.SECCION] || row.SECCION || '—'}</td>
+                <td style="padding:7px 10px;">
+                  <span style="background:${color}20;color:${color};padding:2px 8px;border-radius:4px;font-weight:600;font-size:11px;">${row.ACCION || '—'}</span>
+                </td>
+                <td style="padding:7px 10px;color:#555;font-size:11px;">${detalle || '—'}</td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+        </div>
+        <div style="margin-top:8px;font-size:11px;color:#aaa;text-align:right;">${d.data.length} registros</div>`;
+    } catch(e) {
+      wrap.innerHTML = '<div class="loading">Error: ' + e.message + '</div>';
+    }
+  }
+
   async function initActividad() {
     // Poblar filtros únicos desde primera carga
     try {
@@ -4126,6 +4252,7 @@
     'sop-cliente':    () => initSoporte('sop-cliente'),
     'sop-fixes':      () => initSoporte('sop-fixes'),
     'actividad':      initActividad,
+    'bitacora':       loadBitacora,
     'chi-clientes':   loadChiClientes,
     'chi-proyectos':  loadChiProyectos,
     'qa-alertas':       loadQaAlertas,

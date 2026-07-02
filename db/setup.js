@@ -194,6 +194,29 @@ async function setup() {
     ELSE PRINT 'Tabla SOFIPO_REPORTES ya existe.'
   `);
 
+  // ── AUDIT_LOG ─────────────────────────────────────────────
+  // Bitácora de movimientos: quién hizo qué, cuándo y en qué sección
+  await query(`
+    IF NOT EXISTS (
+      SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'AUDIT_LOG'
+    )
+    BEGIN
+      CREATE TABLE AUDIT_LOG (
+        ID_AUDIT    INT IDENTITY(1,1) PRIMARY KEY,
+        USUARIO     VARCHAR(100)  NOT NULL,
+        SECCION     VARCHAR(50)   NOT NULL,   -- ej. 'estatus-reporte', 'estatus-validacion', 'upload-contratos'
+        ACCION      VARCHAR(50)   NOT NULL,   -- ej. 'MARCAR', 'DESMARCAR', 'UPLOAD', 'LOGIN'
+        DETALLE     VARCHAR(MAX)  NULL,       -- JSON con campos relevantes del cambio
+        FECHA       DATETIME      NOT NULL DEFAULT GETDATE()
+      )
+      CREATE INDEX IX_AL_USUARIO ON AUDIT_LOG (USUARIO)
+      CREATE INDEX IX_AL_SECCION ON AUDIT_LOG (SECCION)
+      CREATE INDEX IX_AL_FECHA   ON AUDIT_LOG (FECHA DESC)
+      PRINT 'Tabla AUDIT_LOG creada.'
+    END
+    ELSE PRINT 'Tabla AUDIT_LOG ya existe.'
+  `);
+
   console.log('✅ Setup de tablas completado.');
 }
 
