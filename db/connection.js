@@ -7,9 +7,10 @@ const config = {
   user:     process.env.DB_USER     || 'sa',
   password: process.env.DB_PASSWORD || '',
   options: {
-    encrypt:              process.env.DB_ENCRYPT    === 'true',
-    trustServerCertificate: process.env.DB_TRUST_CERT !== 'false',
-    enableArithAbort:     true
+    encrypt:                  process.env.DB_ENCRYPT === 'true',
+    trustServerCertificate:   true,
+    enableArithAbort:         true,
+    cryptoCredentialsDetails: { minVersion: 'TLSv1' }
   },
   requestTimeout: 120000,   // 2 min por query (default era 15s)
   pool: {
