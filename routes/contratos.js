@@ -14,7 +14,7 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 
 const esc = v => (v === null || v === undefined || v === '') ? 'NULL' : `'${String(v).trim().replace(/'/g,"''")}'`;
 
 // ── DEBUG TEMPORAL ────────────────────────────────────────
-router.get('/debug/cat-estatus', requireAuth, async (req, res) => {
+router.get('/debug/cat-estatus', async (req, res) => {
   try {
     const rows = await query('SELECT * FROM CAT_ESTATUS');
     res.json(rows);
