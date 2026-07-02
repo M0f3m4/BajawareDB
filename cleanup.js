@@ -2,22 +2,15 @@ require('dotenv').config();
 const { query } = require('./db/connection');
 
 async function run() {
-  // Limpiar INVENTARIO_VERSIONES del upload accidental
-  await query(`
-    DELETE FROM INVENTARIO_VERSIONES
-    WHERE TIPO_OBJETO='REPORTE'
-      AND CLAVE_OBJ='GT_BM_CC1_CC1_00_22'
-      AND FECHA_CARGA > DATEADD(minute,-30,GETDATE())
-  `);
-  console.log('INVENTARIO_VERSIONES limpio');
-
-  // Ver estado de INVENTARIO_REPORTES
+  // Ver otros reportes BM de GT para inferir el patrón
   const rows = await query(`
-    SELECT CLAVE_REP, CLAVE_PAIS, CLAVE_ENTIDADREGULADA, REPORTE, CLAVE_SERIE
+    SELECT TOP 5 CLAVE_REP, REPORTE, CLAVE_SERIE, CLAVE_GRUPO, CLAVE_REG
     FROM INVENTARIO_REPORTES
-    WHERE CLAVE_REP='GT_BM_CC1_CC1_00_22'
+    WHERE CLAVE_PAIS='GT' AND CLAVE_ENTIDADREGULADA='BM'
+      AND CLAVE_REP != 'GT_BM_CC1_CC1_00_22'
+      AND REPORTE IS NOT NULL
   `);
-  console.log('INVENTARIO_REPORTES:', JSON.stringify(rows));
+  console.log(JSON.stringify(rows, null, 2));
 }
 
 run().catch(e => console.error(e.message));
