@@ -13,19 +13,6 @@ function requireAuth(req, res, next) {
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
 const esc = v => (v === null || v === undefined || v === '') ? 'NULL' : `'${String(v).trim().replace(/'/g,"''")}'`;
 
-// ── DEBUG TEMPORAL ────────────────────────────────────────
-router.get('/debug/cat-estatus', async (req, res) => {
-  try {
-    const rows = await query(`
-      SELECT
-        (SELECT COUNT(*) FROM CAT_ESTATUS) AS total,
-        (SELECT COUNT(*) FROM CAT_ESTATUS WHERE CLAVE_ESTATUS='IDENTIFICADO') AS tiene_identificado,
-        (SELECT TOP 1 CLAVE_ESTATUS FROM CAT_ESTATUS ORDER BY CLAVE_ESTATUS) AS primer_valor
-    `);
-    res.json(rows);
-  } catch(e) { res.status(500).json({ error: e.message }); }
-});
-
 // Cache del DISTINCT CLAVE_REP de REPORTE_VALIDACION (scan lento de 431k filas — se hace UNA vez)
 let _rvClavesCache = null;
 let _rvCacheTime   = 0;
@@ -385,14 +372,14 @@ router.put('/estatus-validacion', requireAuth, async (req, res) => {
     if (etapa === 'IDENTIFICADO') {
       // Regresa al estado inicial: limpia todo
       docVal = "'N'"; progVal = "'N'"; certVal = "'N'";
-      nuevoEstatus = 'IDENTIFICADO';
+      nuevoEstatus = 'NO DOCUMENTADO';
     } else if (desmarcar) {
       docVal       = etapa === 'DOCUMENTADO' ? "'N'" : "'S'";
       progVal      = (etapa === 'DOCUMENTADO' || etapa === 'PROGRAMADO') ? "'N'" : "'S'";
       certVal      = "'N'";
       nuevoEstatus = etapa === 'CERTIFICADO' ? 'PROGRAMADO'
                    : etapa === 'PROGRAMADO'  ? 'DOCUMENTADO'
-                   : 'IDENTIFICADO';
+                   : 'NO DOCUMENTADO';
     } else {
       docVal       = "'S'";
       progVal      = (etapa === 'PROGRAMADO' || etapa === 'CERTIFICADO') ? "'S'" : "'N'";
@@ -467,13 +454,13 @@ router.put('/estatus-validacion-bulk', requireAuth, async (req, res) => {
     let docVal, progVal, certVal, nuevoEstatus;
     if (etapa === 'IDENTIFICADO') {
       docVal = "'N'"; progVal = "'N'"; certVal = "'N'";
-      nuevoEstatus = 'IDENTIFICADO';
+      nuevoEstatus = 'NO DOCUMENTADO';
     } else if (desmarcar) {
       docVal       = etapa === 'DOCUMENTADO' ? "'N'" : "'S'";
       progVal      = (etapa === 'DOCUMENTADO' || etapa === 'PROGRAMADO') ? "'N'" : "'S'";
       certVal      = "'N'";
       nuevoEstatus = etapa === 'CERTIFICADO' ? 'PROGRAMADO'
-                   : etapa === 'PROGRAMADO'  ? 'DOCUMENTADO' : 'IDENTIFICADO';
+                   : etapa === 'PROGRAMADO'  ? 'DOCUMENTADO' : 'NO DOCUMENTADO';
     } else {
       docVal       = "'S'";
       progVal      = (etapa === 'PROGRAMADO' || etapa === 'CERTIFICADO') ? "'S'" : "'N'";
@@ -621,7 +608,7 @@ router.post('/inventario-validaciones/upload', requireAuth, upload.single('archi
               (CLAVE_VALIDACION, CLAVE_REP, CLAVE_PLATAFORMA, TIPO_VALIDACION, DESCRIPCION, DOCUMENTADO, PROGRAMADO, CERTIFICADO, ESTATUS, VERSION)
             VALUES
               (${esc(clave)}, ${esc(claveRep)}, ${esc(clavePlat)}, ${esc(r.TIPO_VALIDACION)}, ${esc(r.DESCRIPCION_VALIDACION)},
-               'N', 'N', 'N', 'IDENTIFICADO', ${esc(version)})
+               'N', 'N', 'N', 'NO DOCUMENTADO', ${esc(version)})
           `;
           await query(sqlInsert);
           insertados++;
