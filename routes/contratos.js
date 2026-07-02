@@ -16,7 +16,7 @@ const esc = v => (v === null || v === undefined || v === '') ? 'NULL' : `'${Stri
 // ── DEBUG TEMPORAL ────────────────────────────────────────
 router.get('/debug/cat-estatus', async (req, res) => {
   try {
-    const rows = await query('SELECT * FROM CAT_ESTATUS');
+    const rows = await query('SELECT CLAVE_ESTATUS FROM CAT_ESTATUS');
     res.json(rows);
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
