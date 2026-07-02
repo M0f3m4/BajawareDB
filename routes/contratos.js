@@ -620,12 +620,14 @@ router.post('/inventario-validaciones/upload', requireAuth, upload.single('archi
           `);
           actualizados++;
         }
-        // Registrar en INVENTARIO_VERSIONES
-        await query(`
-          INSERT INTO INVENTARIO_VERSIONES (TIPO_OBJETO, CLAVE_OBJ, VERSION, REGULACION, TIPO_VERSION, DESCRIPCION, ESTATUS, USUARIO)
-          VALUES ('VALIDACION', ${esc(clave)}, ${esc(version)}, ${esc(regulacion)}, ${esc(tipo_version)}, ${esc(descripcion)}, 'IDENTIFICADO', ${esc(usuario)})
-        `);
-      } catch(e2) { errores++; }
+        // Registrar en INVENTARIO_VERSIONES (no bloqueante)
+        try {
+          await query(`
+            INSERT INTO INVENTARIO_VERSIONES (TIPO_OBJETO, CLAVE_OBJ, VERSION, REGULACION, TIPO_VERSION, DESCRIPCION, ESTATUS, USUARIO)
+            VALUES ('VALIDACION', ${esc(clave)}, ${esc(version)}, ${esc(regulacion)}, ${esc(tipo_version)}, ${esc(descripcion)}, 'IDENTIFICADO', ${esc(usuario)})
+          `);
+        } catch(e3) { console.warn('[inv-versiones] error:', e3.message); }
+      } catch(e2) { console.error('[upload-val] fila error:', e2.message); errores++; }
     }
     res.json({ ok: true, insertados, actualizados, errores });
   } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
