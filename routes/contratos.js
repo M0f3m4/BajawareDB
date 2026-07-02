@@ -16,7 +16,12 @@ const esc = v => (v === null || v === undefined || v === '') ? 'NULL' : `'${Stri
 // ── DEBUG TEMPORAL ────────────────────────────────────────
 router.get('/debug/cat-estatus', async (req, res) => {
   try {
-    const rows = await query('SELECT CLAVE_ESTATUS FROM CAT_ESTATUS');
+    const rows = await query(`
+      SELECT
+        (SELECT COUNT(*) FROM CAT_ESTATUS) AS total,
+        (SELECT COUNT(*) FROM CAT_ESTATUS WHERE CLAVE_ESTATUS='IDENTIFICADO') AS tiene_identificado,
+        (SELECT TOP 1 CLAVE_ESTATUS FROM CAT_ESTATUS ORDER BY CLAVE_ESTATUS) AS primer_valor
+    `);
     res.json(rows);
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
