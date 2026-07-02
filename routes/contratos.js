@@ -602,13 +602,17 @@ router.post('/inventario-validaciones/upload', requireAuth, upload.single('archi
       try {
         const existe = await query(`SELECT 1 FROM REPORTE_VALIDACION WHERE CLAVE_VALIDACION=${esc(clave)}`);
         if (!existe.length) {
-          await query(`
+          const clavePlat = String(r.CLAVE_PLATAFORMA || '').trim() || 'N/A';
+          const sqlInsert = `
             INSERT INTO REPORTE_VALIDACION
-              (CLAVE_VALIDACION, CLAVE_REP, TIPO_VALIDACION, DESCRIPCION, DOCUMENTADO, PROGRAMADO, CERTIFICADO, ESTATUS)
+              (CLAVE_VALIDACION, CLAVE_REP, CLAVE_PLATAFORMA, TIPO_VALIDACION, DESCRIPCION, DOCUMENTADO, PROGRAMADO, CERTIFICADO, ESTATUS)
             VALUES
-              (${esc(clave)}, ${esc(claveRep)}, ${esc(r.TIPO_VALIDACION)}, ${esc(r.DESCRIPCION_VALIDACION)},
+              (${esc(clave)}, ${esc(claveRep)}, ${esc(clavePlat)}, ${esc(r.TIPO_VALIDACION)}, ${esc(r.DESCRIPCION_VALIDACION)},
                'N', 'N', 'N', 'IDENTIFICADO')
-          `);
+          `;
+          console.log('[upload-val] DEBUG plat raw:', JSON.stringify(r.CLAVE_PLATAFORMA), '→ esc:', esc(clavePlat));
+          console.log('[upload-val] DEBUG sql:', sqlInsert.trim().substring(0, 300));
+          await query(sqlInsert);
           insertados++;
         } else {
           await query(`
