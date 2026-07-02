@@ -596,45 +596,31 @@ router.post('/inventario-validaciones/upload', requireAuth, upload.single('archi
     const rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
     let insertados = 0, actualizados = 0, errores = 0;
     for (const r of rows) {
-      const clave     = String(r.CLAVE_VALIDACION || '').trim();
-      const claveRep  = String(r.CLAVE_REP || '').trim();
+      const clave    = String(r.CLAVE_VALIDACION || '').trim();
+      const claveRep = String(r.CLAVE_REP || '').trim();
       if (!clave) continue;
       try {
-        const existe = await query(`SELECT 1 FROM INVENTARIO_VALIDACIONES WHERE CLAVE_VALIDACION=${esc(clave)}`);
+        const existe = await query(`SELECT 1 FROM REPORTE_VALIDACION WHERE CLAVE_VALIDACION=${esc(clave)}`);
         if (!existe.length) {
           await query(`
-            INSERT INTO INVENTARIO_VALIDACIONES (
-              CLAVE_VALIDACION, CLAVE_PAIS, CLAVE_ENTIDADREGULADA, CLAVE_REG,
-              CLAVE_REP, ID_VALIDACION_ANT, DESCRIPCION_VALIDACION,
-              TIPO_VALIDACION, TIPO_VALIDACION_CALC, FECHA_ALTA
-            ) VALUES (
-              ${esc(clave)}, ${esc(r.CLAVE_PAIS)}, ${esc(r.CLAVE_ENTIDADREGULADA)}, ${esc(r.CLAVE_REG)},
-              ${esc(claveRep)}, ${esc(r.ID_VALIDACION_ANT)}, ${esc(r.DESCRIPCION_VALIDACION)},
-              ${esc(r.TIPO_VALIDACION)}, ${esc(r.TIPO_VALIDACION_CALC)}, GETDATE()
-            )
+            INSERT INTO REPORTE_VALIDACION
+              (CLAVE_VALIDACION, CLAVE_REP, TIPO_VALIDACION, DESCRIPCION, DOCUMENTADO, PROGRAMADO, CERTIFICADO, ESTATUS)
+            VALUES
+              (${esc(clave)}, ${esc(claveRep)}, ${esc(r.TIPO_VALIDACION)}, ${esc(r.DESCRIPCION_VALIDACION)},
+               'N', 'N', 'N', 'IDENTIFICADO')
           `);
           insertados++;
         } else {
           await query(`
-            UPDATE INVENTARIO_VALIDACIONES SET
+            UPDATE REPORTE_VALIDACION SET
               CLAVE_REP=${esc(claveRep)},
-              DESCRIPCION_VALIDACION=${esc(r.DESCRIPCION_VALIDACION)},
               TIPO_VALIDACION=${esc(r.TIPO_VALIDACION)},
-              TIPO_VALIDACION_CALC=${esc(r.TIPO_VALIDACION_CALC)},
-              FECHA_ACTUALIZADA=GETDATE()
+              DESCRIPCION=${esc(r.DESCRIPCION_VALIDACION)}
             WHERE CLAVE_VALIDACION=${esc(clave)}
           `);
           actualizados++;
         }
-        // Crear fila IDENTIFICADO en REPORTE_VALIDACION si no existe aún
-        const existeRV = await query(`SELECT 1 FROM REPORTE_VALIDACION WHERE CLAVE_VALIDACION=${esc(clave)}`);
-        if (!existeRV.length && claveRep) {
-          await query(`
-            INSERT INTO REPORTE_VALIDACION (CLAVE_VALIDACION, CLAVE_REP, DOCUMENTADO, PROGRAMADO, CERTIFICADO, ESTATUS)
-            VALUES (${esc(clave)}, ${esc(claveRep)}, 'N', 'N', 'N', 'IDENTIFICADO')
-          `);
-        }
-        // Registrar versión en INVENTARIO_VERSIONES
+        // Registrar en INVENTARIO_VERSIONES
         await query(`
           INSERT INTO INVENTARIO_VERSIONES (TIPO_OBJETO, CLAVE_OBJ, VERSION, REGULACION, TIPO_VERSION, DESCRIPCION, ESTATUS, USUARIO)
           VALUES ('VALIDACION', ${esc(clave)}, ${esc(version)}, ${esc(regulacion)}, ${esc(tipo_version)}, ${esc(descripcion)}, 'IDENTIFICADO', ${esc(usuario)})
