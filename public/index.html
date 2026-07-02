@@ -611,6 +611,7 @@
         <div class="sub-item" onclick="showSection('bc-actualizar-rep')">Actualizar Estatus Reporte</div>
         <div class="sub-item" onclick="showSection('bc-actualizar-val')">Actualizar Estatus Validación</div>
         <div class="sub-item" onclick="showSection('bc-carga-inv')">Cargar Inventario</div>
+        <div class="sub-item" onclick="showSection('bc-rep-clientes')">Clientes por Reporte</div>
       </div>
 
       <div class="nav-item" onclick="toggleMenu('sofipo')">
@@ -1213,6 +1214,29 @@
           </div>
           <div id="upd-val-resultados" style="margin-top:8px;max-height:200px;overflow-y:auto;font-size:12px;border:1px solid #eee;border-radius:6px;"></div>
         </div>
+      </div>
+
+      <!-- BC: Clientes por Reporte -->
+      <div class="content-section" id="sec-bc-rep-clientes">
+        <h2 class="section-title">🔎 Clientes por Reporte</h2>
+        <p style="font-size:13px;color:#666;margin-bottom:16px;">Ingresa una clave de reporte para ver qué clientes lo tienen contratado.</p>
+
+        <div style="display:flex;gap:10px;align-items:flex-start;margin-bottom:20px;position:relative;">
+          <div style="flex:1;max-width:420px;position:relative;">
+            <input id="rpc-input" type="text" placeholder="Ej. MX_BM_ACLME_ACLME_08"
+              oninput="rpcAutocomplete(this.value)"
+              onkeydown="if(event.key==='Enter')rpcBuscar()"
+              style="width:100%;padding:8px 12px;border:1px solid #c0cfe0;border-radius:6px;font-size:13px;box-sizing:border-box;">
+            <div id="rpc-sugg" style="display:none;position:absolute;top:100%;left:0;right:0;background:#fff;border:1px solid #c0cfe0;border-top:none;border-radius:0 0 6px 6px;z-index:100;max-height:220px;overflow-y:auto;box-shadow:0 4px 12px rgba(0,0,0,.1);"></div>
+          </div>
+          <button onclick="rpcBuscar()"
+            style="padding:8px 22px;background:#1a3558;color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;">
+            Buscar
+          </button>
+        </div>
+
+        <div id="rpc-info" style="font-size:12px;color:#888;margin-bottom:10px;"></div>
+        <div id="rpc-content"></div>
       </div>
 
       <!-- BC: Carga de Inventario -->
@@ -3293,6 +3317,69 @@
     }
   }
 
+  // ── Clientes por Reporte ─────────────────────────────────
+  let _rpcTimer = null;
+  async function rpcAutocomplete(val) {
+    const sugg = document.getElementById('rpc-sugg');
+    clearTimeout(_rpcTimer);
+    if (val.length < 2) { sugg.style.display = 'none'; return; }
+    _rpcTimer = setTimeout(async () => {
+      const r = await fetch(`/api/contratos/reportes/search?q=${encodeURIComponent(val)}`).then(x=>x.json());
+      if (!r.ok || !r.data.length) { sugg.style.display = 'none'; return; }
+      sugg.innerHTML = r.data.map(d =>
+        `<div onclick="rpcSeleccionar(${JSON.stringify(d.CLAVE_REP)})"
+          style="padding:7px 12px;cursor:pointer;font-size:12px;border-bottom:1px solid #f0f0f0;"
+          onmouseover="this.style.background='#f0f6ff'" onmouseout="this.style.background=''">
+          <strong>${d.CLAVE_REP}</strong>${d.DESCRIPCION_ESP ? `<br><span style="color:#888">${d.DESCRIPCION_ESP}</span>` : ''}
+        </div>`
+      ).join('');
+      sugg.style.display = 'block';
+    }, 300);
+  }
+  function rpcSeleccionar(clave) {
+    document.getElementById('rpc-input').value = clave;
+    document.getElementById('rpc-sugg').style.display = 'none';
+    rpcBuscar();
+  }
+  async function rpcBuscar() {
+    const clave = document.getElementById('rpc-input').value.trim();
+    document.getElementById('rpc-sugg').style.display = 'none';
+    if (!clave) return;
+    const info = document.getElementById('rpc-info');
+    const content = document.getElementById('rpc-content');
+    info.textContent = 'Buscando...';
+    content.innerHTML = '';
+    try {
+      const r = await fetch(`/api/contratos/reporte/${encodeURIComponent(clave)}/clientes`).then(x=>x.json());
+      if (!r.ok) { info.textContent = 'Error: ' + r.message; return; }
+      info.textContent = `${r.total} contrato(s) encontrado(s) para "${clave}"`;
+      if (!r.total) { content.innerHTML = '<p style="color:#888;font-size:13px;">Ningún cliente tiene este reporte contratado.</p>'; return; }
+      const cols = ['Cliente','Contrato','Plataforma','Etapa','En Uso'];
+      content.innerHTML = `
+        <div style="overflow:auto;max-height:65vh;">
+          <table style="width:100%;border-collapse:collapse;font-size:13px;">
+            <thead>
+              <tr>${cols.map(c=>`<th style="position:sticky;top:0;background:#1a3558;color:#fff;padding:8px 12px;text-align:left;white-space:nowrap;">${c}</th>`).join('')}</tr>
+            </thead>
+            <tbody>
+              ${r.data.map((d,i)=>`
+                <tr style="background:${i%2?'#f8fafc':'#fff'}">
+                  <td style="padding:7px 12px;border-bottom:1px solid #eee;">${d.NOMBRE_CLIENTE||d.CLAVE_CLIENTE}</td>
+                  <td style="padding:7px 12px;border-bottom:1px solid #eee;">${d.NOMBRE_CONTRATO||d.CLAVE_CONTRATO}</td>
+                  <td style="padding:7px 12px;border-bottom:1px solid #eee;">${d.CLAVE_PLATAFORMA||''}</td>
+                  <td style="padding:7px 12px;border-bottom:1px solid #eee;">${d.ETAPA||''}</td>
+                  <td style="padding:7px 12px;border-bottom:1px solid #eee;text-align:center;">${d.EN_USO?'✅':'—'}</td>
+                </tr>`).join('')}
+            </tbody>
+          </table>
+        </div>`;
+    } catch(e) { info.textContent = 'Error de conexión'; }
+  }
+  document.addEventListener('click', e => {
+    if (!e.target.closest('#rpc-input') && !e.target.closest('#rpc-sugg'))
+      document.getElementById('rpc-sugg') && (document.getElementById('rpc-sugg').style.display='none');
+  });
+
   // ── Bitácora de Movimientos ───────────────────────────────
   async function loadBitacora() {
     const wrap = document.getElementById('bit-content');
@@ -4260,6 +4347,7 @@
     'bc-actualizar-rep':  () => {},
     'bc-actualizar-val':  () => {},
     'bc-carga-inv':       () => {},
+    'bc-rep-clientes':    () => {},
     'sofipo-layouts':     loadSofipoLayouts,
     'sofipo-reportes':  loadSofipoReportes,
     'sofipo-cruce':         () => {},

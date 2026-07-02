@@ -244,6 +244,43 @@ async function auditLog(usuario, seccion, accion, detalle) {
   } catch(e) { /* no bloquear el flujo principal si audit falla */ }
 }
 
+// ── CLIENTES que tienen un reporte contratado ─────────────
+router.get('/reporte/:clave/clientes', requireAuth, async (req, res) => {
+  try {
+    const rows = await query(`
+      SELECT
+        cli.CLAVE_CLIENTE,
+        cli.NOMBRE_CLIENTE,
+        con.CLAVE_CONTRATO,
+        con.NOMBRE_CONTRATO,
+        con.CLAVE_PLATAFORMA,
+        cr.ETAPA,
+        cr.EN_USO
+      FROM CONTRATOS_REPORTES cr
+      INNER JOIN CONTRATOS con ON con.CLAVE_CONTRATO = cr.CLAVE_CONTRATO
+      INNER JOIN CLIENTE cli   ON cli.CLAVE_CLIENTE  = con.CLAVE_CLIENTE
+      WHERE cr.CLAVE_REP = ${esc(req.params.clave)}
+      ORDER BY cli.NOMBRE_CLIENTE, con.NOMBRE_CONTRATO
+    `);
+    res.json({ ok: true, data: rows, total: rows.length });
+  } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
+});
+
+// ── Autocomplete de CLAVE_REP en CONTRATOS_REPORTES ──────
+router.get('/reportes/search', requireAuth, async (req, res) => {
+  try {
+    const q = (req.query.q || '').replace(/'/g, "''");
+    const rows = await query(`
+      SELECT TOP 20 DISTINCT cr.CLAVE_REP, ir.DESCRIPCION_ESP
+      FROM CONTRATOS_REPORTES cr
+      LEFT JOIN INVENTARIO_REPORTES ir ON ir.CLAVE_REP = cr.CLAVE_REP
+      WHERE cr.CLAVE_REP LIKE '%${q}%'
+      ORDER BY cr.CLAVE_REP
+    `);
+    res.json({ ok: true, data: rows });
+  } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
+});
+
 // ── GET bitácora de movimientos ───────────────────────────
 router.get('/bitacora', requireAuth, async (req, res) => {
   try {
