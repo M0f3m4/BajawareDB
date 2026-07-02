@@ -417,6 +417,85 @@ router.put('/estatus-validacion', requireAuth, async (req, res) => {
   } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
 });
 
+// ── GET validaciones de un reporte (para bulk update) ────────────────────
+router.get('/validaciones-por-reporte', requireAuth, async (req, res) => {
+  try {
+    const { rep, plataforma } = req.query;
+    if (!rep) return res.json({ ok: true, data: [] });
+    const todosRV = await getRVClaves();
+    const matched = todosRV.filter(c =>
+      c === rep || (c.lastIndexOf('_') > 0 && c.slice(0, c.lastIndexOf('_')) === rep)
+    );
+    if (!matched.length) return res.json({ ok: true, data: [] });
+    const inList = matched.map(c => `'${c.replace(/'/g, "''")}'`).join(',');
+    const wherePlat = plataforma ? ` AND CLAVE_PLATAFORMA = ${esc(plataforma)}` : '';
+    const rows = await query(`
+      SELECT CLAVE_VALIDACION, CLAVE_REP, TIPO_VALIDACION, DESCRIPCION,
+             DOCUMENTADO, PROGRAMADO, CERTIFICADO, ESTATUS, CLAVE_PLATAFORMA
+      FROM REPORTE_VALIDACION
+      WHERE CLAVE_REP IN (${inList}) ${wherePlat}
+      ORDER BY CLAVE_REP, CLAVE_VALIDACION
+    `);
+    res.json({ ok: true, data: rows });
+  } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
+});
+
+// ── PUT bulk update de validaciones ──────────────────────────────────────
+router.put('/estatus-validacion-bulk', requireAuth, async (req, res) => {
+  try {
+    const { claves, clave_rep, clave_plataforma, etapa, fecha, desmarcar } = req.body;
+    if (!claves?.length) return res.json({ ok: false, message: 'No hay validaciones seleccionadas' });
+    const usuario  = req.session.user?.usuario || 'sistema';
+    const fechaVal = fecha ? esc(fecha) : 'GETDATE()';
+
+    let docVal, progVal, certVal, nuevoEstatus;
+    if (desmarcar) {
+      docVal       = etapa === 'DOCUMENTADO' ? "'N'" : "'S'";
+      progVal      = (etapa === 'DOCUMENTADO' || etapa === 'PROGRAMADO') ? "'N'" : "'S'";
+      certVal      = "'N'";
+      nuevoEstatus = etapa === 'CERTIFICADO' ? 'PROGRAMADO'
+                   : etapa === 'PROGRAMADO'  ? 'DOCUMENTADO' : '';
+    } else {
+      docVal       = "'S'";
+      progVal      = (etapa === 'PROGRAMADO' || etapa === 'CERTIFICADO') ? "'S'" : "'N'";
+      certVal      = etapa === 'CERTIFICADO' ? "'S'" : "'N'";
+      nuevoEstatus = etapa;
+    }
+    const docFecha  = etapa === 'DOCUMENTADO' ? `, DOC_FECHA_REAL=${desmarcar ? 'NULL' : fechaVal}, USER_DOC=${esc(usuario)}` : '';
+    const progFecha = etapa === 'PROGRAMADO'  ? `, PROG_FECHA_REAL=${desmarcar ? 'NULL' : fechaVal}, USER_PROG=${esc(usuario)}` : '';
+    const certFecha = etapa === 'CERTIFICADO' ? `, CERT_FECHA_REAL=${desmarcar ? 'NULL' : fechaVal}, USER_CERT=${esc(usuario)}` : '';
+
+    let updated = 0;
+    for (const clave_validacion of claves) {
+      const existe = await query(`
+        SELECT 1 FROM REPORTE_VALIDACION
+        WHERE CLAVE_VALIDACION=${esc(clave_validacion)} AND CLAVE_PLATAFORMA=${esc(clave_plataforma)}
+      `);
+      if (existe.length) {
+        await query(`
+          UPDATE REPORTE_VALIDACION SET
+            DOCUMENTADO=${docVal}, PROGRAMADO=${progVal}, CERTIFICADO=${certVal},
+            ESTATUS=${esc(nuevoEstatus)} ${docFecha}${progFecha}${certFecha}
+          WHERE CLAVE_VALIDACION=${esc(clave_validacion)} AND CLAVE_PLATAFORMA=${esc(clave_plataforma)}
+        `);
+        updated++;
+      } else if (!desmarcar) {
+        await query(`
+          INSERT INTO REPORTE_VALIDACION
+            (CLAVE_VALIDACION, CLAVE_REP, CLAVE_PLATAFORMA, DOCUMENTADO, PROGRAMADO, CERTIFICADO, ESTATUS
+             ${etapa==='DOCUMENTADO' ? ',DOC_FECHA_REAL,USER_DOC' : etapa==='PROGRAMADO' ? ',PROG_FECHA_REAL,USER_PROG' : ',CERT_FECHA_REAL,USER_CERT'})
+          VALUES (${esc(clave_validacion)}, ${esc(clave_rep)}, ${esc(clave_plataforma)},
+                  ${docVal}, ${progVal}, ${certVal}, ${esc(nuevoEstatus)}, ${fechaVal}, ${esc(usuario)})
+        `);
+        updated++;
+      }
+    }
+    await auditLog(usuario, 'estatus-validacion', desmarcar ? 'DESMARCAR_BULK' : 'MARCAR_BULK',
+      { clave_rep, clave_plataforma, etapa, total: claves.length, updated });
+    res.json({ ok: true, updated });
+  } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
+});
+
 // ── GET búsqueda de validaciones (para autocompletar en el form) ──────────
 router.get('/buscar-validacion', requireAuth, async (req, res) => {
   const q = (req.query.q || '').trim().replace(/'/g, "''");

@@ -1157,62 +1157,58 @@
       <!-- BC: Actualizar Estatus Validación -->
       <div class="content-section" id="sec-bc-actualizar-val">
         <h2 class="section-title">✏️ Actualizar Estatus de Validación</h2>
-        <div style="background:#fff;border-radius:10px;padding:24px;max-width:640px;box-shadow:0 2px 8px rgba(0,0,0,.06);">
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;">
-            <div>
-              <label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px;">Clave Validación</label>
-              <input id="upd-val-clave" type="text" placeholder="Ej. VAL-0001"
-                style="width:100%;padding:7px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;">
-            </div>
-            <div>
+
+        <!-- Paso 1: buscar reporte -->
+        <div style="background:#fff;border-radius:10px;padding:20px;box-shadow:0 2px 8px rgba(0,0,0,.06);margin-bottom:16px;max-width:700px;">
+          <div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;">
+            <div style="position:relative;flex:1;min-width:200px;">
               <label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px;">Clave Reporte</label>
-              <input id="upd-val-rep" type="text" placeholder="Ej. MX_BM_CUP_01_21"
-                style="width:100%;padding:7px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;">
+              <input id="upd-val-rep" type="text" placeholder="Ej. MX_BM_CUP_01"
+                oninput="uvAutocomplete(this.value)" onkeydown="if(event.key==='Enter')uvCargar()"
+                style="width:100%;padding:7px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;box-sizing:border-box;">
+              <div id="uv-sugg" style="display:none;position:absolute;top:100%;left:0;right:0;background:#fff;border:1px solid #c0cfe0;border-top:none;border-radius:0 0 6px 6px;z-index:100;max-height:200px;overflow-y:auto;box-shadow:0 4px 12px rgba(0,0,0,.1);"></div>
             </div>
-          </div>
-          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin-bottom:14px;">
             <div>
               <label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px;">Plataforma</label>
               <input id="upd-val-plataforma" type="text" placeholder="Ej. JAVA"
-                style="width:100%;padding:7px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;">
+                style="width:120px;padding:7px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;">
             </div>
-            <div>
-              <label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px;">Etapa</label>
-              <select id="upd-val-etapa" style="width:100%;padding:7px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;">
-                <option value="DOCUMENTADO">DOCUMENTADO</option>
-                <option value="PROGRAMADO">PROGRAMADO</option>
-                <option value="CERTIFICADO">CERTIFICADO</option>
-              </select>
-            </div>
-            <div>
-              <label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px;">Fecha Real</label>
-              <input id="upd-val-fecha" type="date"
-                style="width:100%;padding:7px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;">
-            </div>
-          </div>
-          <p style="font-size:11px;color:#888;margin:0 0 10px;">
-            Marcar CERTIFICADO también marca DOC y PROG automáticamente. Desmarcar DOC limpia las tres etapas.
-          </p>
-          <div style="display:flex;align-items:center;gap:16px;margin-bottom:8px;">
-            <button onclick="actualizarEstatusValidacion(false)"
-              style="padding:8px 24px;background:#1a3558;color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;">
-              ✓ Marcar Etapa
-            </button>
-            <button onclick="actualizarEstatusValidacion(true)"
-              style="padding:8px 24px;background:#e74c3c;color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;">
-              ✗ Desmarcar Etapa
+            <button onclick="uvCargar()"
+              style="padding:8px 22px;background:#1a3558;color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;">
+              Cargar
             </button>
           </div>
-          <div id="upd-val-msg" style="margin-top:12px;font-size:13px;"></div>
-          <!-- Búsqueda de validación -->
-          <hr style="margin:20px 0;border:none;border-top:1px solid #eee;">
-          <p style="font-size:12px;color:#888;margin-bottom:8px;">O busca una validación:</p>
-          <div style="display:flex;gap:8px;">
-            <input id="upd-val-buscar" type="text" placeholder="Buscar por clave o descripción..."
-              style="flex:1;padding:7px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;"
-              oninput="buscarValidacionUpd()">
+        </div>
+
+        <!-- Paso 2: acciones + tabla -->
+        <div id="uv-panel" style="display:none;">
+          <div style="background:#fff;border-radius:10px;padding:16px 20px;box-shadow:0 2px 8px rgba(0,0,0,.06);margin-bottom:12px;max-width:700px;">
+            <div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;">
+              <div>
+                <label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px;">Etapa</label>
+                <select id="upd-val-etapa" style="padding:7px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;">
+                  <option value="DOCUMENTADO">DOCUMENTADO</option>
+                  <option value="PROGRAMADO">PROGRAMADO</option>
+                  <option value="CERTIFICADO">CERTIFICADO</option>
+                </select>
+              </div>
+              <div>
+                <label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px;">Fecha Real</label>
+                <input id="upd-val-fecha" type="date"
+                  style="padding:7px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;">
+              </div>
+              <button onclick="uvAplicar(false)"
+                style="padding:8px 20px;background:#1a3558;color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;">
+                ✓ Marcar seleccionadas
+              </button>
+              <button onclick="uvAplicar(true)"
+                style="padding:8px 20px;background:#e74c3c;color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;">
+                ✗ Desmarcar seleccionadas
+              </button>
+            </div>
+            <div id="upd-val-msg" style="margin-top:10px;font-size:13px;"></div>
           </div>
-          <div id="upd-val-resultados" style="margin-top:8px;max-height:200px;overflow-y:auto;font-size:12px;border:1px solid #eee;border-radius:6px;"></div>
+          <div id="uv-tabla"></div>
         </div>
       </div>
 
@@ -3942,62 +3938,126 @@
     } catch(e) { msg.innerHTML = '<span style="color:#e74c3c;">Error: ' + e.message + '</span>'; }
   }
 
-  async function actualizarEstatusValidacion(desmarcar = false) {
-    const clave_validacion = document.getElementById('upd-val-clave').value.trim();
-    const clave_rep        = document.getElementById('upd-val-rep').value.trim();
+  // ── Actualizar Estatus Validación (bulk) ─────────────────
+  let _uvData = [], _uvTimer = null;
+
+  async function uvAutocomplete(val) {
+    const sugg = document.getElementById('uv-sugg');
+    clearTimeout(_uvTimer);
+    if (val.length < 2) { sugg.style.display = 'none'; return; }
+    _uvTimer = setTimeout(async () => {
+      const r = await fetch(`/api/contratos/reportes/search?q=${encodeURIComponent(val)}`).then(x=>x.json());
+      if (!r.ok || !r.data.length) { sugg.style.display = 'none'; return; }
+      sugg.innerHTML = r.data.map(d =>
+        `<div onclick="uvSelRep(${JSON.stringify(d.CLAVE_REP)})"
+          style="padding:7px 12px;cursor:pointer;font-size:12px;border-bottom:1px solid #f0f0f0;"
+          onmouseover="this.style.background='#f0f6ff'" onmouseout="this.style.background=''">
+          <strong>${d.CLAVE_REP}</strong>${d.DESCRIPCION_ESP?`<br><span style="color:#888">${d.DESCRIPCION_ESP}</span>`:''}
+        </div>`
+      ).join('');
+      sugg.style.display = 'block';
+    }, 280);
+  }
+
+  function uvSelRep(clave) {
+    document.getElementById('upd-val-rep').value = clave;
+    document.getElementById('uv-sugg').style.display = 'none';
+    uvCargar();
+  }
+
+  async function uvCargar() {
+    document.getElementById('uv-sugg').style.display = 'none';
+    const rep  = document.getElementById('upd-val-rep').value.trim();
+    const plat = document.getElementById('upd-val-plataforma').value.trim();
+    if (!rep) return;
+    const panel = document.getElementById('uv-panel');
+    const tabla = document.getElementById('uv-tabla');
+    panel.style.display = 'block';
+    tabla.innerHTML = '<p style="color:#888;font-size:13px;padding:8px 0;">Cargando...</p>';
+    document.getElementById('upd-val-msg').innerHTML = '';
+    const url = `/api/contratos/validaciones-por-reporte?rep=${encodeURIComponent(rep)}${plat?'&plataforma='+encodeURIComponent(plat):''}`;
+    const r = await fetch(url).then(x=>x.json()).catch(()=>({ok:false,data:[]}));
+    _uvData = r.data || [];
+    if (!_uvData.length) {
+      tabla.innerHTML = '<p style="color:#888;font-size:13px;">No se encontraron validaciones para este reporte.</p>';
+      return;
+    }
+    // auto-rellenar plataforma si viene en los datos y el campo está vacío
+    if (!plat && _uvData[0]?.CLAVE_PLATAFORMA) {
+      document.getElementById('upd-val-plataforma').value = _uvData[0].CLAVE_PLATAFORMA;
+    }
+    uvRenderTabla();
+  }
+
+  function uvRenderTabla() {
+    const b = v => v==='S'?'✅':v==='N'?'—':(v||'—');
+    document.getElementById('uv-tabla').innerHTML = `
+      <p style="font-size:12px;color:#666;margin-bottom:8px;">${_uvData.length} validaciones cargadas</p>
+      <div style="overflow:auto;max-height:60vh;">
+        <table style="width:100%;border-collapse:collapse;font-size:12px;">
+          <thead><tr>
+            <th style="position:sticky;top:0;background:#1a3558;color:#fff;padding:8px;text-align:center;">
+              <input type="checkbox" id="uv-sel-all" onchange="uvToggleAll(this.checked)">
+            </th>
+            <th style="position:sticky;top:0;background:#1a3558;color:#fff;padding:8px 12px;text-align:left;white-space:nowrap;">Clave Validación</th>
+            <th style="position:sticky;top:0;background:#1a3558;color:#fff;padding:8px 12px;text-align:left;">Descripción</th>
+            <th style="position:sticky;top:0;background:#1a3558;color:#fff;padding:8px;text-align:center;">Doc</th>
+            <th style="position:sticky;top:0;background:#1a3558;color:#fff;padding:8px;text-align:center;">Prog</th>
+            <th style="position:sticky;top:0;background:#1a3558;color:#fff;padding:8px;text-align:center;">Cert</th>
+            <th style="position:sticky;top:0;background:#1a3558;color:#fff;padding:8px 12px;text-align:left;">Estatus</th>
+          </tr></thead>
+          <tbody>
+            ${_uvData.map((v,i)=>`
+              <tr style="background:${i%2?'#f8fafc':'#fff'}">
+                <td style="padding:6px;text-align:center;border-bottom:1px solid #eee;">
+                  <input type="checkbox" class="uv-cb" data-clave="${v.CLAVE_VALIDACION}" data-rep="${v.CLAVE_REP}">
+                </td>
+                <td style="padding:6px 12px;border-bottom:1px solid #eee;font-weight:600;color:#1a3558;white-space:nowrap;">${v.CLAVE_VALIDACION}</td>
+                <td style="padding:6px 12px;border-bottom:1px solid #eee;color:#444;">${v.DESCRIPCION||''}</td>
+                <td style="padding:6px;text-align:center;border-bottom:1px solid #eee;">${b(v.DOCUMENTADO)}</td>
+                <td style="padding:6px;text-align:center;border-bottom:1px solid #eee;">${b(v.PROGRAMADO)}</td>
+                <td style="padding:6px;text-align:center;border-bottom:1px solid #eee;">${b(v.CERTIFICADO)}</td>
+                <td style="padding:6px 12px;border-bottom:1px solid #eee;color:#666;">${v.ESTATUS||''}</td>
+              </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>`;
+  }
+
+  function uvToggleAll(checked) {
+    document.querySelectorAll('.uv-cb').forEach(cb => cb.checked = checked);
+  }
+
+  async function uvAplicar(desmarcar) {
+    const cbs  = [...document.querySelectorAll('.uv-cb:checked')];
+    const msg  = document.getElementById('upd-val-msg');
+    if (!cbs.length) { msg.innerHTML = '<span style="color:#e74c3c;">Selecciona al menos una validación.</span>'; return; }
     const clave_plataforma = document.getElementById('upd-val-plataforma').value.trim();
-    const etapa            = document.getElementById('upd-val-etapa').value;
-    const fecha            = document.getElementById('upd-val-fecha').value;
-    const msg              = document.getElementById('upd-val-msg');
-    if (!clave_validacion || !clave_plataforma) { msg.innerHTML = '<span style="color:#e74c3c;">Completa clave validación y plataforma.</span>'; return; }
-    msg.innerHTML = 'Guardando...';
+    if (!clave_plataforma) { msg.innerHTML = '<span style="color:#e74c3c;">Ingresa la plataforma.</span>'; return; }
+    const claves    = cbs.map(cb => cb.dataset.clave);
+    const clave_rep = cbs[0].dataset.rep;
+    const etapa     = document.getElementById('upd-val-etapa').value;
+    const fecha     = document.getElementById('upd-val-fecha').value;
+    msg.innerHTML   = `Actualizando ${claves.length} validaciones...`;
     try {
-      const r = await fetch('/api/contratos/estatus-validacion', {
-        method: 'PUT',
-        headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({ clave_validacion, clave_rep, clave_plataforma, etapa, fecha, desmarcar })
-      }).then(x => x.json());
+      const r = await fetch('/api/contratos/estatus-validacion-bulk', {
+        method: 'PUT', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ claves, clave_rep, clave_plataforma, etapa, fecha, desmarcar })
+      }).then(x=>x.json());
       if (r.ok) {
-        const accion = desmarcar ? 'desmarcado' : 'marcado';
-        msg.innerHTML = `<span style="color:#27ae60;">✅ Etapa ${etapa} ${accion} correctamente.</span>`;
-        document.getElementById('upd-val-clave').value = '';
-        document.getElementById('upd-val-rep').value = '';
-        document.getElementById('upd-val-plataforma').value = '';
-        document.getElementById('upd-val-fecha').value = '';
-        document.getElementById('upd-val-etapa').selectedIndex = 0;
-        document.getElementById('upd-val-buscar').value = '';
-        document.getElementById('upd-val-resultados').innerHTML = '';
+        msg.innerHTML = `<span style="color:#27ae60;">✅ ${r.updated} validaciones ${desmarcar?'desmarcadas':'marcadas'} como ${etapa}.</span>`;
+        document.getElementById('uv-sel-all').checked = false;
+        await uvCargar();
       } else {
         msg.innerHTML = `<span style="color:#e74c3c;">❌ ${r.message}</span>`;
       }
     } catch(e) { msg.innerHTML = '<span style="color:#e74c3c;">Error: ' + e.message + '</span>'; }
   }
 
-  let updValTimer;
-  async function buscarValidacionUpd() {
-    clearTimeout(updValTimer);
-    updValTimer = setTimeout(async () => {
-      const q = document.getElementById('upd-val-buscar').value.trim();
-      const wrap = document.getElementById('upd-val-resultados');
-      if (!q || q.length < 2) { wrap.innerHTML = ''; return; }
-      try {
-        const r = await fetch('/api/contratos/buscar-validacion?q=' + encodeURIComponent(q)).then(x => x.json());
-        const data = r.data || [];
-        wrap.innerHTML = data.map(v => `
-          <div onclick="
-            document.getElementById('upd-val-clave').value='${v.CLAVE_VALIDACION}';
-            document.getElementById('upd-val-rep').value='${v.CLAVE_REP}';
-            document.getElementById('upd-val-plataforma').value='${v.CLAVE_PLATAFORMA||''}';
-            document.getElementById('upd-val-resultados').innerHTML='';
-            document.getElementById('upd-val-buscar').value='';"
-            style="padding:6px 10px;cursor:pointer;border-bottom:1px solid #f0f0f0;display:flex;flex-direction:column;gap:2px;">
-            <span style="font-weight:600;color:#1a3558;">${v.CLAVE_VALIDACION}</span>
-            <span style="color:#666;font-size:11px;">${v.CLAVE_REP} · ${v.CLAVE_PLATAFORMA||''}</span>
-            <span style="color:#aaa;font-size:11px;">${v.DESCRIPCION||''}</span>
-          </div>`).join('') || '<div style="color:#aaa;padding:8px 10px;">Sin resultados.</div>';
-      } catch(e) {}
-    }, 300);
-  }
+  document.addEventListener('click', e => {
+    if (!e.target.closest('#upd-val-rep') && !e.target.closest('#uv-sugg'))
+      document.getElementById('uv-sugg') && (document.getElementById('uv-sugg').style.display='none');
+  });
 
   let updRepTimer;
   async function buscarReporteUpd() {
