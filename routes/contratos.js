@@ -311,7 +311,7 @@ router.get('/bitacora', requireAuth, async (req, res) => {
 router.put('/estatus-reporte', requireAuth, async (req, res) => {
   try {
     const { clave_rep, clave_plataforma, etapa, fecha, desmarcar } = req.body;
-    const usuario  = req.session.user?.usuario || 'sistema';
+    const usuario  = req.session.user?.username || 'sistema';
     const fechaVal = fecha ? esc(fecha) : 'GETDATE()';
 
     // Cascada MARCAR:    CERT→doc+prog+cert | PROG→doc+prog | DOC→doc
@@ -365,7 +365,7 @@ router.put('/estatus-reporte', requireAuth, async (req, res) => {
 router.put('/estatus-validacion', requireAuth, async (req, res) => {
   try {
     const { clave_validacion, clave_rep, clave_plataforma, etapa, fecha, desmarcar } = req.body;
-    const usuario  = req.session.user?.usuario || 'sistema';
+    const usuario  = req.session.user?.username || 'sistema';
     const fechaVal = fecha ? esc(fecha) : 'GETDATE()';
 
     let docVal, progVal, certVal, nuevoEstatus;
@@ -445,7 +445,7 @@ router.put('/estatus-validacion-bulk', requireAuth, async (req, res) => {
   try {
     const { claves, clave_rep, clave_plataforma, etapa, fecha, desmarcar } = req.body;
     if (!claves?.length) return res.json({ ok: false, message: 'No hay validaciones seleccionadas' });
-    const usuario  = req.session.user?.usuario || 'sistema';
+    const usuario  = req.session.user?.username || 'sistema';
     const fechaVal = fecha ? esc(fecha) : 'GETDATE()';
 
     let docVal, progVal, certVal, nuevoEstatus;
