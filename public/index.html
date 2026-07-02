@@ -1277,7 +1277,7 @@
         <!-- Tab: Validaciones -->
         <div id="panel-inv-val" style="display:none;">
           <p style="font-size:13px;color:#666;margin-bottom:4px;">Columnas del Excel:</p>
-          <p style="font-size:11px;color:#aaa;font-family:monospace;margin-bottom:16px;">CLAVE_VALIDACION | CLAVE_PAIS | CLAVE_ENTIDADREGULADA | CLAVE_REG | CLAVE_REP | ID_VALIDACION_ANT | DESCRIPCION_VALIDACION | TIPO_VALIDACION | TIPO_VALIDACION_CALC</p>
+          <p style="font-size:11px;color:#aaa;font-family:monospace;margin-bottom:16px;">CLAVE_VALIDACION | CLAVE_PAIS | CLAVE_ENTIDADREGULADA | CLAVE_REG | CLAVE_REP | ID_VALIDACION_ANT | DESCRIPCION_VALIDACION | TIPO_VALIDACION | CLAVE_PLATAFORMA | TIPO_VALIDACION_CALC</p>
           <div style="display:flex;gap:10px;align-items:center;margin-bottom:12px;">
             <input id="bc-inv-val-file" type="file" accept=".xlsx,.xls" style="font-size:13px;">
             <button onclick="descargarTemplate('validaciones')"
@@ -4212,8 +4212,8 @@
       },
       validaciones: {
         nombre: 'template_inventario_validaciones.xlsx',
-        cols: ['CLAVE_VALIDACION','CLAVE_PAIS','CLAVE_ENTIDADREGULADA','CLAVE_REG','CLAVE_REP','ID_VALIDACION_ANT','DESCRIPCION_VALIDACION','TIPO_VALIDACION','TIPO_VALIDACION_CALC'],
-        ejemplo: ['MX_BM_XX_XX_00_24_A_1_01_01','MX','BM','SUPER','MX_BM_XX_XX_00_24','XX_01','Valida que el campo no sea nulo','Intra','NULO']
+        cols: ['CLAVE_VALIDACION','CLAVE_PAIS','CLAVE_ENTIDADREGULADA','CLAVE_REG','CLAVE_REP','ID_VALIDACION_ANT','DESCRIPCION_VALIDACION','TIPO_VALIDACION','CLAVE_PLATAFORMA','TIPO_VALIDACION_CALC'],
+        ejemplo: ['MX_BM_XX_XX_00_24_A_1_01_01','MX','BM','SUPER','MX_BM_XX_XX_00_24','XX_01','Valida que el campo no sea nulo','Intra','JAVA','NULO']
       },
       contratos: null
     };
