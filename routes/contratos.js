@@ -605,13 +605,11 @@ router.post('/inventario-validaciones/upload', requireAuth, upload.single('archi
           const clavePlat = String(r.CLAVE_PLATAFORMA || '').trim() || 'N/A';
           const sqlInsert = `
             INSERT INTO REPORTE_VALIDACION
-              (CLAVE_VALIDACION, CLAVE_REP, CLAVE_PLATAFORMA, TIPO_VALIDACION, DESCRIPCION, DOCUMENTADO, PROGRAMADO, CERTIFICADO, ESTATUS)
+              (CLAVE_VALIDACION, CLAVE_REP, CLAVE_PLATAFORMA, TIPO_VALIDACION, DESCRIPCION, DOCUMENTADO, PROGRAMADO, CERTIFICADO, ESTATUS, VERSION)
             VALUES
               (${esc(clave)}, ${esc(claveRep)}, ${esc(clavePlat)}, ${esc(r.TIPO_VALIDACION)}, ${esc(r.DESCRIPCION_VALIDACION)},
-               'N', 'N', 'N', 'IDENTIFICADO')
+               'N', 'N', 'N', 'IDENTIFICADO', ${esc(version)})
           `;
-          console.log('[upload-val] DEBUG plat raw:', JSON.stringify(r.CLAVE_PLATAFORMA), '→ esc:', esc(clavePlat));
-          console.log('[upload-val] DEBUG sql:', sqlInsert.trim().substring(0, 300));
           await query(sqlInsert);
           insertados++;
         } else {
