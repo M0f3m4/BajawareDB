@@ -16,19 +16,46 @@ const esc = v => (v === null || v === undefined || v === '') ? 'NULL' : `'${Stri
 // ── GET historial de versiones ────────────────────────────
 router.get('/historial-versiones', requireAuth, async (req, res) => {
   try {
-    const { tipo, clave, limit = 100 } = req.query;
-    let where = [];
-    if (tipo)  where.push(`TIPO_OBJETO=${esc(tipo)}`);
-    if (clave) where.push(`CLAVE_OBJ LIKE ${esc('%' + clave + '%')}`);
-    const w = where.length ? 'WHERE ' + where.join(' AND ') : '';
+    const { tipo, clave, rep, limit = 200 } = req.query;
+    let where = ['iv.TIPO_OBJETO = COALESCE(' + esc(tipo||null) + ', iv.TIPO_OBJETO)'];
+    if (clave) where.push(`iv.CLAVE_OBJ LIKE ${esc('%' + clave + '%')}`);
+    if (rep)   where.push(`inv.CLAVE_REP = ${esc(rep)}`);
+    const w = 'WHERE ' + where.join(' AND ');
     const rows = await query(`
-      SELECT TOP ${parseInt(limit)} ID_VERSION, TIPO_OBJETO, CLAVE_OBJ, VERSION,
-        REGULACION, TIPO_VERSION, DESCRIPCION, ESTATUS, USUARIO, FECHA_CARGA
-      FROM INVENTARIO_VERSIONES ${w}
-      ORDER BY FECHA_CARGA DESC
+      SELECT TOP ${parseInt(limit)}
+        iv.ID_VERSION, iv.TIPO_OBJETO, iv.CLAVE_OBJ,
+        inv.CLAVE_REP,
+        iv.VERSION, iv.REGULACION, iv.TIPO_VERSION, iv.DESCRIPCION,
+        iv.ESTATUS, iv.USUARIO, iv.FECHA_CARGA
+      FROM INVENTARIO_VERSIONES iv
+      LEFT JOIN INVENTARIO_VALIDACIONES inv ON inv.CLAVE_VALIDACION = iv.CLAVE_OBJ AND iv.TIPO_OBJETO = 'VALIDACION'
+      ${w}
+      ORDER BY iv.FECHA_CARGA DESC
     `);
     res.json({ ok: true, data: rows });
   } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
+});
+
+// ── POST migración masiva 1.0.0 ───────────────────────────
+router.post('/historial-versiones/migrar-base', requireAuth, async (req, res) => {
+  try {
+    console.log('[migrar-base] iniciando...');
+    await query(`
+      INSERT INTO INVENTARIO_VERSIONES (TIPO_OBJETO, CLAVE_OBJ, VERSION, REGULACION, TIPO_VERSION, DESCRIPCION, ESTATUS, USUARIO)
+      SELECT DISTINCT 'VALIDACION', iv.CLAVE_VALIDACION, '1.0.0', 'INICIAL', 'BASE', 'Version inicial', 'IDENTIFICADO', 'sistema'
+      FROM INVENTARIO_VALIDACIONES iv
+      WHERE NOT EXISTS (
+        SELECT 1 FROM INVENTARIO_VERSIONES ivv
+        WHERE ivv.CLAVE_OBJ = iv.CLAVE_VALIDACION AND ivv.TIPO_OBJETO = 'VALIDACION'
+      )
+    `);
+    const cnt = await query(`SELECT COUNT(*) AS total FROM INVENTARIO_VERSIONES WHERE TIPO_OBJETO='VALIDACION'`);
+    console.log('[migrar-base] listo:', cnt[0].total);
+    res.json({ ok: true, total: cnt[0].total });
+  } catch(e) {
+    console.error('[migrar-base] error:', e.message);
+    res.status(500).json({ ok: false, message: e.message });
+  }
 });
 
 // Cache del DISTINCT CLAVE_REP de REPORTE_VALIDACION (scan lento de 431k filas — se hace UNA vez)
