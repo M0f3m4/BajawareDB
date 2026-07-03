@@ -797,6 +797,28 @@ router.post('/contratos/upload', requireAuth, upload.single('archivo'), async (r
   } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
 });
 
+// ── GET exportar inventario reportes a Excel ──────────────
+router.get('/inventario-reportes/export', requireAuth, async (req, res) => {
+  try {
+    const rows = await query(`
+      SELECT CLAVE_REP, CLAVE_PAIS, CLAVE_ENTIDADREGULADA, CLAVE_REG,
+             CLAVE_SERIE, SUBSERIE, CLAVE_GRUPO, REPORTE,
+             CLAVE_SECCION_REP, CLAVE_VERSION_REPORTE, CLAVE_PERIODO,
+             DESCRIPCION_ESP, CLAVE_FECHA_ENT_REP, CARACTERISTICAS,
+             CLAVE_REGULACION_REP, CLAVE_REP_GENERAL, FECHA_REGULACION, VIGENTE
+      FROM INVENTARIO_REPORTES
+      ORDER BY CLAVE_REP
+    `);
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.json_to_sheet(rows);
+    XLSX.utils.book_append_sheet(wb, ws, 'INVENTARIO_REPORTES');
+    const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+    res.setHeader('Content-Disposition', 'attachment; filename="inventario_reportes.xlsx"');
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.send(buf);
+  } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
+});
+
 // ── GET búsqueda inventario reportes ─────────────────────
 router.get('/inventario/reportes', requireAuth, async (req, res) => {
   try {

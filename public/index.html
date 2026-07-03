@@ -1263,14 +1263,14 @@
           <p style="font-size:11px;color:#aaa;font-family:monospace;margin-bottom:16px;">CLAVE_REP | CLAVE_PAIS | CLAVE_ENTIDADREGULADA | CLAVE_REG | CLAVE_SERIE | SUBSERIE | CLAVE_GRUPO | REPORTE | CLAVE_SECCION_REP | CLAVE_VERSION_REPORTE | CLAVE_PERIODO | DESCRIPCION_ESP | CLAVE_FECHA_ENT_REP | CARACTERISTICAS | CLAVE_REGULACION_REP | CLAVE_REP_GENERAL | FECHA_REGULACION | VIGENTE</p>
           <div style="display:flex;gap:10px;align-items:center;margin-bottom:12px;">
             <input id="bc-inv-rep-file" type="file" accept=".xlsx,.xls" style="font-size:13px;">
-            <button onclick="descargarTemplate('reportes')"
+            <button onclick="exportarInventarioReportes()"
               style="padding:6px 14px;background:#f0f4f8;color:#1a3558;border:1px solid #c0cfe0;border-radius:6px;font-size:12px;cursor:pointer;">
-              📥 Template
+              📤 Exportar desde BD
             </button>
           </div>
           <button onclick="cargarInventarioReportes()"
             style="padding:8px 24px;background:#1a3558;color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;">
-            📤 Cargar
+            📥 Cargar Excel
           </button>
           <div id="bc-inv-rep-msg" style="margin-top:12px;font-size:13px;"></div>
         </div>
@@ -4272,6 +4272,10 @@
   }
 
   let _invVerTipo = ''; // 'rep' o 'val'
+
+  function exportarInventarioReportes() {
+    window.location.href = '/api/contratos/inventario-reportes/export';
+  }
 
   function cargarInventarioReportes() {
     const file = document.getElementById('bc-inv-rep-file').files[0];
