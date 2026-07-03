@@ -538,6 +538,7 @@
       <div class="sub-menu" id="sub-act">
         <div class="sub-item" onclick="showSection('actividad')">Feed</div>
         <div class="sub-item" onclick="showSection('bitacora')">Bitácora</div>
+        <div class="sub-item" onclick="showSection('historial-versiones')">Historial Versiones</div>
       </div>
 
       <div class="nav-item" onclick="showSection('qa-alertas')" id="nav-qa-alertas">
@@ -1450,6 +1451,27 @@
             </button>
           </div>
         </div>
+      </div>
+
+      <!-- ── Historial de Versiones ────────────────────────────── -->
+      <div class="content-section" id="sec-historial-versiones">
+        <h2 class="section-title">Historial de Versiones</h2>
+        <div class="toolbar" style="flex-wrap:wrap;gap:8px;margin-bottom:14px;">
+          <select id="hv-tipo" style="min-width:140px;" onchange="loadHistorialVersiones()">
+            <option value="">Todos los tipos</option>
+            <option value="REPORTE">Reporte</option>
+            <option value="VALIDACION">Validación</option>
+            <option value="LAYOUT">Layout</option>
+          </select>
+          <input id="hv-clave" type="text" placeholder="Buscar por clave..."
+            style="padding:7px 12px;border:1px solid #ddd;border-radius:6px;font-size:13px;width:260px;"
+            onkeydown="if(event.key==='Enter') loadHistorialVersiones()">
+          <button onclick="loadHistorialVersiones()"
+            style="padding:7px 16px;background:#1a3558;color:#fff;border:none;border-radius:6px;font-size:13px;cursor:pointer;">
+            🔍 Buscar
+          </button>
+        </div>
+        <div id="hv-content"><p style="color:#888;font-size:13px;">Usa los filtros para consultar el historial.</p></div>
       </div>
 
       <!-- Actividad -->
@@ -3422,6 +3444,48 @@
     if (!e.target.closest('#rpc-input') && !e.target.closest('#rpc-sugg'))
       document.getElementById('rpc-sugg') && (document.getElementById('rpc-sugg').style.display='none');
   });
+
+  // ── Historial de Versiones ────────────────────────────────
+  async function loadHistorialVersiones() {
+    const wrap = document.getElementById('hv-content');
+    if (!wrap) return;
+    wrap.innerHTML = '<div class="loading">Cargando...</div>';
+    const tipo  = document.getElementById('hv-tipo').value;
+    const clave = document.getElementById('hv-clave').value.trim();
+    let url = '/api/contratos/historial-versiones?limit=200';
+    if (tipo)  url += `&tipo=${encodeURIComponent(tipo)}`;
+    if (clave) url += `&clave=${encodeURIComponent(clave)}`;
+    try {
+      const r = await fetch(url);
+      const j = await r.json();
+      if (!j.ok || !j.data.length) { wrap.innerHTML = '<p style="color:#888;font-size:13px;">Sin resultados.</p>'; return; }
+      wrap.innerHTML = `
+        <table style="width:100%;border-collapse:collapse;font-size:13px;">
+          <thead><tr style="background:#f0f4f8;">
+            <th style="padding:8px;text-align:left;border-bottom:2px solid #ddd;">Tipo</th>
+            <th style="padding:8px;text-align:left;border-bottom:2px solid #ddd;">Clave</th>
+            <th style="padding:8px;text-align:left;border-bottom:2px solid #ddd;">Versión</th>
+            <th style="padding:8px;text-align:left;border-bottom:2px solid #ddd;">Regulación</th>
+            <th style="padding:8px;text-align:left;border-bottom:2px solid #ddd;">Tipo Ver.</th>
+            <th style="padding:8px;text-align:left;border-bottom:2px solid #ddd;">Descripción</th>
+            <th style="padding:8px;text-align:left;border-bottom:2px solid #ddd;">Usuario</th>
+            <th style="padding:8px;text-align:left;border-bottom:2px solid #ddd;">Fecha</th>
+          </tr></thead>
+          <tbody>
+            ${j.data.map(v => `<tr style="border-bottom:1px solid #eee;">
+              <td style="padding:7px 8px;"><span class="badge ${v.TIPO_OBJETO==='REPORTE'?'badge-blue':v.TIPO_OBJETO==='VALIDACION'?'badge-green':'badge-purple'}">${v.TIPO_OBJETO}</span></td>
+              <td style="padding:7px 8px;font-family:monospace;font-size:11px;">${v.CLAVE_OBJ}</td>
+              <td style="padding:7px 8px;font-weight:600;">${v.VERSION||''}</td>
+              <td style="padding:7px 8px;">${v.REGULACION||'-'}</td>
+              <td style="padding:7px 8px;">${v.TIPO_VERSION||'-'}</td>
+              <td style="padding:7px 8px;">${v.DESCRIPCION||'-'}</td>
+              <td style="padding:7px 8px;">${v.USUARIO||''}</td>
+              <td style="padding:7px 8px;color:#888;">${v.FECHA_CARGA ? new Date(v.FECHA_CARGA).toLocaleString('es-MX') : ''}</td>
+            </tr>`).join('')}
+          </tbody>
+        </table>`;
+    } catch(e) { wrap.innerHTML = `<p style="color:red;">${e.message}</p>`; }
+  }
 
   // ── Bitácora de Movimientos ───────────────────────────────
   async function loadBitacora() {

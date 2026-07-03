@@ -13,6 +13,24 @@ function requireAuth(req, res, next) {
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
 const esc = v => (v === null || v === undefined || v === '') ? 'NULL' : `'${String(v).trim().replace(/'/g,"''")}'`;
 
+// ── GET historial de versiones ────────────────────────────
+router.get('/historial-versiones', requireAuth, async (req, res) => {
+  try {
+    const { tipo, clave, limit = 100 } = req.query;
+    let where = [];
+    if (tipo)  where.push(`TIPO_OBJETO=${esc(tipo)}`);
+    if (clave) where.push(`CLAVE_OBJ LIKE ${esc('%' + clave + '%')}`);
+    const w = where.length ? 'WHERE ' + where.join(' AND ') : '';
+    const rows = await query(`
+      SELECT TOP ${parseInt(limit)} ID_VERSION, TIPO_OBJETO, CLAVE_OBJ, VERSION,
+        REGULACION, TIPO_VERSION, DESCRIPCION, ESTATUS, USUARIO, FECHA_CARGA
+      FROM INVENTARIO_VERSIONES ${w}
+      ORDER BY FECHA_CARGA DESC
+    `);
+    res.json({ ok: true, data: rows });
+  } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
+});
+
 // Cache del DISTINCT CLAVE_REP de REPORTE_VALIDACION (scan lento de 431k filas — se hace UNA vez)
 let _rvClavesCache = null;
 let _rvCacheTime   = 0;
