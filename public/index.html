@@ -1259,8 +1259,9 @@
 
         <!-- Tab: Reportes -->
         <div id="panel-inv-rep">
-          <p style="font-size:13px;color:#666;margin-bottom:4px;">Columnas del Excel (mismo nombre que la BD):</p>
-          <p style="font-size:11px;color:#aaa;font-family:monospace;margin-bottom:16px;">CLAVE_REP | CLAVE_PAIS | CLAVE_ENTIDADREGULADA | CLAVE_REG | CLAVE_SERIE | SUBSERIE | CLAVE_GRUPO | REPORTE | CLAVE_SECCION_REP | CLAVE_VERSION_REPORTE | CLAVE_PERIODO | DESCRIPCION_ESP | CLAVE_FECHA_ENT_REP | CARACTERISTICAS | CLAVE_REGULACION_REP | CLAVE_REP_GENERAL | FECHA_REGULACION | VIGENTE</p>
+          <p style="font-size:13px;color:#666;margin-bottom:12px;">
+            Exporta el inventario actual de la BD, edita las filas que necesites y vuelve a subir el mismo archivo.
+          </p>
           <div style="display:flex;gap:10px;align-items:center;margin-bottom:12px;">
             <input id="bc-inv-rep-file" type="file" accept=".xlsx,.xls" style="font-size:13px;">
             <button onclick="exportarInventarioReportes()"
