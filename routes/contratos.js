@@ -626,6 +626,21 @@ router.post('/inventario-reportes/upload', requireAuth, upload.single('archivo')
   } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
 });
 
+// ── POST check inventario validaciones ────────────────────
+router.post('/inventario-validaciones/check', requireAuth, async (req, res) => {
+  try {
+    const { version, claves_rep = [] } = req.body;
+    const vCheck = await query(`SELECT COUNT(*) AS cnt FROM INVENTARIO_VERSIONES WHERE TIPO_OBJETO='VALIDACION' AND VERSION=${esc(version)}`);
+    let invalidas = [];
+    if (claves_rep.length) {
+      const vals = claves_rep.map(c => `(${esc(c)})`).join(',');
+      const rows = await query(`SELECT t.c FROM (VALUES ${vals}) AS t(c) WHERE NOT EXISTS (SELECT 1 FROM INVENTARIO_REPORTES WHERE CLAVE_REP = t.c)`);
+      invalidas = rows.map(r => r.c);
+    }
+    res.json({ ok: true, version_existe: vCheck[0].cnt > 0, version_count: vCheck[0].cnt, claves_rep_invalidas: invalidas });
+  } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
+});
+
 // ── POST carga Excel inventario validaciones ───────────────
 router.post('/inventario-validaciones/upload', requireAuth, upload.single('archivo'), async (req, res) => {
   if (!req.file) return res.status(400).json({ ok: false, message: 'No se recibió archivo' });
@@ -633,6 +648,7 @@ router.post('/inventario-validaciones/upload', requireAuth, upload.single('archi
     const usuario     = req.session.user?.username || 'sistema';
     const version     = (req.body.version     || '1.0.0').trim();
     const regulacion  = (req.body.regulacion  || '').trim();
+    const force       = req.body.force === 'true';
     const tipo_version= (req.body.tipo_version|| 'BASE').trim();
     const descripcion = (req.body.descripcion || '').trim();
 
@@ -686,8 +702,11 @@ router.post('/inventario-validaciones/upload', requireAuth, upload.single('archi
           `);
           actualizados++;
         }
-        // Registrar en INVENTARIO_VERSIONES (no bloqueante)
+        // Registrar en INVENTARIO_VERSIONES (si force=true, sobreescribe la misma versión)
         try {
+          if (force) {
+            await query(`DELETE FROM INVENTARIO_VERSIONES WHERE TIPO_OBJETO='VALIDACION' AND CLAVE_OBJ=${esc(clave)} AND VERSION=${esc(version)}`);
+          }
           await query(`
             INSERT INTO INVENTARIO_VERSIONES (TIPO_OBJETO, CLAVE_OBJ, VERSION, REGULACION, TIPO_VERSION, DESCRIPCION, ESTATUS, USUARIO)
             VALUES ('VALIDACION', ${esc(clave)}, ${esc(version)}, ${esc(regulacion)}, ${esc(tipo_version)}, ${esc(descripcion)}, 'IDENTIFICADO', ${esc(usuario)})

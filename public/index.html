@@ -1315,46 +1315,67 @@
 
       <!-- Modal: versión de carga -->
       <div id="inv-ver-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;align-items:center;justify-content:center;">
-        <div style="background:#fff;border-radius:12px;padding:28px 32px;width:420px;box-shadow:0 8px 32px rgba(0,0,0,.2);">
-          <h3 style="margin:0 0 6px;font-size:15px;color:#1a3558;">📋 Datos de versión</h3>
-          <p id="inv-ver-filename" style="font-size:12px;color:#888;margin:0 0 20px;"></p>
-          <div style="display:grid;gap:14px;">
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div style="background:#fff;border-radius:12px;padding:28px 32px;width:440px;box-shadow:0 8px 32px rgba(0,0,0,.2);">
+
+          <!-- Página 1: Formulario -->
+          <div id="inv-ver-form-section">
+            <h3 style="margin:0 0 6px;font-size:15px;color:#1a3558;">📋 Datos de versión</h3>
+            <p id="inv-ver-filename" style="font-size:12px;color:#888;margin:0 0 20px;"></p>
+            <div style="display:grid;gap:14px;">
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+                <div>
+                  <label style="font-size:11px;font-weight:600;color:#555;display:block;margin-bottom:4px;">Versión *</label>
+                  <input id="inv-ver-version" type="text" value="1.0.0" placeholder="ej. 2.0.0"
+                    style="width:100%;padding:7px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;box-sizing:border-box;">
+                </div>
+                <div>
+                  <label style="font-size:11px;font-weight:600;color:#555;display:block;margin-bottom:4px;">Tipo Versión</label>
+                  <select id="inv-ver-tipo-ver" style="width:100%;padding:7px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;">
+                    <option value="BASE">BASE</option>
+                    <option value="CAMBIO REG">CAMBIO REG</option>
+                    <option value="FIX">FIX</option>
+                  </select>
+                </div>
+              </div>
               <div>
-                <label style="font-size:11px;font-weight:600;color:#555;display:block;margin-bottom:4px;">Versión *</label>
-                <input id="inv-ver-version" type="text" value="1.0.0" placeholder="ej. 2.0.0"
+                <label style="font-size:11px;font-weight:600;color:#555;display:block;margin-bottom:4px;">Regulación</label>
+                <input id="inv-ver-regulacion" type="text" placeholder="ej. DICIEMBRE 2025"
                   style="width:100%;padding:7px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;box-sizing:border-box;">
               </div>
               <div>
-                <label style="font-size:11px;font-weight:600;color:#555;display:block;margin-bottom:4px;">Tipo Versión</label>
-                <select id="inv-ver-tipo" style="width:100%;padding:7px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;">
-                  <option value="BASE">BASE</option>
-                  <option value="CAMBIO REG">CAMBIO REG</option>
-                  <option value="FIX">FIX</option>
-                </select>
+                <label style="font-size:11px;font-weight:600;color:#555;display:block;margin-bottom:4px;">Descripción</label>
+                <input id="inv-ver-desc" type="text" placeholder="ej. Actualización reportes Q4"
+                  style="width:100%;padding:7px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;box-sizing:border-box;">
               </div>
             </div>
-            <div>
-              <label style="font-size:11px;font-weight:600;color:#555;display:block;margin-bottom:4px;">Regulación</label>
-              <input id="inv-ver-regulacion" type="text" placeholder="ej. DICIEMBRE 2025"
-                style="width:100%;padding:7px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;box-sizing:border-box;">
-            </div>
-            <div>
-              <label style="font-size:11px;font-weight:600;color:#555;display:block;margin-bottom:4px;">Descripción</label>
-              <input id="inv-ver-desc" type="text" placeholder="ej. Actualización reportes Q4"
-                style="width:100%;padding:7px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;box-sizing:border-box;">
+            <div style="display:flex;gap:10px;margin-top:22px;justify-content:flex-end;">
+              <button onclick="invVerCancelar()"
+                style="padding:8px 20px;background:#f0f4f8;color:#555;border:1px solid #ddd;border-radius:6px;font-size:13px;cursor:pointer;">
+                Cancelar
+              </button>
+              <button onclick="invVerConfirmar()" id="inv-ver-btn-confirmar"
+                style="padding:8px 24px;background:#1a3558;color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;">
+                📤 Verificar y cargar
+              </button>
             </div>
           </div>
-          <div style="display:flex;gap:10px;margin-top:22px;justify-content:flex-end;">
-            <button onclick="invVerCancelar()"
-              style="padding:8px 20px;background:#f0f4f8;color:#555;border:1px solid #ddd;border-radius:6px;font-size:13px;cursor:pointer;">
-              Cancelar
-            </button>
-            <button onclick="invVerConfirmar()"
-              style="padding:8px 24px;background:#1a3558;color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;">
-              📤 Confirmar carga
-            </button>
+
+          <!-- Página 2: Resultados del check -->
+          <div id="inv-ver-check-section" style="display:none;">
+            <h3 style="margin:0 0 16px;font-size:15px;color:#1a3558;">⚠️ Verificación previa</h3>
+            <div id="inv-ver-check-body"></div>
+            <div style="display:flex;gap:10px;margin-top:22px;justify-content:flex-end;">
+              <button onclick="invVerVolverForm()"
+                style="padding:8px 20px;background:#f0f4f8;color:#555;border:1px solid #ddd;border-radius:6px;font-size:13px;cursor:pointer;">
+                ← Corregir
+              </button>
+              <button onclick="invVerSubirForzado()"
+                style="padding:8px 24px;background:#e67e22;color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;">
+                📤 Subir de todas formas
+              </button>
+            </div>
           </div>
+
         </div>
       </div>
 
@@ -4274,22 +4295,113 @@
 
   function invVerCancelar() {
     document.getElementById('inv-ver-modal').style.display = 'none';
+    invVerVolverForm();
   }
 
-  async function invVerConfirmar() {
-    const version    = document.getElementById('inv-ver-version').value.trim() || '1.0.0';
-    const regulacion = document.getElementById('inv-ver-regulacion').value.trim();
-    const tipo_ver   = document.getElementById('inv-ver-tipo').value;
-    const descripcion= document.getElementById('inv-ver-desc').value.trim();
-    document.getElementById('inv-ver-modal').style.display = 'none';
+  function invVerVolverForm() {
+    document.getElementById('inv-ver-form-section').style.display = '';
+    document.getElementById('inv-ver-check-section').style.display = 'none';
+  }
 
+  let _invVerPending = null;
+  let _invVerNeedsForce = false;
+
+  async function invVerConfirmar() {
+    const version     = document.getElementById('inv-ver-version').value.trim() || '1.0.0';
+    const regulacion  = document.getElementById('inv-ver-regulacion').value.trim();
+    const tipo_ver    = document.getElementById('inv-ver-tipo-ver').value;
+    const descripcion = document.getElementById('inv-ver-desc').value.trim();
+
+    // Para reportes no hay check — subir directo
+    if (_invVerTipo !== 'val') {
+      document.getElementById('inv-ver-modal').style.display = 'none';
+      await _invVerSubirReal(version, regulacion, tipo_ver, descripcion, false);
+      return;
+    }
+
+    // Parsear Excel client-side para extraer CLAVE_REP únicos (solo esa columna)
+    const btn = document.getElementById('inv-ver-btn-confirmar');
+    btn.textContent = 'Verificando...'; btn.disabled = true;
+    const file = document.getElementById('bc-inv-val-file').files[0];
+    const buf = await file.arrayBuffer();
+    const wb2 = XLSX.read(buf, { type: 'array' });
+    const ws2 = wb2.Sheets[wb2.SheetNames[0]];
+    const ref = XLSX.utils.decode_range(ws2['!ref']);
+    let repCol = -1;
+    for (let c = ref.s.c; c <= ref.e.c; c++) {
+      const hCell = ws2[XLSX.utils.encode_cell({r: ref.s.r, c})];
+      if (hCell && hCell.v === 'CLAVE_REP') { repCol = c; break; }
+    }
+    const clavesRepSet = new Set();
+    if (repCol >= 0) {
+      for (let r = ref.s.r + 1; r <= ref.e.r; r++) {
+        const cell = ws2[XLSX.utils.encode_cell({r, c: repCol})];
+        if (cell && cell.v) clavesRepSet.add(String(cell.v).trim());
+      }
+    }
+    btn.textContent = '📤 Verificar y cargar'; btn.disabled = false;
+
+    // Llamar al check endpoint
+    let check;
+    try {
+      check = await fetch('/api/contratos/inventario-validaciones/check', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ version, claves_rep: [...clavesRepSet] })
+      }).then(x => x.json());
+    } catch(e) {
+      // Si el check falla, subir sin verificar
+      document.getElementById('inv-ver-modal').style.display = 'none';
+      await _invVerSubirReal(version, regulacion, tipo_ver, descripcion, false);
+      return;
+    }
+
+    // Sin advertencias — subir directo
+    if (!check.version_existe && !check.claves_rep_invalidas.length) {
+      document.getElementById('inv-ver-modal').style.display = 'none';
+      await _invVerSubirReal(version, regulacion, tipo_ver, descripcion, false);
+      return;
+    }
+
+    // Guardar datos pendientes y mostrar página 2
+    _invVerPending = { version, regulacion, tipo_ver, descripcion };
+    _invVerNeedsForce = check.version_existe;
+
+    let html = '';
+    if (check.version_existe) {
+      html += `<div style="background:#fff3cd;border:1px solid #ffc107;border-radius:8px;padding:12px 16px;margin-bottom:12px;">
+        ⚠️ La versión <strong>${version}</strong> ya tiene <strong>${check.version_count.toLocaleString()}</strong> entradas en el historial.<br>
+        <span style="font-size:12px;color:#856404;">Si continúas, esas entradas se sobreescriben con los datos actuales.</span>
+      </div>`;
+    }
+    if (check.claves_rep_invalidas.length) {
+      html += `<div style="background:#f8d7da;border:1px solid #f5c6cb;border-radius:8px;padding:12px 16px;margin-bottom:12px;">
+        ❌ ${check.claves_rep_invalidas.length} CLAVE_REP no existen en Inventario Reportes:<br>
+        <span style="font-size:11px;font-family:monospace;color:#721c24;">${check.claves_rep_invalidas.join(', ')}</span><br>
+        <span style="font-size:12px;color:#721c24;">Las validaciones con esos reportes no se insertarán en REPORTE_VALIDACION.</span>
+      </div>`;
+    }
+    document.getElementById('inv-ver-check-body').innerHTML = html;
+    document.getElementById('inv-ver-form-section').style.display = 'none';
+    document.getElementById('inv-ver-check-section').style.display = '';
+  }
+
+  async function invVerSubirForzado() {
+    if (!_invVerPending) return;
+    const { version, regulacion, tipo_ver, descripcion } = _invVerPending;
+    _invVerPending = null;
+    document.getElementById('inv-ver-modal').style.display = 'none';
+    invVerVolverForm();
+    await _invVerSubirReal(version, regulacion, tipo_ver, descripcion, _invVerNeedsForce);
+  }
+
+  async function _invVerSubirReal(version, regulacion, tipo_ver, descripcion, force) {
     const isRep = _invVerTipo === 'rep';
-    const fileId = isRep ? 'bc-inv-rep-file' : 'bc-inv-val-file';
-    const msgId  = isRep ? 'bc-inv-rep-msg'  : 'bc-inv-val-msg';
+    const fileId   = isRep ? 'bc-inv-rep-file' : 'bc-inv-val-file';
+    const msgId    = isRep ? 'bc-inv-rep-msg'  : 'bc-inv-val-msg';
     const endpoint = isRep ? '/api/contratos/inventario-reportes/upload' : '/api/contratos/inventario-validaciones/upload';
     const file = document.getElementById(fileId).files[0];
     const msg  = document.getElementById(msgId);
-
     msg.innerHTML = 'Cargando...';
     const fd = new FormData();
     fd.append('archivo', file);
@@ -4297,7 +4409,7 @@
     fd.append('regulacion', regulacion);
     fd.append('tipo_version', tipo_ver);
     fd.append('descripcion', descripcion);
-
+    if (force) fd.append('force', 'true');
     try {
       const r = await fetch(endpoint, { method: 'POST', body: fd }).then(x => x.json());
       msg.innerHTML = r.ok
