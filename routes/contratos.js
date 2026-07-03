@@ -562,6 +562,21 @@ router.get('/buscar-validacion', requireAuth, async (req, res) => {
   } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
 });
 
+// ── POST check inventario reportes ────────────────────────
+router.post('/inventario-reportes/check', requireAuth, async (req, res) => {
+  try {
+    const { version, claves_entidad = [] } = req.body;
+    const vCheck = await query(`SELECT COUNT(*) AS cnt FROM INVENTARIO_VERSIONES WHERE TIPO_OBJETO='REPORTE' AND VERSION=${esc(version)}`);
+    let invalidas = [];
+    if (claves_entidad.length) {
+      const vals = claves_entidad.map(c => `(${esc(c)})`).join(',');
+      const rows = await query(`SELECT t.c FROM (VALUES ${vals}) AS t(c) WHERE NOT EXISTS (SELECT 1 FROM CAT_ENTIDAD_REGULADA WHERE CLAVE_ENTIDADREGULADA = t.c)`);
+      invalidas = rows.map(r => r.c);
+    }
+    res.json({ ok: true, version_existe: vCheck[0].cnt > 0, version_count: vCheck[0].cnt, entidades_invalidas: invalidas });
+  } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
+});
+
 // ── POST carga Excel inventario reportes ──────────────────
 router.post('/inventario-reportes/upload', requireAuth, upload.single('archivo'), async (req, res) => {
   if (!req.file) return res.status(400).json({ ok: false, message: 'No se recibió archivo' });
@@ -571,6 +586,7 @@ router.post('/inventario-reportes/upload', requireAuth, upload.single('archivo')
     const regulacion  = (req.body.regulacion  || '').trim();
     const tipo_version= (req.body.tipo_version|| 'BASE').trim();
     const descripcion = (req.body.descripcion || '').trim();
+    const force       = req.body.force === 'true';
 
     const wb   = XLSX.read(req.file.buffer, { type: 'buffer' });
     const ws   = wb.Sheets[wb.SheetNames[0]];
@@ -616,11 +632,16 @@ router.post('/inventario-reportes/upload', requireAuth, upload.single('archivo')
           actualizados++;
         }
         // Registrar versión en INVENTARIO_VERSIONES
-        await query(`
-          INSERT INTO INVENTARIO_VERSIONES (TIPO_OBJETO, CLAVE_OBJ, VERSION, REGULACION, TIPO_VERSION, DESCRIPCION, ESTATUS, USUARIO)
-          VALUES ('REPORTE', ${esc(clave)}, ${esc(version)}, ${esc(regulacion)}, ${esc(tipo_version)}, ${esc(descripcion)}, 'IDENTIFICADO', ${esc(usuario)})
-        `);
-      } catch(e2) { errores++; }
+        try {
+          if (force) {
+            await query(`DELETE FROM INVENTARIO_VERSIONES WHERE TIPO_OBJETO='REPORTE' AND CLAVE_OBJ=${esc(clave)} AND VERSION=${esc(version)}`);
+          }
+          await query(`
+            INSERT INTO INVENTARIO_VERSIONES (TIPO_OBJETO, CLAVE_OBJ, VERSION, REGULACION, TIPO_VERSION, DESCRIPCION, ESTATUS, USUARIO)
+            VALUES ('REPORTE', ${esc(clave)}, ${esc(version)}, ${esc(regulacion)}, ${esc(tipo_version)}, ${esc(descripcion)}, 'IDENTIFICADO', ${esc(usuario)})
+          `);
+        } catch(e3) { console.warn('[inv-versiones-rep] error:', e3.message); }
+      } catch(e2) { console.error('[upload-rep] fila error:', e2.message); errores++; }
     }
     res.json({ ok: true, insertados, actualizados, errores });
   } catch(e) { res.status(500).json({ ok: false, message: e.message }); }

@@ -4312,52 +4312,57 @@
     const tipo_ver    = document.getElementById('inv-ver-tipo-ver').value;
     const descripcion = document.getElementById('inv-ver-desc').value.trim();
 
-    // Para reportes no hay check — subir directo
-    if (_invVerTipo !== 'val') {
-      document.getElementById('inv-ver-modal').style.display = 'none';
-      await _invVerSubirReal(version, regulacion, tipo_ver, descripcion, false);
-      return;
-    }
+    const isRep = _invVerTipo === 'rep';
+    const fileIdCheck = isRep ? 'bc-inv-rep-file' : 'bc-inv-val-file';
 
-    // Parsear Excel client-side para extraer CLAVE_REP únicos (solo esa columna)
+    // Parsear Excel client-side para extraer columna clave única
     const btn = document.getElementById('inv-ver-btn-confirmar');
     btn.textContent = 'Verificando...'; btn.disabled = true;
-    const file = document.getElementById('bc-inv-val-file').files[0];
+    const file = document.getElementById(fileIdCheck).files[0];
     const buf = await file.arrayBuffer();
     const wb2 = XLSX.read(buf, { type: 'array' });
     const ws2 = wb2.Sheets[wb2.SheetNames[0]];
     const ref = XLSX.utils.decode_range(ws2['!ref']);
-    let repCol = -1;
+    const colBuscar = isRep ? 'CLAVE_ENTIDADREGULADA' : 'CLAVE_REP';
+    let colIdx = -1;
     for (let c = ref.s.c; c <= ref.e.c; c++) {
       const hCell = ws2[XLSX.utils.encode_cell({r: ref.s.r, c})];
-      if (hCell && hCell.v === 'CLAVE_REP') { repCol = c; break; }
+      if (hCell && hCell.v === colBuscar) { colIdx = c; break; }
     }
-    const clavesRepSet = new Set();
-    if (repCol >= 0) {
+    const clavesSet = new Set();
+    if (colIdx >= 0) {
       for (let r = ref.s.r + 1; r <= ref.e.r; r++) {
-        const cell = ws2[XLSX.utils.encode_cell({r, c: repCol})];
-        if (cell && cell.v) clavesRepSet.add(String(cell.v).trim());
+        const cell = ws2[XLSX.utils.encode_cell({r, c: colIdx})];
+        if (cell && cell.v) clavesSet.add(String(cell.v).trim());
       }
     }
     btn.textContent = '📤 Verificar y cargar'; btn.disabled = false;
 
-    // Llamar al check endpoint
+    // Llamar al check endpoint correspondiente
+    const checkEndpoint = isRep
+      ? '/api/contratos/inventario-reportes/check'
+      : '/api/contratos/inventario-validaciones/check';
+    const checkBody = isRep
+      ? { version, claves_entidad: [...clavesSet] }
+      : { version, claves_rep: [...clavesSet] };
+
     let check;
     try {
-      check = await fetch('/api/contratos/inventario-validaciones/check', {
+      check = await fetch(checkEndpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ version, claves_rep: [...clavesRepSet] })
+        body: JSON.stringify(checkBody)
       }).then(x => x.json());
     } catch(e) {
-      // Si el check falla, subir sin verificar
       document.getElementById('inv-ver-modal').style.display = 'none';
       await _invVerSubirReal(version, regulacion, tipo_ver, descripcion, false);
       return;
     }
 
+    const advertencias = isRep ? (check.entidades_invalidas||[]) : (check.claves_rep_invalidas||[]);
+
     // Sin advertencias — subir directo
-    if (!check.version_existe && !check.claves_rep_invalidas.length) {
+    if (!check.version_existe && !advertencias.length) {
       document.getElementById('inv-ver-modal').style.display = 'none';
       await _invVerSubirReal(version, regulacion, tipo_ver, descripcion, false);
       return;
@@ -4374,11 +4379,15 @@
         <span style="font-size:12px;color:#856404;">Si continúas, esas entradas se sobreescriben con los datos actuales.</span>
       </div>`;
     }
-    if (check.claves_rep_invalidas.length) {
+    if (advertencias.length) {
+      const label = isRep ? 'Entidades reguladas' : 'CLAVE_REP';
+      const detalle = isRep
+        ? 'Los reportes con esas entidades fallarán al insertar.'
+        : 'Las validaciones con esos reportes no se insertarán en REPORTE_VALIDACION.';
       html += `<div style="background:#f8d7da;border:1px solid #f5c6cb;border-radius:8px;padding:12px 16px;margin-bottom:12px;">
-        ❌ ${check.claves_rep_invalidas.length} CLAVE_REP no existen en Inventario Reportes:<br>
-        <span style="font-size:11px;font-family:monospace;color:#721c24;">${check.claves_rep_invalidas.join(', ')}</span><br>
-        <span style="font-size:12px;color:#721c24;">Las validaciones con esos reportes no se insertarán en REPORTE_VALIDACION.</span>
+        ❌ ${advertencias.length} ${label} no existen en el catálogo:<br>
+        <span style="font-size:11px;font-family:monospace;color:#721c24;">${advertencias.join(', ')}</span><br>
+        <span style="font-size:12px;color:#721c24;">${detalle}</span>
       </div>`;
     }
     document.getElementById('inv-ver-check-body').innerHTML = html;
