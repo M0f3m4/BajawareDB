@@ -1463,12 +1463,22 @@
             <option value="VALIDACION">Validación</option>
             <option value="LAYOUT">Layout</option>
           </select>
-          <input id="hv-clave" type="text" placeholder="Buscar por clave..."
-            style="padding:7px 12px;border:1px solid #ddd;border-radius:6px;font-size:13px;width:260px;"
+          <div style="position:relative;">
+            <input id="hv-rep" type="text" placeholder="Filtrar por reporte..."
+              style="padding:7px 12px;border:1px solid #ddd;border-radius:6px;font-size:13px;width:260px;"
+              oninput="hvRepBuscar()" onkeydown="if(event.key==='Enter'){document.getElementById('hv-rep-sugg').style.display='none';loadHistorialVersiones();}">
+            <div id="hv-rep-sugg" style="display:none;position:absolute;top:100%;left:0;width:100%;background:#fff;border:1px solid #ddd;border-radius:6px;box-shadow:0 4px 12px rgba(0,0,0,.1);z-index:1000;max-height:200px;overflow-y:auto;"></div>
+          </div>
+          <input id="hv-clave" type="text" placeholder="Buscar por clave validación..."
+            style="padding:7px 12px;border:1px solid #ddd;border-radius:6px;font-size:13px;width:240px;"
             onkeydown="if(event.key==='Enter') loadHistorialVersiones()">
           <button onclick="loadHistorialVersiones()"
             style="padding:7px 16px;background:#1a3558;color:#fff;border:none;border-radius:6px;font-size:13px;cursor:pointer;">
             🔍 Buscar
+          </button>
+          <button onclick="hvMigrarBase()"
+            style="padding:7px 16px;background:#e67e22;color:#fff;border:none;border-radius:6px;font-size:13px;cursor:pointer;">
+            ⬆ Cargar v1.0.0 base
           </button>
         </div>
         <div id="hv-content"><p style="color:#888;font-size:13px;">Usa los filtros para consultar el historial.</p></div>
@@ -3451,18 +3461,22 @@
     if (!wrap) return;
     wrap.innerHTML = '<div class="loading">Cargando...</div>';
     const tipo  = document.getElementById('hv-tipo').value;
+    const rep   = document.getElementById('hv-rep').value.trim();
     const clave = document.getElementById('hv-clave').value.trim();
-    let url = '/api/contratos/historial-versiones?limit=200';
+    let url = '/api/contratos/historial-versiones?limit=500';
     if (tipo)  url += `&tipo=${encodeURIComponent(tipo)}`;
+    if (rep)   url += `&rep=${encodeURIComponent(rep)}`;
     if (clave) url += `&clave=${encodeURIComponent(clave)}`;
     try {
       const r = await fetch(url);
       const j = await r.json();
       if (!j.ok || !j.data.length) { wrap.innerHTML = '<p style="color:#888;font-size:13px;">Sin resultados.</p>'; return; }
       wrap.innerHTML = `
-        <table style="width:100%;border-collapse:collapse;font-size:13px;">
+        <p style="font-size:12px;color:#888;margin:0 0 10px;">${j.data.length} registros</p>
+        <table style="width:100%;border-collapse:collapse;font-size:12px;">
           <thead><tr style="background:#f0f4f8;">
             <th style="padding:8px;text-align:left;border-bottom:2px solid #ddd;">Tipo</th>
+            <th style="padding:8px;text-align:left;border-bottom:2px solid #ddd;">Reporte</th>
             <th style="padding:8px;text-align:left;border-bottom:2px solid #ddd;">Clave</th>
             <th style="padding:8px;text-align:left;border-bottom:2px solid #ddd;">Versión</th>
             <th style="padding:8px;text-align:left;border-bottom:2px solid #ddd;">Regulación</th>
@@ -3473,17 +3487,55 @@
           </tr></thead>
           <tbody>
             ${j.data.map(v => `<tr style="border-bottom:1px solid #eee;">
-              <td style="padding:7px 8px;"><span class="badge ${v.TIPO_OBJETO==='REPORTE'?'badge-blue':v.TIPO_OBJETO==='VALIDACION'?'badge-green':'badge-purple'}">${v.TIPO_OBJETO}</span></td>
-              <td style="padding:7px 8px;font-family:monospace;font-size:11px;">${v.CLAVE_OBJ}</td>
-              <td style="padding:7px 8px;font-weight:600;">${v.VERSION||''}</td>
-              <td style="padding:7px 8px;">${v.REGULACION||'-'}</td>
-              <td style="padding:7px 8px;">${v.TIPO_VERSION||'-'}</td>
-              <td style="padding:7px 8px;">${v.DESCRIPCION||'-'}</td>
-              <td style="padding:7px 8px;">${v.USUARIO||''}</td>
-              <td style="padding:7px 8px;color:#888;">${v.FECHA_CARGA ? new Date(v.FECHA_CARGA).toLocaleString('es-MX') : ''}</td>
+              <td style="padding:6px 8px;"><span class="badge ${v.TIPO_OBJETO==='REPORTE'?'badge-blue':v.TIPO_OBJETO==='VALIDACION'?'badge-green':'badge-purple'}">${v.TIPO_OBJETO}</span></td>
+              <td style="padding:6px 8px;font-family:monospace;font-size:11px;color:#555;">${v.CLAVE_REP||'-'}</td>
+              <td style="padding:6px 8px;font-family:monospace;font-size:11px;">${v.CLAVE_OBJ}</td>
+              <td style="padding:6px 8px;font-weight:600;">${v.VERSION||''}</td>
+              <td style="padding:6px 8px;">${v.REGULACION||'-'}</td>
+              <td style="padding:6px 8px;">${v.TIPO_VERSION||'-'}</td>
+              <td style="padding:6px 8px;">${v.DESCRIPCION||'-'}</td>
+              <td style="padding:6px 8px;">${v.USUARIO||''}</td>
+              <td style="padding:6px 8px;color:#888;">${v.FECHA_CARGA ? new Date(v.FECHA_CARGA).toLocaleString('es-MX') : ''}</td>
             </tr>`).join('')}
           </tbody>
         </table>`;
+    } catch(e) { wrap.innerHTML = `<p style="color:red;">${e.message}</p>`; }
+  }
+
+  async function hvRepBuscar() {
+    const q = document.getElementById('hv-rep').value.trim();
+    const sugg = document.getElementById('hv-rep-sugg');
+    if (q.length < 2) { sugg.style.display = 'none'; return; }
+    const r = await fetch(`/api/contratos/reportes/search?q=${encodeURIComponent(q)}`);
+    const j = await r.json();
+    if (!j.ok || !j.data.length) { sugg.style.display = 'none'; return; }
+    sugg.innerHTML = j.data.map(d => `
+      <div onclick="hvRepSeleccionar('${d.CLAVE_REP}')"
+        style="padding:8px 12px;cursor:pointer;font-size:12px;border-bottom:1px solid #f0f0f0;"
+        onmouseover="this.style.background='#f5f5f5'" onmouseout="this.style.background=''">
+        <strong>${d.CLAVE_REP}</strong>${d.DESCRIPCION_ESP ? '<br><span style="color:#888;">'+d.DESCRIPCION_ESP+'</span>' : ''}
+      </div>`).join('');
+    sugg.style.display = 'block';
+  }
+
+  function hvRepSeleccionar(clave) {
+    document.getElementById('hv-rep').value = clave;
+    document.getElementById('hv-rep-sugg').style.display = 'none';
+    loadHistorialVersiones();
+  }
+
+  async function hvMigrarBase() {
+    if (!confirm('¿Registrar versión 1.0.0 para todas las validaciones existentes? Esto puede tardar unos segundos.')) return;
+    const wrap = document.getElementById('hv-content');
+    wrap.innerHTML = '<div class="loading">Cargando versión base... puede tardar unos segundos.</div>';
+    try {
+      const r = await fetch('/api/contratos/historial-versiones/migrar-base', { method: 'POST' });
+      const j = await r.json();
+      if (j.ok) {
+        wrap.innerHTML = `<p style="color:green;font-size:13px;">✓ ${j.total.toLocaleString()} validaciones registradas con versión 1.0.0.</p>`;
+      } else {
+        wrap.innerHTML = `<p style="color:red;">${j.message}</p>`;
+      }
     } catch(e) { wrap.innerHTML = `<p style="color:red;">${e.message}</p>`; }
   }
 
