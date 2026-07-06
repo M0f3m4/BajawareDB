@@ -720,10 +720,10 @@ router.post('/inventario-validaciones/upload', requireAuth, upload.single('archi
         if (!existe.length) {
           await query(`
             INSERT INTO REPORTE_VALIDACION
-              (CLAVE_VALIDACION, CLAVE_REP, CLAVE_PLATAFORMA, TIPO_VALIDACION, DESCRIPCION, DOCUMENTADO, PROGRAMADO, CERTIFICADO, ESTATUS, VERSION_CARGA)
+              (CLAVE_VALIDACION, CLAVE_REP, CLAVE_PLATAFORMA, TIPO_VALIDACION, DESCRIPCION, DOCUMENTADO, PROGRAMADO, CERTIFICADO, ESTATUS, VERSION, VERSION_CARGA)
             VALUES
               (${esc(clave)}, ${esc(claveRep)}, ${esc(clavePlat)}, ${esc(r.TIPO_VALIDACION)}, ${esc(r.DESCRIPCION_VALIDACION)},
-               'N', 'N', 'N', 'NO DOCUMENTADO', ${esc(version)})
+               'N', 'N', 'N', 'NO DOCUMENTADO', '0', ${esc(version)})
           `);
           insertados++;
         } else {
