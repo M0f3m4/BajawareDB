@@ -666,12 +666,13 @@ router.post('/inventario-validaciones/check', requireAuth, async (req, res) => {
 router.post('/inventario-validaciones/upload', requireAuth, upload.single('archivo'), async (req, res) => {
   if (!req.file) return res.status(400).json({ ok: false, message: 'No se recibió archivo' });
   try {
-    const usuario     = req.session.user?.username || 'sistema';
-    const version     = (req.body.version     || '1.0.0').trim();
-    const regulacion  = (req.body.regulacion  || '').trim();
-    const force       = req.body.force === 'true';
-    const tipo_version= (req.body.tipo_version|| 'BASE').trim();
-    const descripcion = (req.body.descripcion || '').trim();
+    const usuario          = req.session.user?.username || 'sistema';
+    const version          = (req.body.version          || '1.0.0').trim();
+    const regulacion       = (req.body.regulacion       || '').trim();
+    const force            = req.body.force === 'true';
+    const tipo_version     = (req.body.tipo_version     || 'BASE').trim();
+    const descripcion      = (req.body.descripcion      || '').trim();
+    const clavePlatGlobal  = (req.body.clave_plataforma || '').trim();
 
     const wb   = XLSX.read(req.file.buffer, { type: 'buffer' });
     const ws   = wb.Sheets[wb.SheetNames[0]];
@@ -682,7 +683,7 @@ router.post('/inventario-validaciones/upload', requireAuth, upload.single('archi
       const claveRep = String(r.CLAVE_REP || '').trim();
       if (!clave) continue;
       try {
-        const clavePlat = String(r.CLAVE_PLATAFORMA || '').trim() || 'N/A';
+        const clavePlat = clavePlatGlobal || String(r.CLAVE_PLATAFORMA || '').trim() || 'N/A';
 
         // 1. Upsert en INVENTARIO_VALIDACIONES (tabla maestra, FK parent)
         const existeInv = await query(`SELECT 1 FROM INVENTARIO_VALIDACIONES WHERE CLAVE_VALIDACION=${esc(clave)}`);

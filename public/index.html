@@ -1279,7 +1279,7 @@
         <!-- Tab: Validaciones -->
         <div id="panel-inv-val" style="display:none;">
           <p style="font-size:13px;color:#666;margin-bottom:4px;">Columnas del Excel:</p>
-          <p style="font-size:11px;color:#aaa;font-family:monospace;margin-bottom:16px;">CLAVE_VALIDACION | CLAVE_PAIS | CLAVE_ENTIDADREGULADA | CLAVE_REG | CLAVE_REP | ID_VALIDACION_ANT | DESCRIPCION_VALIDACION | TIPO_VALIDACION | CLAVE_PLATAFORMA | TIPO_VALIDACION_CALC</p>
+          <p style="font-size:11px;color:#aaa;font-family:monospace;margin-bottom:16px;">CLAVE_VALIDACION | CLAVE_PAIS | CLAVE_ENTIDADREGULADA | CLAVE_REG | CLAVE_REP | ID_VALIDACION_ANT | DESCRIPCION_VALIDACION | TIPO_VALIDACION | TIPO_VALIDACION_CALC</p>
           <div style="display:flex;gap:10px;align-items:center;margin-bottom:12px;">
             <input id="bc-inv-val-file" type="file" accept=".xlsx,.xls" style="font-size:13px;">
             <button onclick="descargarTemplate('validaciones')"
@@ -1375,6 +1375,15 @@
                     <option value="FIX">FIX</option>
                   </select>
                 </div>
+              </div>
+              <!-- Plataforma: solo visible al cargar validaciones -->
+              <div id="inv-ver-plat-row" style="display:none;">
+                <label style="font-size:11px;font-weight:600;color:#555;display:block;margin-bottom:4px;">Plataforma *</label>
+                <select id="inv-ver-plataforma" style="width:100%;padding:7px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;">
+                  <option value="RW6_JAVA">RW6_JAVA</option>
+                  <option value="RW5_NET">RW5_NET</option>
+                  <option value="SICC">SICC</option>
+                </select>
               </div>
               <div>
                 <label style="font-size:11px;font-weight:600;color:#555;display:block;margin-bottom:4px;">Regulación</label>
@@ -4343,8 +4352,8 @@
     if (!file) { msg.innerHTML = '<span style="color:#e74c3c;">Selecciona un archivo.</span>'; return; }
     _invVerTipo = 'rep';
     document.getElementById('inv-ver-filename').textContent = '📄 ' + file.name;
-    const m = document.getElementById('inv-ver-modal');
-    m.style.display = 'flex';
+    document.getElementById('inv-ver-plat-row').style.display = 'none';
+    document.getElementById('inv-ver-modal').style.display = 'flex';
   }
 
   function cargarInventarioValidaciones() {
@@ -4353,8 +4362,8 @@
     if (!file) { msg.innerHTML = '<span style="color:#e74c3c;">Selecciona un archivo.</span>'; return; }
     _invVerTipo = 'val';
     document.getElementById('inv-ver-filename').textContent = '📄 ' + file.name;
-    const m = document.getElementById('inv-ver-modal');
-    m.style.display = 'flex';
+    document.getElementById('inv-ver-plat-row').style.display = '';
+    document.getElementById('inv-ver-modal').style.display = 'flex';
   }
 
   function invVerCancelar() {
@@ -4470,6 +4479,7 @@
 
   async function _invVerSubirReal(version, regulacion, tipo_ver, descripcion, force) {
     const isRep = _invVerTipo === 'rep';
+    const clave_plataforma = !isRep ? document.getElementById('inv-ver-plataforma').value : '';
     const fileId   = isRep ? 'bc-inv-rep-file' : 'bc-inv-val-file';
     const msgId    = isRep ? 'bc-inv-rep-msg'  : 'bc-inv-val-msg';
     const endpoint = isRep ? '/api/contratos/inventario-reportes/upload' : '/api/contratos/inventario-validaciones/upload';
@@ -4482,6 +4492,7 @@
     fd.append('regulacion', regulacion);
     fd.append('tipo_version', tipo_ver);
     fd.append('descripcion', descripcion);
+    if (clave_plataforma) fd.append('clave_plataforma', clave_plataforma);
     if (force) fd.append('force', 'true');
     try {
       const r = await fetch(endpoint, { method: 'POST', body: fd }).then(x => x.json());
@@ -4514,8 +4525,8 @@
       },
       validaciones: {
         nombre: 'template_inventario_validaciones.xlsx',
-        cols: ['CLAVE_VALIDACION','CLAVE_PAIS','CLAVE_ENTIDADREGULADA','CLAVE_REG','CLAVE_REP','ID_VALIDACION_ANT','DESCRIPCION_VALIDACION','TIPO_VALIDACION','CLAVE_PLATAFORMA','TIPO_VALIDACION_CALC'],
-        ejemplo: ['GT_BM_CC1_CC1_00_22_B_1_01_01','GT','BM','','GT_BM_CC1_CC1_00_22','CC1_01','Valida que el valor del campo no sea nulo','Intra','RW6_JAVA','NULO']
+        cols: ['CLAVE_VALIDACION','CLAVE_PAIS','CLAVE_ENTIDADREGULADA','CLAVE_REG','CLAVE_REP','ID_VALIDACION_ANT','DESCRIPCION_VALIDACION','TIPO_VALIDACION','TIPO_VALIDACION_CALC'],
+        ejemplo: ['GT_BM_CC1_CC1_00_22_B_1_01_01','GT','BM','','GT_BM_CC1_CC1_00_22','CC1_01','Valida que el valor del campo no sea nulo','Intra','NULO']
       },
       contratos: null
     };
