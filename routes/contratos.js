@@ -605,7 +605,7 @@ router.post('/inventario-reportes/upload', requireAuth, upload.single('archivo')
               CLAVE_SECCION_REP, CLAVE_VERSION_REPORTE, CLAVE_PERIODO,
               DESCRIPCION_ESP, CLAVE_FECHA_ENT_REP, CARACTERISTICAS,
               CLAVE_REGULACION_REP, CLAVE_REP_GENERAL, FECHA_REGULACION,
-              FECHA_ALTA, FECHA_ACTUALIZADA, VIGENTE
+              FECHA_ALTA, FECHA_ACTUALIZADA, VIGENTE, VERSION_CARGA
             ) VALUES (
               ${esc(clave)}, ${esc(r.CLAVE_PAIS)}, ${esc(r.CLAVE_ENTIDADREGULADA)}, ${esc(r.CLAVE_REG)},
               ${esc(r.CLAVE_SERIE)}, ${esc(r.SUBSERIE)}, ${esc(r.CLAVE_GRUPO)}, ${esc(r.REPORTE)},
@@ -613,7 +613,7 @@ router.post('/inventario-reportes/upload', requireAuth, upload.single('archivo')
               ${esc(r.DESCRIPCION_ESP)}, ${esc(r.CLAVE_FECHA_ENT_REP)}, ${esc(r.CARACTERISTICAS)},
               ${esc(r.CLAVE_REGULACION_REP)}, ${esc(r.CLAVE_REP_GENERAL)},
               ${r.FECHA_REGULACION ? esc(r.FECHA_REGULACION) : 'NULL'},
-              GETDATE(), GETDATE(), 1
+              GETDATE(), GETDATE(), 1, ${esc(version)}
             )
           `);
           insertados++;
@@ -626,7 +626,7 @@ router.post('/inventario-reportes/upload', requireAuth, upload.single('archivo')
               CLAVE_SECCION_REP=${esc(r.CLAVE_SECCION_REP)}, CLAVE_VERSION_REPORTE=${esc(r.CLAVE_VERSION_REPORTE)},
               CLAVE_PERIODO=${esc(r.CLAVE_PERIODO)}, DESCRIPCION_ESP=${esc(r.DESCRIPCION_ESP)},
               CLAVE_REGULACION_REP=${esc(r.CLAVE_REGULACION_REP)}, CLAVE_REP_GENERAL=${esc(r.CLAVE_REP_GENERAL)},
-              FECHA_ACTUALIZADA=GETDATE()
+              VERSION_CARGA=${esc(version)}, FECHA_ACTUALIZADA=GETDATE()
             WHERE CLAVE_REP=${esc(clave)}
           `);
           actualizados++;
@@ -691,16 +691,16 @@ router.post('/inventario-validaciones/upload', requireAuth, upload.single('archi
           await query(`
             INSERT INTO INVENTARIO_VALIDACIONES
               (CLAVE_VALIDACION, CLAVE_PAIS, CLAVE_ENTIDADREGULADA, CLAVE_REG, CLAVE_REP,
-               ID_VALIDACION_ANT, DESCRIPCION_VALIDACION, TIPO_VALIDACION, TIPO_VALIDACION_CALC, FECHA_ALTA)
+               ID_VALIDACION_ANT, DESCRIPCION_VALIDACION, TIPO_VALIDACION, TIPO_VALIDACION_CALC, VERSION_CARGA, FECHA_ALTA)
             VALUES
               (${esc(clave)}, ${esc(r.CLAVE_PAIS)}, ${esc(r.CLAVE_ENTIDADREGULADA)}, ${esc(r.CLAVE_REG)}, ${esc(claveRep)},
-               ${esc(r.ID_VALIDACION_ANT)}, ${esc(r.DESCRIPCION_VALIDACION)}, ${esc(r.TIPO_VALIDACION)}, ${esc(r.TIPO_VALIDACION_CALC)}, GETDATE())
+               ${esc(r.ID_VALIDACION_ANT)}, ${esc(r.DESCRIPCION_VALIDACION)}, ${esc(r.TIPO_VALIDACION)}, ${esc(r.TIPO_VALIDACION_CALC)}, ${esc(version)}, GETDATE())
           `);
         } else {
           await query(`
             UPDATE INVENTARIO_VALIDACIONES SET
               CLAVE_REP=${esc(claveRep)}, DESCRIPCION_VALIDACION=${esc(r.DESCRIPCION_VALIDACION)},
-              TIPO_VALIDACION=${esc(r.TIPO_VALIDACION)}, FECHA_ACTUALIZADA=GETDATE()
+              TIPO_VALIDACION=${esc(r.TIPO_VALIDACION)}, VERSION_CARGA=${esc(version)}, FECHA_ACTUALIZADA=GETDATE()
             WHERE CLAVE_VALIDACION=${esc(clave)}
           `);
         }
@@ -710,7 +710,7 @@ router.post('/inventario-validaciones/upload', requireAuth, upload.single('archi
         if (!existe.length) {
           await query(`
             INSERT INTO REPORTE_VALIDACION
-              (CLAVE_VALIDACION, CLAVE_REP, CLAVE_PLATAFORMA, TIPO_VALIDACION, DESCRIPCION, DOCUMENTADO, PROGRAMADO, CERTIFICADO, ESTATUS, VERSION)
+              (CLAVE_VALIDACION, CLAVE_REP, CLAVE_PLATAFORMA, TIPO_VALIDACION, DESCRIPCION, DOCUMENTADO, PROGRAMADO, CERTIFICADO, ESTATUS, VERSION_CARGA)
             VALUES
               (${esc(clave)}, ${esc(claveRep)}, ${esc(clavePlat)}, ${esc(r.TIPO_VALIDACION)}, ${esc(r.DESCRIPCION_VALIDACION)},
                'N', 'N', 'N', 'NO DOCUMENTADO', ${esc(version)})
@@ -719,7 +719,7 @@ router.post('/inventario-validaciones/upload', requireAuth, upload.single('archi
         } else {
           await query(`
             UPDATE REPORTE_VALIDACION SET
-              TIPO_VALIDACION=${esc(r.TIPO_VALIDACION)}, DESCRIPCION=${esc(r.DESCRIPCION_VALIDACION)}
+              TIPO_VALIDACION=${esc(r.TIPO_VALIDACION)}, DESCRIPCION=${esc(r.DESCRIPCION_VALIDACION)}, VERSION_CARGA=${esc(version)}
             WHERE CLAVE_VALIDACION=${esc(clave)} AND CLAVE_PLATAFORMA=${esc(clavePlat)}
           `);
           actualizados++;
