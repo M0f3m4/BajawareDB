@@ -4396,18 +4396,21 @@
     const wb2 = XLSX.read(buf, { type: 'array' });
     const ws2 = wb2.Sheets[wb2.SheetNames[0]];
     const ref = XLSX.utils.decode_range(ws2['!ref']);
-    const colBuscar = isRep ? 'CLAVE_ENTIDADREGULADA' : 'CLAVE_REP';
-    let colIdx = -1;
+    // Columnas a extraer según tipo
+    const colEntidad = isRep ? 'CLAVE_ENTIDADREGULADA' : 'CLAVE_REP';
+    const colObjeto  = isRep ? 'CLAVE_REP' : 'CLAVE_VALIDACION';
+    const colIdxMap = {};
     for (let c = ref.s.c; c <= ref.e.c; c++) {
       const hCell = ws2[XLSX.utils.encode_cell({r: ref.s.r, c})];
-      if (hCell && hCell.v === colBuscar) { colIdx = c; break; }
+      if (hCell && (hCell.v === colEntidad || hCell.v === colObjeto)) colIdxMap[hCell.v] = c;
     }
     const clavesSet = new Set();
-    if (colIdx >= 0) {
-      for (let r = ref.s.r + 1; r <= ref.e.r; r++) {
-        const cell = ws2[XLSX.utils.encode_cell({r, c: colIdx})];
-        if (cell && cell.v) clavesSet.add(String(cell.v).trim());
-      }
+    const objetosSet = new Set();
+    for (let r = ref.s.r + 1; r <= ref.e.r; r++) {
+      const ce = colIdxMap[colEntidad] !== undefined ? ws2[XLSX.utils.encode_cell({r, c: colIdxMap[colEntidad]})] : null;
+      const co = colIdxMap[colObjeto]  !== undefined ? ws2[XLSX.utils.encode_cell({r, c: colIdxMap[colObjeto]})]  : null;
+      if (ce && ce.v) clavesSet.add(String(ce.v).trim());
+      if (co && co.v) objetosSet.add(String(co.v).trim());
     }
     btn.textContent = '📤 Verificar y cargar'; btn.disabled = false;
 
@@ -4416,8 +4419,8 @@
       ? '/api/contratos/inventario-reportes/check'
       : '/api/contratos/inventario-validaciones/check';
     const checkBody = isRep
-      ? { version, claves_entidad: [...clavesSet] }
-      : { version, claves_rep: [...clavesSet] };
+      ? { version, claves_entidad: [...clavesSet], claves_rep: [...objetosSet] }
+      : { version, claves_rep: [...clavesSet], claves_validacion: [...objetosSet] };
 
     let check;
     try {

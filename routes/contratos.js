@@ -565,15 +565,20 @@ router.get('/buscar-validacion', requireAuth, async (req, res) => {
 // ── POST check inventario reportes ────────────────────────
 router.post('/inventario-reportes/check', requireAuth, async (req, res) => {
   try {
-    const { version, claves_entidad = [] } = req.body;
-    const vCheck = await query(`SELECT COUNT(*) AS cnt FROM INVENTARIO_VERSIONES WHERE TIPO_OBJETO='REPORTE' AND VERSION=${esc(version)}`);
+    const { version, claves_entidad = [], claves_rep = [] } = req.body;
+    let version_count = 0;
+    if (claves_rep.length) {
+      const vals = claves_rep.map(c => `(${esc(c)})`).join(',');
+      const vCheck = await query(`SELECT COUNT(*) AS cnt FROM INVENTARIO_VERSIONES WHERE TIPO_OBJETO='REPORTE' AND VERSION=${esc(version)} AND CLAVE_OBJ IN (SELECT c FROM (VALUES ${vals}) AS t(c))`);
+      version_count = vCheck[0].cnt;
+    }
     let invalidas = [];
     if (claves_entidad.length) {
       const vals = claves_entidad.map(c => `(${esc(c)})`).join(',');
       const rows = await query(`SELECT t.c FROM (VALUES ${vals}) AS t(c) WHERE NOT EXISTS (SELECT 1 FROM CAT_ENTIDAD_REGULADA WHERE CLAVE_ENTIDADREGULADA = t.c)`);
       invalidas = rows.map(r => r.c);
     }
-    res.json({ ok: true, version_existe: vCheck[0].cnt > 0, version_count: vCheck[0].cnt, entidades_invalidas: invalidas });
+    res.json({ ok: true, version_existe: version_count > 0, version_count, entidades_invalidas: invalidas });
   } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
 });
 
@@ -650,15 +655,20 @@ router.post('/inventario-reportes/upload', requireAuth, upload.single('archivo')
 // ── POST check inventario validaciones ────────────────────
 router.post('/inventario-validaciones/check', requireAuth, async (req, res) => {
   try {
-    const { version, claves_rep = [] } = req.body;
-    const vCheck = await query(`SELECT COUNT(*) AS cnt FROM INVENTARIO_VERSIONES WHERE TIPO_OBJETO='VALIDACION' AND VERSION=${esc(version)}`);
+    const { version, claves_rep = [], claves_validacion = [] } = req.body;
+    let version_count = 0;
+    if (claves_validacion.length) {
+      const vals = claves_validacion.map(c => `(${esc(c)})`).join(',');
+      const vCheck = await query(`SELECT COUNT(*) AS cnt FROM INVENTARIO_VERSIONES WHERE TIPO_OBJETO='VALIDACION' AND VERSION=${esc(version)} AND CLAVE_OBJ IN (SELECT c FROM (VALUES ${vals}) AS t(c))`);
+      version_count = vCheck[0].cnt;
+    }
     let invalidas = [];
     if (claves_rep.length) {
       const vals = claves_rep.map(c => `(${esc(c)})`).join(',');
       const rows = await query(`SELECT t.c FROM (VALUES ${vals}) AS t(c) WHERE NOT EXISTS (SELECT 1 FROM INVENTARIO_REPORTES WHERE CLAVE_REP = t.c)`);
       invalidas = rows.map(r => r.c);
     }
-    res.json({ ok: true, version_existe: vCheck[0].cnt > 0, version_count: vCheck[0].cnt, claves_rep_invalidas: invalidas });
+    res.json({ ok: true, version_existe: version_count > 0, version_count, claves_rep_invalidas: invalidas });
   } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
 });
 
