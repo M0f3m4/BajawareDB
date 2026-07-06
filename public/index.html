@@ -1314,6 +1314,44 @@
         </div>
       </div>
 
+      <!-- Modal: actualizar estatus validación individual -->
+      <div id="uv-quick-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;align-items:center;justify-content:center;">
+        <div style="background:#fff;border-radius:12px;padding:28px 32px;width:400px;box-shadow:0 8px 32px rgba(0,0,0,.2);">
+          <h3 style="margin:0 0 4px;font-size:15px;color:#1a3558;">✏️ Actualizar Estatus</h3>
+          <p id="uv-quick-info" style="font-size:11px;color:#888;margin:0 0 20px;font-family:monospace;"></p>
+          <div style="display:grid;gap:14px;">
+            <div>
+              <label style="font-size:11px;font-weight:600;color:#555;display:block;margin-bottom:4px;">Etapa</label>
+              <select id="uv-quick-etapa" style="width:100%;padding:7px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;">
+                <option value="IDENTIFICADO">IDENTIFICADO</option>
+                <option value="DOCUMENTADO">DOCUMENTADO</option>
+                <option value="PROGRAMADO">PROGRAMADO</option>
+                <option value="CERTIFICADO">CERTIFICADO</option>
+              </select>
+            </div>
+            <div>
+              <label style="font-size:11px;font-weight:600;color:#555;display:block;margin-bottom:4px;">Fecha Real</label>
+              <input id="uv-quick-fecha" type="date" style="width:100%;padding:7px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;box-sizing:border-box;">
+            </div>
+          </div>
+          <div id="uv-quick-msg" style="margin-top:12px;font-size:12px;min-height:18px;"></div>
+          <div style="display:flex;gap:10px;margin-top:18px;justify-content:flex-end;">
+            <button onclick="document.getElementById('uv-quick-modal').style.display='none'"
+              style="padding:7px 18px;background:#f0f4f8;color:#555;border:1px solid #ddd;border-radius:6px;font-size:13px;cursor:pointer;">
+              Cancelar
+            </button>
+            <button onclick="uvQuickAplicar(true)"
+              style="padding:7px 16px;background:#e74c3c;color:#fff;border:none;border-radius:6px;font-size:13px;cursor:pointer;">
+              ✗ Desmarcar
+            </button>
+            <button onclick="uvQuickAplicar(false)"
+              style="padding:7px 18px;background:#1a3558;color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;">
+              ✓ Marcar
+            </button>
+          </div>
+        </div>
+      </div>
+
       <!-- Modal: versión de carga -->
       <div id="inv-ver-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;align-items:center;justify-content:center;">
         <div style="background:#fff;border-radius:12px;padding:28px 32px;width:440px;box-shadow:0 8px 32px rgba(0,0,0,.2);">
@@ -4083,11 +4121,32 @@
     document.getElementById('upd-rep-plataforma').value = plataforma;
   }
 
+  let _uvQuick = {};
   function precargarActualizarVal(clave, rep, plataforma) {
-    showSection('bc-actualizar-val');
-    document.getElementById('upd-val-clave').value = clave;
-    document.getElementById('upd-val-rep').value = rep;
-    document.getElementById('upd-val-plataforma').value = plataforma;
+    _uvQuick = { clave, rep, plataforma };
+    document.getElementById('uv-quick-info').textContent = `${clave}  ·  ${rep}  ·  ${plataforma}`;
+    document.getElementById('uv-quick-msg').textContent = '';
+    document.getElementById('uv-quick-fecha').value = '';
+    document.getElementById('uv-quick-modal').style.display = 'flex';
+  }
+
+  async function uvQuickAplicar(desmarcar) {
+    const etapa = document.getElementById('uv-quick-etapa').value;
+    const fecha = document.getElementById('uv-quick-fecha').value;
+    const msg   = document.getElementById('uv-quick-msg');
+    msg.innerHTML = 'Guardando...';
+    try {
+      const r = await fetch('/api/contratos/estatus-validacion', {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clave_validacion: _uvQuick.clave, clave_rep: _uvQuick.rep, clave_plataforma: _uvQuick.plataforma, etapa, fecha, desmarcar })
+      }).then(x => x.json());
+      if (r.ok) {
+        msg.innerHTML = `<span style="color:#27ae60;">✅ ${desmarcar ? 'Desmarcado' : 'Marcado'} correctamente.</span>`;
+        setTimeout(() => { document.getElementById('uv-quick-modal').style.display = 'none'; loadValCliente(); }, 1000);
+      } else {
+        msg.innerHTML = `<span style="color:#e74c3c;">❌ ${r.message}</span>`;
+      }
+    } catch(e) { msg.innerHTML = `<span style="color:#e74c3c;">Error: ${e.message}</span>`; }
   }
 
   async function actualizarEstatusReporte(desmarcar = false) {
