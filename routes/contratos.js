@@ -30,7 +30,7 @@ router.get('/historial-versiones', requireAuth, async (req, res) => {
       FROM INVENTARIO_VERSIONES iv
       LEFT JOIN INVENTARIO_VALIDACIONES inv ON inv.CLAVE_VALIDACION = iv.CLAVE_OBJ AND iv.TIPO_OBJETO = 'VALIDACION'
       ${w}
-      ORDER BY iv.FECHA_CARGA DESC
+      ORDER BY iv.FECHA_CARGA DESC, iv.ID_VERSION DESC
     `);
     res.json({ ok: true, data: rows });
   } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
