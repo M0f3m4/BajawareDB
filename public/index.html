@@ -1425,24 +1425,8 @@
           <h3 style="margin:0 0 6px;font-size:15px;color:#1a3558;">🖥️ Asignar plataformas</h3>
           <p style="font-size:12px;color:#888;margin:0 0 16px;">Selecciona las plataformas para cada validación cargada.</p>
           <div id="inv-plat-msg" style="margin-bottom:10px;font-size:13px;"></div>
-          <table style="width:100%;border-collapse:collapse;font-size:12px;">
-            <thead>
-              <tr style="background:#f0f4f8;">
-                <th style="padding:8px;text-align:left;border-bottom:2px solid #ddd;">Validación</th>
-                <th style="padding:8px;text-align:center;border-bottom:2px solid #ddd;">
-                  RW6_JAVA<br>
-                  <input type="checkbox" id="plat-all-RW6_JAVA" onchange="invPlatSelAll('RW6_JAVA',this.checked)" title="Seleccionar todas">
-                </th>
-                <th style="padding:8px;text-align:center;border-bottom:2px solid #ddd;">
-                  RW5_NET<br>
-                  <input type="checkbox" id="plat-all-RW5_NET" onchange="invPlatSelAll('RW5_NET',this.checked)" title="Seleccionar todas">
-                </th>
-                <th style="padding:8px;text-align:center;border-bottom:2px solid #ddd;">
-                  SICC<br>
-                  <input type="checkbox" id="plat-all-SICC" onchange="invPlatSelAll('SICC',this.checked)" title="Seleccionar todas">
-                </th>
-              </tr>
-            </thead>
+          <table id="inv-plat-table" style="width:100%;border-collapse:collapse;font-size:12px;">
+            <thead id="inv-plat-thead"></thead>
             <tbody id="inv-plat-tbody"></tbody>
           </table>
           <div style="display:flex;gap:10px;margin-top:20px;justify-content:flex-end;">
@@ -4542,8 +4526,17 @@
     } catch(e) { msg.innerHTML = '<span style="color:#e74c3c;">Error: ' + e.message + '</span>'; }
   }
 
+  let _invPlataformas = ['MVC','RISKWARE','RW5_NET','RW6_JAVA','RW7_CORE','SICC'];
+
   async function invPlatAbrir() {
     const claves = _invPlatValidaciones.map(v => v.CLAVE_VALIDACION);
+
+    // Cargar plataformas del catálogo
+    try {
+      const rp = await fetch('/api/contratos/cat-plataformas').then(x => x.json());
+      if (rp.ok && rp.data.length) _invPlataformas = rp.data;
+    } catch(e) {}
+
     // Obtener plataformas ya asignadas
     let asignadas = {};
     try {
@@ -4554,6 +4547,18 @@
       if (r.ok) asignadas = r.data;
     } catch(e) {}
 
+    // Construir header dinámico
+    const thead = document.getElementById('inv-plat-thead');
+    thead.innerHTML = `<tr style="background:#f0f4f8;">
+      <th style="padding:8px;text-align:left;border-bottom:2px solid #ddd;">Validación</th>
+      ${_invPlataformas.map(p => `
+        <th style="padding:8px;text-align:center;border-bottom:2px solid #ddd;font-size:11px;">
+          ${p}<br>
+          <input type="checkbox" id="plat-all-${p}" onchange="invPlatSelAll('${p}',this.checked)" title="Seleccionar todas">
+        </th>`).join('')}
+    </tr>`;
+
+    // Construir filas
     const tbody = document.getElementById('inv-plat-tbody');
     tbody.innerHTML = _invPlatValidaciones.map(v => {
       const plats = asignadas[v.CLAVE_VALIDACION] || [];
@@ -4562,23 +4567,13 @@
           <div style="font-weight:600;">${v.CLAVE_VALIDACION}</div>
           <div style="color:#888;font-size:10px;">${v.DESCRIPCION_VALIDACION||''}</div>
         </td>
-        <td style="padding:6px 8px;text-align:center;">
-          <input type="checkbox" class="plat-cb" data-clave="${v.CLAVE_VALIDACION}" data-plat="RW6_JAVA" ${plats.includes('RW6_JAVA')?'checked disabled':''}>
-        </td>
-        <td style="padding:6px 8px;text-align:center;">
-          <input type="checkbox" class="plat-cb" data-clave="${v.CLAVE_VALIDACION}" data-plat="RW5_NET" ${plats.includes('RW5_NET')?'checked disabled':''}>
-        </td>
-        <td style="padding:6px 8px;text-align:center;">
-          <input type="checkbox" class="plat-cb" data-clave="${v.CLAVE_VALIDACION}" data-plat="SICC" ${plats.includes('SICC')?'checked disabled':''}>
-        </td>
+        ${_invPlataformas.map(p => `
+          <td style="padding:6px 8px;text-align:center;">
+            <input type="checkbox" class="plat-cb" data-clave="${v.CLAVE_VALIDACION}" data-plat="${p}" ${plats.includes(p)?'checked disabled':''}>
+          </td>`).join('')}
       </tr>`;
     }).join('');
 
-    // Reset select-all checkboxes
-    ['RW6_JAVA','RW5_NET','SICC'].forEach(p => {
-      const el = document.getElementById('plat-all-' + p);
-      if (el) el.checked = false;
-    });
     document.getElementById('inv-plat-msg').innerHTML = '';
     document.getElementById('inv-plat-modal').style.display = 'flex';
   }

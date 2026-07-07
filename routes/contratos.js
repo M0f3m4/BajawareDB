@@ -740,6 +740,14 @@ router.post('/inventario-validaciones/upload', requireAuth, upload.single('archi
 // ── POST carga Excel contratos (2 hojas) ──────────────────
 // Hoja "CONTRATO": CLAVE_CONTRATO, NOMBRE_CONTRATO, CLAVE_CLIENTE, CLAVE_PLATAFORMA
 // Hoja "REPORTES": CLAVE_CONTRATO, CLAVE_REP, FECHA_ESTIMADA_QA, FECHA_ESTIMADA_CERT, FECHA_ESTIMADA_PROD
+// ── GET catálogo de plataformas ───────────────────────────
+router.get('/cat-plataformas', requireAuth, async (req, res) => {
+  try {
+    const rows = await query(`SELECT CLAVE_PLATAFORMA FROM CAT_PLATAFORMA ORDER BY CLAVE_PLATAFORMA`);
+    res.json({ ok: true, data: rows.map(r => r.CLAVE_PLATAFORMA) });
+  } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
+});
+
 // ── POST plataformas ya asignadas a lista de validaciones ─
 router.post('/inventario-validaciones/plataformas-asignadas', requireAuth, async (req, res) => {
   try {
