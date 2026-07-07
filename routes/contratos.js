@@ -676,26 +676,25 @@ router.post('/inventario-validaciones/check', requireAuth, async (req, res) => {
 router.post('/inventario-validaciones/upload', requireAuth, upload.single('archivo'), async (req, res) => {
   if (!req.file) return res.status(400).json({ ok: false, message: 'No se recibió archivo' });
   try {
-    const usuario          = req.session.user?.username || 'sistema';
-    const version          = (req.body.version          || '1.0.0').trim();
-    const regulacion       = (req.body.regulacion       || '').trim();
-    const force            = req.body.force === 'true';
-    const tipo_version     = (req.body.tipo_version     || 'BASE').trim();
-    const descripcion      = (req.body.descripcion      || '').trim();
-    const clavePlatGlobal  = (req.body.clave_plataforma || '').trim();
+    const usuario      = req.session.user?.username || 'sistema';
+    const version      = (req.body.version      || '1.0.0').trim();
+    const regulacion   = (req.body.regulacion   || '').trim();
+    const force        = req.body.force === 'true';
+    const tipo_version = (req.body.tipo_version || 'BASE').trim();
+    const descripcion  = (req.body.descripcion  || '').trim();
 
     const wb   = XLSX.read(req.file.buffer, { type: 'buffer' });
     const ws   = wb.Sheets[wb.SheetNames[0]];
     const rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
     let insertados = 0, actualizados = 0, errores = 0;
+    const validacionesProcesadas = [];
+
     for (const r of rows) {
       const clave    = String(r.CLAVE_VALIDACION || '').trim();
       const claveRep = String(r.CLAVE_REP || '').trim();
       if (!clave) continue;
       try {
-        const clavePlat = clavePlatGlobal || String(r.CLAVE_PLATAFORMA || '').trim() || 'N/A';
-
-        // 1. Upsert en INVENTARIO_VALIDACIONES (tabla maestra, FK parent)
+        // Upsert en INVENTARIO_VALIDACIONES
         const existeInv = await query(`SELECT 1 FROM INVENTARIO_VALIDACIONES WHERE CLAVE_VALIDACION=${esc(clave)}`);
         if (!existeInv.length) {
           await query(`
@@ -706,6 +705,7 @@ router.post('/inventario-validaciones/upload', requireAuth, upload.single('archi
               (${esc(clave)}, ${esc(r.CLAVE_PAIS)}, ${esc(r.CLAVE_ENTIDADREGULADA)}, ${esc(r.CLAVE_REG)}, ${esc(claveRep)},
                ${esc(r.ID_VALIDACION_ANT)}, ${esc(r.DESCRIPCION_VALIDACION)}, ${esc(r.TIPO_VALIDACION)}, ${esc(r.TIPO_VALIDACION_CALC)}, ${esc(version)}, GETDATE())
           `);
+          insertados++;
         } else {
           await query(`
             UPDATE INVENTARIO_VALIDACIONES SET
@@ -713,28 +713,15 @@ router.post('/inventario-validaciones/upload', requireAuth, upload.single('archi
               TIPO_VALIDACION=${esc(r.TIPO_VALIDACION)}, VERSION_CARGA=${esc(version)}, FECHA_ACTUALIZADA=GETDATE()
             WHERE CLAVE_VALIDACION=${esc(clave)}
           `);
-        }
-
-        // 2. Upsert en REPORTE_VALIDACION (estatus por plataforma)
-        const existe = await query(`SELECT 1 FROM REPORTE_VALIDACION WHERE CLAVE_VALIDACION=${esc(clave)} AND CLAVE_PLATAFORMA=${esc(clavePlat)}`);
-        if (!existe.length) {
-          await query(`
-            INSERT INTO REPORTE_VALIDACION
-              (CLAVE_VALIDACION, CLAVE_REP, CLAVE_PLATAFORMA, TIPO_VALIDACION, DESCRIPCION, DOCUMENTADO, PROGRAMADO, CERTIFICADO, ESTATUS, VERSION, VERSION_CARGA)
-            VALUES
-              (${esc(clave)}, ${esc(claveRep)}, ${esc(clavePlat)}, ${esc(r.TIPO_VALIDACION)}, ${esc(r.DESCRIPCION_VALIDACION)},
-               'N', 'N', 'N', 'NO DOCUMENTADO', '0', ${esc(version)})
-          `);
-          insertados++;
-        } else {
-          await query(`
-            UPDATE REPORTE_VALIDACION SET
-              TIPO_VALIDACION=${esc(r.TIPO_VALIDACION)}, DESCRIPCION=${esc(r.DESCRIPCION_VALIDACION)}, VERSION_CARGA=${esc(version)}
-            WHERE CLAVE_VALIDACION=${esc(clave)} AND CLAVE_PLATAFORMA=${esc(clavePlat)}
-          `);
           actualizados++;
         }
-        // Registrar en INVENTARIO_VERSIONES (si force=true, sobreescribe la misma versión)
+        validacionesProcesadas.push({
+          CLAVE_VALIDACION: clave,
+          CLAVE_REP: claveRep,
+          DESCRIPCION_VALIDACION: String(r.DESCRIPCION_VALIDACION || '').trim(),
+          TIPO_VALIDACION: String(r.TIPO_VALIDACION || '').trim()
+        });
+        // Registrar en INVENTARIO_VERSIONES
         try {
           if (force) {
             await query(`DELETE FROM INVENTARIO_VERSIONES WHERE TIPO_OBJETO='VALIDACION' AND CLAVE_OBJ=${esc(clave)} AND VERSION=${esc(version)}`);
@@ -746,13 +733,60 @@ router.post('/inventario-validaciones/upload', requireAuth, upload.single('archi
         } catch(e3) { console.warn('[inv-versiones] error:', e3.message); }
       } catch(e2) { console.error('[upload-val] fila error:', e2.message); errores++; }
     }
-    res.json({ ok: true, insertados, actualizados, errores });
+    res.json({ ok: true, insertados, actualizados, errores, validaciones: validacionesProcesadas });
   } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
 });
 
 // ── POST carga Excel contratos (2 hojas) ──────────────────
 // Hoja "CONTRATO": CLAVE_CONTRATO, NOMBRE_CONTRATO, CLAVE_CLIENTE, CLAVE_PLATAFORMA
 // Hoja "REPORTES": CLAVE_CONTRATO, CLAVE_REP, FECHA_ESTIMADA_QA, FECHA_ESTIMADA_CERT, FECHA_ESTIMADA_PROD
+// ── POST plataformas ya asignadas a lista de validaciones ─
+router.post('/inventario-validaciones/plataformas-asignadas', requireAuth, async (req, res) => {
+  try {
+    const { claves = [] } = req.body;
+    if (!claves.length) return res.json({ ok: true, data: {} });
+    const vals = claves.map(c => `(${esc(c)})`).join(',');
+    const rows = await query(`
+      SELECT CLAVE_VALIDACION, CLAVE_PLATAFORMA
+      FROM REPORTE_VALIDACION
+      WHERE CLAVE_VALIDACION IN (SELECT c FROM (VALUES ${vals}) AS t(c))
+    `);
+    const data = {};
+    for (const r of rows) {
+      if (!data[r.CLAVE_VALIDACION]) data[r.CLAVE_VALIDACION] = [];
+      data[r.CLAVE_VALIDACION].push(r.CLAVE_PLATAFORMA);
+    }
+    res.json({ ok: true, data });
+  } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
+});
+
+// ── POST asignar plataformas a validaciones ────────────────
+router.post('/inventario-validaciones/asignar-plataformas', requireAuth, async (req, res) => {
+  try {
+    const { asignaciones = [], version = '1.0.0' } = req.body;
+    // asignaciones: [{ clave_validacion, clave_rep, tipo_validacion, descripcion, plataforma }]
+    let creados = 0, omitidos = 0;
+    for (const a of asignaciones) {
+      const { clave_validacion, clave_rep, tipo_validacion, descripcion, plataforma } = a;
+      const existe = await query(`SELECT 1 FROM REPORTE_VALIDACION WHERE CLAVE_VALIDACION=${esc(clave_validacion)} AND CLAVE_PLATAFORMA=${esc(plataforma)}`);
+      if (!existe.length) {
+        await query(`
+          INSERT INTO REPORTE_VALIDACION
+            (CLAVE_VALIDACION, CLAVE_REP, CLAVE_PLATAFORMA, TIPO_VALIDACION, DESCRIPCION, DOCUMENTADO, PROGRAMADO, CERTIFICADO, ESTATUS, VERSION, VERSION_CARGA)
+          VALUES
+            (${esc(clave_validacion)}, ${esc(clave_rep)}, ${esc(plataforma)}, ${esc(tipo_validacion)}, ${esc(descripcion)},
+             'N', 'N', 'N', 'NO DOCUMENTADO', '0', ${esc(version)})
+        `);
+        creados++;
+      } else {
+        omitidos++;
+      }
+    }
+    res.json({ ok: true, creados, omitidos });
+  } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
+});
+
+// ── POST carga Excel contratos (2 hojas) ──────────────────
 router.post('/contratos/upload', requireAuth, upload.single('archivo'), async (req, res) => {
   if (!req.file) return res.status(400).json({ ok: false, message: 'No se recibió archivo' });
   try {
