@@ -120,7 +120,7 @@ router.get('/contratos/:clave/reportes', requireAuth, async (req, res) => {
         er.VERSION
       FROM CONTRATOS_REPORTES cr
       LEFT JOIN CONTRATOS c            ON c.CLAVE_CONTRATO = cr.CLAVE_CONTRATO
-      LEFT JOIN INVENTARIO_REPORTES ir ON ir.CLAVE_REP = cr.CLAVE_REP
+      LEFT JOIN INVENTARIO_REPORTES ir ON ir.CLAVE_REP_GENERAL = cr.CLAVE_REP
       LEFT JOIN ESTATUS_REPORTE er     ON er.CLAVE_REP_GENERAL = cr.CLAVE_REP
                                       AND er.CLAVE_PLATAFORMA = c.CLAVE_PLATAFORMA
       WHERE cr.CLAVE_CONTRATO=${esc(req.params.clave)}
@@ -318,7 +318,7 @@ router.get('/reportes/search', requireAuth, async (req, res) => {
     const rows = await query(`
       SELECT TOP 20 DISTINCT cr.CLAVE_REP, ir.DESCRIPCION_ESP
       FROM CONTRATOS_REPORTES cr
-      LEFT JOIN INVENTARIO_REPORTES ir ON ir.CLAVE_REP = cr.CLAVE_REP
+      LEFT JOIN INVENTARIO_REPORTES ir ON ir.CLAVE_REP_GENERAL = cr.CLAVE_REP
       WHERE cr.CLAVE_REP LIKE '%${q}%'
       ORDER BY cr.CLAVE_REP
     `);
