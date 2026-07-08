@@ -117,7 +117,8 @@ router.get('/contratos/:clave/reportes', requireAuth, async (req, res) => {
         er.CERT_FECHA_REAL,
         er.ESTATUS,
         COALESCE(er.CLAVE_PLATAFORMA, c.CLAVE_PLATAFORMA) AS CLAVE_PLATAFORMA,
-        er.VERSION
+        er.VERSION,
+        ir.VERSION_CARGA
       FROM CONTRATOS_REPORTES cr
       LEFT JOIN CONTRATOS c            ON c.CLAVE_CONTRATO = cr.CLAVE_CONTRATO
       LEFT JOIN INVENTARIO_REPORTES ir ON ir.CLAVE_REP_GENERAL = cr.CLAVE_REP
@@ -159,7 +160,7 @@ router.get('/contratos/:clave/validaciones', requireAuth, async (req, res) => {
       SELECT
         rv.CLAVE_VALIDACION, rv.CLAVE_REP, rv.TIPO_VALIDACION, rv.DESCRIPCION,
         rv.DOCUMENTADO, rv.DOC_FECHA_REAL, rv.PROGRAMADO, rv.PROG_FECHA_REAL,
-        rv.CERTIFICADO, rv.CERT_FECHA_REAL, rv.ESTATUS, rv.CLAVE_PLATAFORMA, rv.VERSION
+        rv.CERTIFICADO, rv.CERT_FECHA_REAL, rv.ESTATUS, rv.CLAVE_PLATAFORMA, rv.VERSION, rv.VERSION_CARGA
       FROM REPORTE_VALIDACION rv
       WHERE rv.CLAVE_REP IN (${inList})
       ORDER BY rv.CLAVE_REP, rv.CLAVE_VALIDACION
@@ -227,7 +228,7 @@ router.get('/clientes/:clave/validaciones', requireAuth, async (req, res) => {
       rows = await query(`
         SELECT rv.CLAVE_VALIDACION, rv.CLAVE_REP, rv.TIPO_VALIDACION, rv.DESCRIPCION,
                rv.DOCUMENTADO, rv.DOC_FECHA_REAL, rv.PROGRAMADO, rv.PROG_FECHA_REAL,
-               rv.CERTIFICADO, rv.CERT_FECHA_REAL, rv.ESTATUS, rv.CLAVE_PLATAFORMA, rv.VERSION
+               rv.CERTIFICADO, rv.CERT_FECHA_REAL, rv.ESTATUS, rv.CLAVE_PLATAFORMA, rv.VERSION, rv.VERSION_CARGA
         FROM REPORTE_VALIDACION rv
         WHERE rv.CLAVE_REP IN (${inList})
         ${platFilter}
@@ -260,7 +261,7 @@ router.get('/clientes/:clave/validaciones', requireAuth, async (req, res) => {
       rows = await query(`
         SELECT rv.CLAVE_VALIDACION, rv.CLAVE_REP, rv.TIPO_VALIDACION, rv.DESCRIPCION,
                rv.DOCUMENTADO, rv.DOC_FECHA_REAL, rv.PROGRAMADO, rv.PROG_FECHA_REAL,
-               rv.CERTIFICADO, rv.CERT_FECHA_REAL, rv.ESTATUS, rv.CLAVE_PLATAFORMA, rv.VERSION
+               rv.CERTIFICADO, rv.CERT_FECHA_REAL, rv.ESTATUS, rv.CLAVE_PLATAFORMA, rv.VERSION, rv.VERSION_CARGA
         FROM REPORTE_VALIDACION rv
         WHERE rv.CLAVE_REP IN (${inList})
         ${platFilter}
