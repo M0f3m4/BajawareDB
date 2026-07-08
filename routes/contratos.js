@@ -195,12 +195,23 @@ router.get('/clientes/:clave/validaciones', requireAuth, async (req, res) => {
     const repFiltro    = req.query.rep || null; // CLAVE_REP base opcional
     const esTodos = claveCliente === 'todos';
 
-    // -- Nombre del cliente (si aplica)
+    // -- Nombre del cliente + plataformas contratadas
     let nombreCliente = '';
+    let platFilter = ''; // AND rv.CLAVE_PLATAFORMA IN (...)
     if (!esTodos) {
       const [cli] = await query(`SELECT NOMBRE_CLIENTE FROM CLIENTE WHERE CLAVE_CLIENTE=${esc(claveCliente)}`);
       if (!cli) return res.json({ ok: true, data: [], cliente: '' });
       nombreCliente = cli.NOMBRE_CLIENTE;
+
+      // Plataformas contratadas por este cliente
+      const plats = await query(`
+        SELECT DISTINCT CLAVE_PLATAFORMA FROM CONTRATOS
+        WHERE CLAVE_CLIENTE=${esc(claveCliente)} AND CLAVE_PLATAFORMA IS NOT NULL
+      `);
+      if (plats.length) {
+        const platList = plats.map(p => esc(p.CLAVE_PLATAFORMA)).join(',');
+        platFilter = `AND rv.CLAVE_PLATAFORMA IN (${platList})`;
+      }
     }
 
     // -- Si viene filtro por reporte, úsalo directo (evita cache + IN grande)
@@ -219,6 +230,7 @@ router.get('/clientes/:clave/validaciones', requireAuth, async (req, res) => {
                rv.CERTIFICADO, rv.CERT_FECHA_REAL, rv.ESTATUS, rv.CLAVE_PLATAFORMA, rv.VERSION
         FROM REPORTE_VALIDACION rv
         WHERE rv.CLAVE_REP IN (${inList})
+        ${platFilter}
         ORDER BY rv.CLAVE_REP, rv.CLAVE_VALIDACION
       `);
     } else {
@@ -251,6 +263,7 @@ router.get('/clientes/:clave/validaciones', requireAuth, async (req, res) => {
                rv.CERTIFICADO, rv.CERT_FECHA_REAL, rv.ESTATUS, rv.CLAVE_PLATAFORMA, rv.VERSION
         FROM REPORTE_VALIDACION rv
         WHERE rv.CLAVE_REP IN (${inList})
+        ${platFilter}
         ORDER BY rv.CLAVE_REP, rv.CLAVE_VALIDACION
       `);
     }

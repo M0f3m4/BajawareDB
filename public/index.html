@@ -1321,6 +1321,11 @@
           <p id="uv-quick-info" style="font-size:11px;color:#888;margin:0 0 20px;font-family:monospace;"></p>
           <div style="display:grid;gap:14px;">
             <div>
+              <label style="font-size:11px;font-weight:600;color:#555;display:block;margin-bottom:4px;">Plataforma</label>
+              <select id="uv-quick-plataforma" style="width:100%;padding:7px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;">
+              </select>
+            </div>
+            <div>
               <label style="font-size:11px;font-weight:600;color:#555;display:block;margin-bottom:4px;">Etapa</label>
               <select id="uv-quick-etapa" style="width:100%;padding:7px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;">
                 <option value="IDENTIFICADO">IDENTIFICADO</option>
@@ -4147,10 +4152,17 @@
 
   let _uvQuick = {};
   function precargarActualizarVal(clave, rep, plataforma) {
-    _uvQuick = { clave, rep, plataforma };
-    document.getElementById('uv-quick-info').textContent = `${clave}  ·  ${rep}  ·  ${plataforma}`;
+    _uvQuick = { clave, rep };
+    document.getElementById('uv-quick-info').textContent = `${clave}  ·  ${rep}`;
     document.getElementById('uv-quick-msg').textContent = '';
     document.getElementById('uv-quick-fecha').value = '';
+
+    // Poblar dropdown de plataformas
+    const sel = document.getElementById('uv-quick-plataforma');
+    sel.innerHTML = _invPlataformas.map(p =>
+      `<option value="${p}" ${p === plataforma ? 'selected' : ''}>${p}</option>`
+    ).join('');
+
     document.getElementById('uv-quick-modal').style.display = 'flex';
   }
 
@@ -4162,7 +4174,7 @@
     try {
       const r = await fetch('/api/contratos/estatus-validacion', {
         method: 'PUT', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ clave_validacion: _uvQuick.clave, clave_rep: _uvQuick.rep, clave_plataforma: _uvQuick.plataforma, etapa, fecha, desmarcar })
+        body: JSON.stringify({ clave_validacion: _uvQuick.clave, clave_rep: _uvQuick.rep, clave_plataforma: document.getElementById('uv-quick-plataforma').value, etapa, fecha, desmarcar })
       }).then(x => x.json());
       if (r.ok) {
         msg.innerHTML = `<span style="color:#27ae60;">✅ ${desmarcar ? 'Desmarcado' : 'Marcado'} correctamente.</span>`;
