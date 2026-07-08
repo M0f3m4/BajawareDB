@@ -2,10 +2,19 @@ const express   = require('express');
 const router    = express.Router();
 const userStore = require('../db/userStore');
 
-// ── Solo admins ───────────────────────────────────────────
+const ROLES_VALIDOS = ['lector', 'admin', 'owner'];
+
+// ── Solo owner ────────────────────────────────────────────
+function requireOwner(req, res, next) {
+  if (!req.session.user) return res.status(401).json({ ok: false, message: 'No autenticado' });
+  if (req.session.user.rol !== 'owner') return res.status(403).json({ ok: false, message: 'Se requiere rol owner' });
+  next();
+}
+
+// ── Admin o Owner ─────────────────────────────────────────
 function requireAdmin(req, res, next) {
   if (!req.session.user) return res.status(401).json({ ok: false, message: 'No autenticado' });
-  if (req.session.user.rol !== 'admin') return res.status(403).json({ ok: false, message: 'Se requiere rol admin' });
+  if (!['admin', 'owner'].includes(req.session.user.rol)) return res.status(403).json({ ok: false, message: 'Se requiere rol admin u owner' });
   next();
 }
 
@@ -28,10 +37,10 @@ router.get('/', requireAdmin, (req, res) => {
 
 // ── POST /api/usuarios ────────────────────────────────────
 // Body: { username, nombre, rol }
-router.post('/', requireAdmin, (req, res) => {
+router.post('/', requireOwner, (req, res) => {
   const { username, nombre, rol = 'lector' } = req.body;
   if (!username || !nombre) return res.status(400).json({ ok: false, message: 'username y nombre son requeridos' });
-  if (!['admin', 'lector'].includes(rol)) return res.status(400).json({ ok: false, message: 'Rol inválido' });
+  if (!ROLES_VALIDOS.includes(rol)) return res.status(400).json({ ok: false, message: 'Rol inválido' });
   try {
     const user = userStore.create({ username, nombre, rol });
     res.json({ ok: true, data: user });
@@ -42,9 +51,9 @@ router.post('/', requireAdmin, (req, res) => {
 
 // ── PUT /api/usuarios/:id ─────────────────────────────────
 // Body: { nombre, rol }
-router.put('/:id', requireAdmin, (req, res) => {
+router.put('/:id', requireOwner, (req, res) => {
   const { nombre, rol } = req.body;
-  if (rol && !['admin', 'lector'].includes(rol)) return res.status(400).json({ ok: false, message: 'Rol inválido' });
+  if (rol && !ROLES_VALIDOS.includes(rol)) return res.status(400).json({ ok: false, message: 'Rol inválido' });
   try {
     const user = userStore.update(req.params.id, { ...(nombre && { nombre }), ...(rol && { rol }) });
     res.json({ ok: true, data: user });
@@ -55,7 +64,7 @@ router.put('/:id', requireAdmin, (req, res) => {
 
 // ── POST /api/usuarios/:id/toggle ─────────────────────────
 // Activa o desactiva un usuario
-router.post('/:id/toggle', requireAdmin, (req, res) => {
+router.post('/:id/toggle', requireOwner, (req, res) => {
   // No permitir desactivarse a sí mismo
   if (parseInt(req.params.id) === req.session.user.id) {
     return res.status(400).json({ ok: false, message: 'No puedes desactivarte a ti mismo' });

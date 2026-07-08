@@ -932,6 +932,7 @@
             <select class="modal-select" id="usuario-rol">
               <option value="lector">Lector — solo consulta</option>
               <option value="admin">Admin — acceso total</option>
+              <option value="owner">Owner — gestión de usuarios</option>
             </select>
             <div id="modal-usuario-error" style="color:#c0392b;font-size:13px;margin-bottom:10px;display:none;"></div>
             <div class="modal-footer">
@@ -1679,7 +1680,9 @@
   });
 
   // ── INIT APP ─────────────────────────────────────────────
+  let _currentUser = {};
   function initApp(user) {
+    _currentUser = user;
     document.getElementById('login-page').style.display = 'none';
     document.getElementById('main-app').style.display = 'flex';
     document.getElementById('header-user').textContent = user.nombre + ' — Bajaware';
@@ -2870,6 +2873,7 @@
         return;
       }
 
+      document.getElementById('btn-nuevo-usuario').style.display = _currentUser.rol === 'owner' ? '' : 'none';
       count.textContent = data.data.length + ' usuario(s) registrado(s)';
 
       wrap.innerHTML = `<table class="data-table">
@@ -2879,10 +2883,11 @@
             <tr>
               <td><strong>${u.username}</strong></td>
               <td>${u.nombre}</td>
-              <td><span class="badge ${u.rol === 'admin' ? 'badge-blue' : 'badge-yellow'}">${u.rol}</span></td>
+              <td><span class="badge ${u.rol === 'owner' ? 'badge-purple' : u.rol === 'admin' ? 'badge-blue' : 'badge-yellow'}">${u.rol}</span></td>
               <td><span class="badge ${u.activo ? 'badge-green' : 'badge-red'}">${u.activo ? 'Activo' : 'Inactivo'}</span></td>
               <td style="font-size:12px;color:#888;">${new Date(u.createdAt).toLocaleDateString('es-MX')}</td>
               <td style="display:flex;gap:6px;">
+                ${_currentUser.rol === 'owner' ? `
                 <button onclick="editarUsuario(${u.id},'${u.username}','${u.nombre}','${u.rol}')"
                   style="padding:4px 10px;font-size:11px;border:1px solid #1a3558;border-radius:5px;background:#fff;color:#1a3558;cursor:pointer;">
                   Editar
@@ -2890,7 +2895,7 @@
                 <button onclick="toggleUsuario(${u.id})"
                   style="padding:4px 10px;font-size:11px;border:1px solid ${u.activo ? '#c0392b' : '#27ae60'};border-radius:5px;background:#fff;color:${u.activo ? '#c0392b' : '#27ae60'};cursor:pointer;">
                   ${u.activo ? 'Desactivar' : 'Activar'}
-                </button>
+                </button>` : ''}
               </td>
             </tr>`).join('')}
         </tbody>
