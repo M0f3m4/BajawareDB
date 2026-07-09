@@ -493,11 +493,12 @@
         <div class="sub-item" onclick="showSection('permisos')">Permisos</div>
       </div>
 
-      <div class="nav-item" onclick="toggleMenu('about')">
+      <!-- HIDDEN: About -->
+      <div class="nav-item" onclick="toggleMenu('about')" style="display:none">
         <div class="nav-item-left"><span class="nav-icon">ℹ️</span> About</div>
         <span class="nav-arrow" id="arr-about">▼</span>
       </div>
-      <div class="sub-menu" id="sub-about">
+      <div class="sub-menu" id="sub-about" style="display:none">
         <div class="sub-item" onclick="showSection('version')">Versión</div>
         <div class="sub-item" onclick="showSection('licencia')">Licencia</div>
       </div>
@@ -513,11 +514,12 @@
         <div class="sub-item" onclick="showSection('inv-catalogos')">Catálogos</div>
       </div>
 
-      <div class="nav-item" onclick="toggleMenu('cont')">
+      <!-- HIDDEN: Contratos -->
+      <div class="nav-item" onclick="toggleMenu('cont')" style="display:none">
         <div class="nav-item-left"><span class="nav-icon">📝</span> Contratos</div>
         <span class="nav-arrow" id="arr-cont">▼</span>
       </div>
-      <div class="sub-menu" id="sub-cont">
+      <div class="sub-menu" id="sub-cont" style="display:none">
         <div class="sub-item" onclick="showSection('cont-lista')">Lista</div>
         <div class="sub-item" onclick="showSection('cont-nuevo')">Nuevo</div>
       </div>
@@ -541,7 +543,8 @@
         <div class="sub-item" onclick="showSection('historial-versiones')">Historial Versiones</div>
       </div>
 
-      <div class="nav-item" onclick="showSection('qa-alertas')" id="nav-qa-alertas">
+      <!-- HIDDEN: QA Alertas -->
+      <div class="nav-item" onclick="showSection('qa-alertas')" id="nav-qa-alertas" style="display:none">
         <div class="nav-item-left">
           <span class="nav-icon">🚨</span> QA Alertas
           <span id="qa-badge" style="display:none;margin-left:6px;background:#e74c3c;color:#fff;border-radius:10px;padding:1px 7px;font-size:11px;font-weight:700;"></span>
@@ -558,25 +561,28 @@
         <div class="sub-item" onclick="showSection('spr-tickets')">Tickets</div>
       </div>
 
-      <div class="nav-item" onclick="toggleMenu('doc')">
+      <!-- HIDDEN: Documentación -->
+      <div class="nav-item" onclick="toggleMenu('doc')" style="display:none">
         <div class="nav-item-left"><span class="nav-icon">📁</span> Documentación</div>
         <span class="nav-arrow" id="arr-doc">▼</span>
       </div>
-      <div class="sub-menu" id="sub-doc">
+      <div class="sub-menu" id="sub-doc" style="display:none">
         <div class="sub-item" onclick="showSection('doc-lista')">Documentos</div>
         <div class="sub-item" onclick="showSection('doc-subir')">Subir</div>
       </div>
 
-      <div class="nav-item" onclick="toggleMenu('prog')">
+      <!-- HIDDEN: Programación -->
+      <div class="nav-item" onclick="toggleMenu('prog')" style="display:none">
         <div class="nav-item-left"><span class="nav-icon">💻</span> Programación</div>
         <span class="nav-arrow" id="arr-prog">▼</span>
       </div>
-      <div class="sub-menu" id="sub-prog">
+      <div class="sub-menu" id="sub-prog" style="display:none">
         <div class="sub-item" onclick="showSection('prog-tareas')">Tareas</div>
         <div class="sub-item" onclick="showSection('prog-avance')">Avance</div>
       </div>
 
-      <div class="nav-item" onclick="showSection('cert')">
+      <!-- HIDDEN: Certificación -->
+      <div class="nav-item" onclick="showSection('cert')" style="display:none">
         <div class="nav-item-left"><span class="nav-icon">✅</span> Certificación</div>
       </div>
 
@@ -589,11 +595,12 @@
         <div class="sub-item" onclick="showSection('sop-fixes')">Fixes por cliente</div>
       </div>
 
-      <div class="nav-item" onclick="toggleMenu('con')">
+      <!-- HIDDEN: Conocimiento -->
+      <div class="nav-item" onclick="toggleMenu('con')" style="display:none">
         <div class="nav-item-left"><span class="nav-icon">🎓</span> Conocimiento</div>
         <span class="nav-arrow" id="arr-con">▼</span>
       </div>
-      <div class="sub-menu" id="sub-con">
+      <div class="sub-menu" id="sub-con" style="display:none">
         <div class="sub-item" onclick="showSection('con-base')">Base</div>
         <div class="sub-item" onclick="showSection('con-articulos')">Artículos</div>
       </div>
@@ -615,11 +622,12 @@
         <div class="sub-item" onclick="showSection('bc-rep-clientes')">Clientes por Reporte</div>
       </div>
 
-      <div class="nav-item" onclick="toggleMenu('sofipo')">
+      <!-- HIDDEN: SOFIPO -->
+      <div class="nav-item" onclick="toggleMenu('sofipo')" style="display:none">
         <div class="nav-item-left"><span class="nav-icon">🗂️</span> SOFIPO</div>
         <span class="nav-arrow" id="arr-sofipo">▼</span>
       </div>
-      <div class="sub-menu" id="sub-sofipo">
+      <div class="sub-menu" id="sub-sofipo" style="display:none">
         <div class="sub-item" onclick="showSection('sofipo-layouts')">Layouts</div>
         <div class="sub-item" onclick="showSection('sofipo-reportes')">Reportes</div>
         <div class="sub-item" onclick="showSection('sofipo-cruce')">Cruce campo↔reporte</div>
