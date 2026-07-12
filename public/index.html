@@ -1606,10 +1606,10 @@
       <div class="content-section" id="sec-bitacora">
         <h2 class="section-title">Bitácora de Movimientos</h2>
         <div class="toolbar" style="flex-wrap:wrap;gap:8px;margin-bottom:14px;">
-          <select id="bit-usuario" style="min-width:160px;">
+          <select id="bit-usuario" onchange="loadBitacora()" style="min-width:160px;">
             <option value="">Todos los usuarios</option>
           </select>
-          <select id="bit-seccion" style="min-width:160px;">
+          <select id="bit-seccion" onchange="loadBitacora()" style="min-width:160px;">
             <option value="">Todas las secciones</option>
             <option value="estatus-reporte">Estatus Reporte</option>
             <option value="estatus-validacion">Estatus Validación</option>
@@ -1617,9 +1617,9 @@
             <option value="upload-reportes">Carga Reportes</option>
             <option value="upload-validaciones">Carga Validaciones</option>
           </select>
-          <input type="date" id="bit-desde" style="padding:6px 10px;border:1px solid #ccc;border-radius:6px;font-size:13px;" placeholder="Desde">
-          <input type="date" id="bit-hasta" style="padding:6px 10px;border:1px solid #ccc;border-radius:6px;font-size:13px;" placeholder="Hasta">
-          <select id="bit-limit">
+          <input type="date" id="bit-desde" onchange="loadBitacora()" style="padding:6px 10px;border:1px solid #ccc;border-radius:6px;font-size:13px;" placeholder="Desde">
+          <input type="date" id="bit-hasta" onchange="loadBitacora()" style="padding:6px 10px;border:1px solid #ccc;border-radius:6px;font-size:13px;" placeholder="Hasta">
+          <select id="bit-limit" onchange="loadBitacora()">
             <option value="50">Últimos 50</option>
             <option value="100" selected>Últimos 100</option>
             <option value="200">Últimos 200</option>
