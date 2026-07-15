@@ -460,7 +460,10 @@
     <p class="login-subtitle">Reportware 5.0 — Base de Conocimiento</p>
 
     <label for="username">Usuario</label>
-    <input type="text" id="username" placeholder="Ingresa tu usuario" autocomplete="off" />
+    <input type="text" id="username" placeholder="Ingresa tu usuario" autocomplete="off" onkeydown="if(event.key==='Enter')document.getElementById('password').focus()" />
+
+    <label for="password">Contraseña</label>
+    <input type="password" id="password" placeholder="Ingresa tu contraseña" onkeydown="if(event.key==='Enter')doLogin()" />
 
     <button class="login-btn" id="login-btn" onclick="doLogin()">Entrar</button>
     <p class="login-error" id="login-error">Por favor ingresa un usuario.</p>
@@ -942,6 +945,10 @@
               <option value="admin">Admin — acceso total</option>
               <option value="owner">Owner — gestión de usuarios</option>
             </select>
+            <div id="usuario-pass-section">
+              <label class="modal-label" id="usuario-pass-label">Contraseña</label>
+              <input class="modal-input" id="usuario-password" type="password" placeholder="Contraseña" />
+            </div>
             <div id="modal-usuario-error" style="color:#c0392b;font-size:13px;margin-bottom:10px;display:none;"></div>
             <div class="modal-footer">
               <button class="btn-cancel" onclick="cerrarModalUsuario()">Cancelar</button>
@@ -1454,22 +1461,20 @@
 
       <!-- Modal: asignación de plataformas post-upload -->
       <div id="inv-plat-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;align-items:center;justify-content:center;">
-        <div style="background:#fff;border-radius:12px;padding:28px 32px;width:700px;max-width:95vw;max-height:85vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,.2);">
-          <h3 style="margin:0 0 6px;font-size:15px;color:#1a3558;">🖥️ Asignar plataformas</h3>
-          <p style="font-size:12px;color:#888;margin:0 0 16px;">Selecciona las plataformas para cada validación cargada.</p>
-          <div id="inv-plat-msg" style="margin-bottom:10px;font-size:13px;"></div>
-          <table id="inv-plat-table" style="width:100%;border-collapse:collapse;font-size:12px;">
-            <thead id="inv-plat-thead"></thead>
-            <tbody id="inv-plat-tbody"></tbody>
-          </table>
-          <div style="display:flex;gap:10px;margin-top:20px;justify-content:flex-end;">
+        <div style="background:#fff;border-radius:12px;padding:28px 32px;width:420px;max-width:95vw;box-shadow:0 8px 32px rgba(0,0,0,.2);">
+          <h3 style="margin:0 0 4px;font-size:15px;color:#1a3558;">🖥️ Asignar plataforma</h3>
+          <p id="inv-plat-count" style="font-size:12px;color:#888;margin:0 0 20px;"></p>
+          <div id="inv-plat-msg" style="margin-bottom:12px;font-size:13px;"></div>
+          <label style="font-size:11px;font-weight:600;color:#555;display:block;margin-bottom:8px;">Selecciona la plataforma:</label>
+          <div id="inv-plat-opciones" style="display:grid;gap:8px;"></div>
+          <div style="display:flex;gap:10px;margin-top:24px;justify-content:flex-end;">
             <button onclick="document.getElementById('inv-plat-modal').style.display='none'"
               style="padding:8px 20px;background:#f0f4f8;color:#555;border:1px solid #ddd;border-radius:6px;font-size:13px;cursor:pointer;">
               Cerrar
             </button>
             <button onclick="invPlatConfirmar()"
               style="padding:8px 24px;background:#1a3558;color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;">
-              ✅ Confirmar asignación
+              ✅ Asignar
             </button>
           </div>
         </div>
@@ -1657,10 +1662,15 @@
   // ── LOGIN ────────────────────────────────────────────────
   async function doLogin() {
     const username = document.getElementById('username').value.trim();
+    const password = document.getElementById('password').value;
     const errEl    = document.getElementById('login-error');
     const btn      = document.getElementById('login-btn');
 
-    if (!username) { errEl.style.display = 'block'; return; }
+    if (!username || !password) {
+      errEl.textContent = 'Ingresa usuario y contraseña.';
+      errEl.style.display = 'block';
+      return;
+    }
     errEl.style.display = 'none';
     btn.disabled = true;
     btn.textContent = 'Entrando...';
@@ -1669,7 +1679,7 @@
       const res  = await fetch('/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username })
+        body: JSON.stringify({ username, password })
       });
       const data = await res.json();
 
@@ -2925,6 +2935,9 @@
     document.getElementById('usuario-username').disabled = false;
     document.getElementById('usuario-nombre').value = '';
     document.getElementById('usuario-rol').value = 'lector';
+    document.getElementById('usuario-password').value = '';
+    document.getElementById('usuario-pass-label').textContent = 'Contraseña';
+    document.getElementById('usuario-pass-section').style.display = '';
     document.getElementById('modal-usuario-error').style.display = 'none';
     document.getElementById('modal-usuario').classList.add('open');
   }
@@ -2936,6 +2949,9 @@
     document.getElementById('usuario-username').disabled = true;
     document.getElementById('usuario-nombre').value = nombre;
     document.getElementById('usuario-rol').value = rol;
+    document.getElementById('usuario-password').value = '';
+    document.getElementById('usuario-pass-label').textContent = 'Nueva contraseña (dejar vacío para no cambiar)';
+    document.getElementById('usuario-pass-section').style.display = '';
     document.getElementById('modal-usuario-error').style.display = 'none';
     document.getElementById('modal-usuario').classList.add('open');
   }
@@ -2949,6 +2965,7 @@
     const username = document.getElementById('usuario-username').value.trim();
     const nombre   = document.getElementById('usuario-nombre').value.trim();
     const rol      = document.getElementById('usuario-rol').value;
+    const password = document.getElementById('usuario-password').value;
     const errEl    = document.getElementById('modal-usuario-error');
 
     if (!nombre || (!id && !username)) {
@@ -2956,24 +2973,36 @@
       errEl.style.display = 'block';
       return;
     }
+    if (!id && !password) {
+      errEl.textContent = 'La contraseña es requerida para nuevos usuarios';
+      errEl.style.display = 'block';
+      return;
+    }
 
     try {
       const url    = id ? `/api/usuarios/${id}` : '/api/usuarios';
       const method = id ? 'PUT' : 'POST';
+      const body   = id ? { nombre, rol } : { username, nombre, rol, password };
       const res    = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, nombre, rol })
+        body: JSON.stringify(body)
       });
       const data = await res.json();
+      if (!data.ok) { errEl.textContent = data.message; errEl.style.display = 'block'; return; }
 
-      if (data.ok) {
-        cerrarModalUsuario();
-        loadUsuarios();
-      } else {
-        errEl.textContent = data.message;
-        errEl.style.display = 'block';
+      // Si es edición y pusieron nueva contraseña, resetearla
+      if (id && password) {
+        const rp = await fetch(`/api/usuarios/${id}/password`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password })
+        }).then(x => x.json());
+        if (!rp.ok) { errEl.textContent = rp.message; errEl.style.display = 'block'; return; }
       }
+
+      cerrarModalUsuario();
+      loadUsuarios();
     } catch (e) {
       errEl.textContent = 'Error: ' + e.message;
       errEl.style.display = 'block';
@@ -4586,77 +4615,49 @@
   let _invPlataformas = ['MVC','RISKWARE','RW5_NET','RW6_JAVA','RW7_CORE','SICC'];
 
   async function invPlatAbrir() {
-    const claves = _invPlatValidaciones.map(v => v.CLAVE_VALIDACION);
-
     // Cargar plataformas del catálogo
     try {
       const rp = await fetch('/api/contratos/cat-plataformas').then(x => x.json());
       if (rp.ok && rp.data.length) _invPlataformas = rp.data;
     } catch(e) {}
 
-    // Obtener plataformas ya asignadas
-    let asignadas = {};
-    try {
-      const r = await fetch('/api/contratos/inventario-validaciones/plataformas-asignadas', {
-        method: 'POST', headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({ claves })
-      }).then(x => x.json());
-      if (r.ok) asignadas = r.data;
-    } catch(e) {}
+    const n = _invPlatValidaciones.length;
+    document.getElementById('inv-plat-count').textContent = `${n} validaciones serán asignadas a la plataforma seleccionada.`;
 
-    // Construir header dinámico
-    const thead = document.getElementById('inv-plat-thead');
-    thead.innerHTML = `<tr style="background:#f0f4f8;">
-      <th style="padding:8px;text-align:left;border-bottom:2px solid #ddd;">Validación</th>
-      ${_invPlataformas.map(p => `
-        <th style="padding:8px;text-align:center;border-bottom:2px solid #ddd;font-size:11px;">
-          ${p}<br>
-          <input type="checkbox" id="plat-all-${p}" onchange="invPlatSelAll('${p}',this.checked)" title="Seleccionar todas">
-        </th>`).join('')}
-    </tr>`;
-
-    // Construir filas
-    const tbody = document.getElementById('inv-plat-tbody');
-    tbody.innerHTML = _invPlatValidaciones.map(v => {
-      const plats = asignadas[v.CLAVE_VALIDACION] || [];
-      return `<tr style="border-bottom:1px solid #eee;">
-        <td style="padding:6px 8px;font-family:monospace;font-size:11px;">
-          <div style="font-weight:600;">${v.CLAVE_VALIDACION}</div>
-          <div style="color:#888;font-size:10px;">${v.DESCRIPCION_VALIDACION||''}</div>
-        </td>
-        ${_invPlataformas.map(p => `
-          <td style="padding:6px 8px;text-align:center;">
-            <input type="checkbox" class="plat-cb" data-clave="${v.CLAVE_VALIDACION}" data-plat="${p}" ${plats.includes(p)?'checked disabled':''}>
-          </td>`).join('')}
-      </tr>`;
-    }).join('');
+    // Opciones: una por plataforma + TODAS
+    const opciones = document.getElementById('inv-plat-opciones');
+    opciones.innerHTML = ['TODAS', ..._invPlataformas].map((p, i) => `
+      <label style="display:flex;align-items:center;gap:10px;padding:8px 12px;border:1px solid #ddd;border-radius:8px;cursor:pointer;font-size:13px;background:#fafafa;">
+        <input type="radio" name="inv-plat-radio" value="${p}" ${i===0?'checked':''} style="accent-color:#1a3558;">
+        ${p === 'TODAS' ? '📋 <strong>TODAS las plataformas</strong>' : p}
+      </label>`).join('');
 
     document.getElementById('inv-plat-msg').innerHTML = '';
     document.getElementById('inv-plat-modal').style.display = 'flex';
   }
 
-  function invPlatSelAll(plat, checked) {
-    document.querySelectorAll(`.plat-cb[data-plat="${plat}"]:not(:disabled)`).forEach(cb => cb.checked = checked);
-  }
-
   async function invPlatConfirmar() {
-    const asignaciones = [];
-    const mapaVal = Object.fromEntries(_invPlatValidaciones.map(v => [v.CLAVE_VALIDACION, v]));
-    document.querySelectorAll('.plat-cb:checked:not(:disabled)').forEach(cb => {
-      const clave = cb.dataset.clave;
-      const v = mapaVal[clave];
-      if (v) asignaciones.push({
-        clave_validacion: clave,
-        clave_rep: v.CLAVE_REP,
-        tipo_validacion: v.TIPO_VALIDACION,
-        descripcion: v.DESCRIPCION_VALIDACION,
-        plataforma: cb.dataset.plat
-      });
-    });
-    if (!asignaciones.length) {
-      document.getElementById('inv-plat-msg').innerHTML = '<span style="color:#e67e22;">Selecciona al menos una plataforma.</span>';
+    const radio = document.querySelector('input[name="inv-plat-radio"]:checked');
+    if (!radio) {
+      document.getElementById('inv-plat-msg').innerHTML = '<span style="color:#e67e22;">Selecciona una plataforma.</span>';
       return;
     }
+    const seleccion = radio.value;
+    const plataformas = seleccion === 'TODAS' ? _invPlataformas : [seleccion];
+
+    const asignaciones = [];
+    for (const v of _invPlatValidaciones) {
+      for (const plat of plataformas) {
+        asignaciones.push({
+          clave_validacion: v.CLAVE_VALIDACION,
+          clave_rep: v.CLAVE_REP,
+          tipo_validacion: v.TIPO_VALIDACION,
+          descripcion: v.DESCRIPCION_VALIDACION,
+          plataforma: plat
+        });
+      }
+    }
+
     document.getElementById('inv-plat-msg').innerHTML = 'Guardando...';
     try {
       const r = await fetch('/api/contratos/inventario-validaciones/asignar-plataformas', {
@@ -4665,8 +4666,6 @@
       }).then(x => x.json());
       if (r.ok) {
         document.getElementById('inv-plat-msg').innerHTML = `<span style="color:#27ae60;">✅ ${r.creados} asignaciones creadas, ${r.omitidos} ya existían.</span>`;
-        // Marcar los checkboxes confirmados como disabled
-        document.querySelectorAll('.plat-cb:checked:not(:disabled)').forEach(cb => cb.disabled = true);
       } else {
         document.getElementById('inv-plat-msg').innerHTML = `<span style="color:#e74c3c;">❌ ${r.message}</span>`;
       }
