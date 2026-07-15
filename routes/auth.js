@@ -4,9 +4,7 @@ const userStore = require('../db/userStore');
 
 /**
  * POST /auth/login
- * Body: { username }
- * Valida que el usuario exista en la BD (sin contraseña por ahora).
- * Si la BD no está disponible, permite cualquier usuario (modo dev).
+ * Body: { username, password }
  */
 router.post('/login', async (req, res) => {
   const { username } = req.body;
@@ -45,7 +43,6 @@ router.post('/logout', (req, res) => {
 
 /**
  * GET /auth/me
- * Devuelve el usuario en sesión actual.
  */
 router.get('/me', (req, res) => {
   if (!req.session.user) return res.status(401).json({ ok: false });

@@ -462,8 +462,8 @@
     <label for="username">Usuario</label>
     <input type="text" id="username" placeholder="Ingresa tu usuario" autocomplete="off" onkeydown="if(event.key==='Enter')document.getElementById('password').focus()" />
 
-    <label for="password">Contraseña</label>
-    <input type="password" id="password" placeholder="Ingresa tu contraseña" onkeydown="if(event.key==='Enter')doLogin()" />
+    <!-- HIDDEN: password field (auth desactivada temporalmente) -->
+    <input type="hidden" id="password" value="" />
 
     <button class="login-btn" id="login-btn" onclick="doLogin()">Entrar</button>
     <p class="login-error" id="login-error">Por favor ingresa un usuario.</p>
@@ -945,7 +945,8 @@
               <option value="admin">Admin — acceso total</option>
               <option value="owner">Owner — gestión de usuarios</option>
             </select>
-            <div id="usuario-pass-section">
+            <!-- HIDDEN: password section (auth desactivada temporalmente) -->
+            <div id="usuario-pass-section" style="display:none;">
               <label class="modal-label" id="usuario-pass-label">Contraseña</label>
               <input class="modal-input" id="usuario-password" type="password" placeholder="Contraseña" />
             </div>
@@ -1666,8 +1667,8 @@
     const errEl    = document.getElementById('login-error');
     const btn      = document.getElementById('login-btn');
 
-    if (!username || !password) {
-      errEl.textContent = 'Ingresa usuario y contraseña.';
+    if (!username) {
+      errEl.textContent = 'Ingresa tu usuario.';
       errEl.style.display = 'block';
       return;
     }

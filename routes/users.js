@@ -36,14 +36,28 @@ router.get('/', requireAdmin, (req, res) => {
 });
 
 // ── POST /api/usuarios ────────────────────────────────────
-// Body: { username, nombre, rol }
-router.post('/', requireOwner, (req, res) => {
-  const { username, nombre, rol = 'lector' } = req.body;
+// Body: { username, nombre, rol, password }
+router.post('/', requireOwner, async (req, res) => {
+  const { username, nombre, rol = 'lector', password } = req.body;
   if (!username || !nombre) return res.status(400).json({ ok: false, message: 'username y nombre son requeridos' });
+  // contraseña desactivada temporalmente
   if (!ROLES_VALIDOS.includes(rol)) return res.status(400).json({ ok: false, message: 'Rol inválido' });
   try {
-    const user = userStore.create({ username, nombre, rol });
+    const user = await userStore.create({ username, nombre, rol, password });
     res.json({ ok: true, data: user });
+  } catch (e) {
+    res.status(400).json({ ok: false, message: e.message });
+  }
+});
+
+// ── POST /api/usuarios/:id/password ──────────────────────
+// Body: { password }
+router.post('/:id/password', requireOwner, async (req, res) => {
+  const { password } = req.body;
+  if (!password || password.length < 4) return res.status(400).json({ ok: false, message: 'Contraseña muy corta (mínimo 4 caracteres)' });
+  try {
+    await userStore.setPassword(req.params.id, password);
+    res.json({ ok: true });
   } catch (e) {
     res.status(400).json({ ok: false, message: e.message });
   }
