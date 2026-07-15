@@ -735,6 +735,25 @@ router.post('/inventario-validaciones/upload', requireAuth, upload.single('archi
           DESCRIPCION_VALIDACION: String(r.DESCRIPCION_VALIDACION || '').trim(),
           TIPO_VALIDACION: String(r.TIPO_VALIDACION || '').trim()
         });
+        // Registrar historial en INVENTARIO_VALIDACIONES_HIST
+        try {
+          const existeHist = await query(`
+            SELECT 1 FROM INVENTARIO_VALIDACIONES_HIST
+            WHERE CLAVE_VALIDACION=${esc(clave)} AND VERSION_CARGA=${esc(version)}
+          `);
+          if (!existeHist.length) {
+            await query(`
+              INSERT INTO INVENTARIO_VALIDACIONES_HIST
+                (CLAVE_VALIDACION, VERSION_CARGA, CLAVE_PAIS, CLAVE_ENTIDADREGULADA, CLAVE_REG, CLAVE_REP,
+                 DESCRIPCION_VALIDACION, TIPO_VALIDACION, TIPO_VALIDACION_CALC)
+              VALUES
+                (${esc(clave)}, ${esc(version)}, ${esc(r.CLAVE_PAIS)}, ${esc(r.CLAVE_ENTIDADREGULADA)},
+                 ${esc(r.CLAVE_REG)}, ${esc(claveRep)}, ${esc(r.DESCRIPCION_VALIDACION)},
+                 ${esc(r.TIPO_VALIDACION)}, ${esc(r.TIPO_VALIDACION_CALC)})
+            `);
+          }
+        } catch(e2) { console.warn('[inv-val-hist] error:', e2.message); }
+
         // Registrar en INVENTARIO_VERSIONES
         try {
           if (force) {
