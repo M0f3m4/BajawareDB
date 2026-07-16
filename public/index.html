@@ -1007,7 +1007,8 @@
           </div>
           <span id="invv-badge" style="font-size:11px;background:#e8f0fe;color:#1a3558;padding:3px 10px;border-radius:10px;font-weight:600;display:none;"></span>
         </div>
-        <div id="invv-content" style="max-height:55vh;overflow-y:auto;overflow-x:auto;"><p style="color:#aaa;font-size:13px;">Selecciona una entidad y un reporte.</p></div>
+        <div id="invv-scroll-top" style="overflow-x:auto;overflow-y:hidden;height:16px;"><div id="invv-scroll-ghost" style="height:1px;"></div></div>
+        <div id="invv-content" style="max-height:60vh;overflow:auto;"><p style="color:#aaa;font-size:13px;">Selecciona una entidad y un reporte.</p></div>
       </div>
 
       <!-- Estatus de Reportes -->
@@ -4102,13 +4103,12 @@
     const wrap    = document.getElementById('invv-content');
     const badge   = document.getElementById('invv-badge');
     if (!entidad || !rep) return;
-    wrap.innerHTML = '<div class="loading">Cargando...</div>';
+    wrap.innerHTML = '<div style=""><div class="loading">Cargando...</div></div>';
     badge.style.display = 'none';
     try {
       const r = await fetch(`/api/contratos/inventario-validaciones/lista?entidad=${encodeURIComponent(entidad)}&rep=${encodeURIComponent(rep)}`).then(x => x.json());
-      if (!r.ok) { wrap.innerHTML = `<p style="color:#e74c3c;">Error: ${r.message}</p>`; return; }
+      if (!r.ok) { wrap.innerHTML = `<div style=""><p style="color:#e74c3c;">Error: ${r.message}</p></div>`; return; }
       const data = r.data || [];
-      // Agrupar por validación (puede haber una fila por plataforma)
       const mapaVal = {};
       for (const row of data) {
         if (!mapaVal[row.CLAVE_VALIDACION]) {
@@ -4119,29 +4119,40 @@
       const vals = Object.values(mapaVal);
       badge.textContent = `${vals.length} validaciones`;
       badge.style.display = 'inline-block';
-      if (!vals.length) { wrap.innerHTML = '<p style="color:#aaa;font-size:13px;">Sin validaciones.</p>'; return; }
+      if (!vals.length) { wrap.innerHTML = '<div style=""><p style="color:#aaa;font-size:13px;">Sin validaciones.</p></div>'; return; }
       wrap.innerHTML = `
-        <div class="data-table-wrap">
-          <table class="data-table">
-            <thead><tr>
-              <th>Clave validación</th>
-              <th>Descripción</th>
-              <th>Tipo</th>
-              <th>Versión</th>
-              <th>Plataformas</th>
-            </tr></thead>
-            <tbody>
-              ${vals.map(v => `<tr>
-                <td style="font-family:monospace;font-size:12px;font-weight:600;color:#1a3558;">${v.CLAVE_VALIDACION}</td>
-                <td style="font-size:12px;">${v.DESCRIPCION_VALIDACION || '<span style="color:#bbb;font-style:italic;">—</span>'}</td>
-                <td style="font-size:12px;">${v.TIPO_VALIDACION || '—'}</td>
-                <td style="text-align:center;"><span style="font-size:11px;background:#f0f4ff;color:#1a3558;padding:2px 7px;border-radius:10px;font-family:monospace;">${v.VERSION_CARGA || '—'}</span></td>
-                <td style="font-size:11px;">${v.plataformas.length ? v.plataformas.map(p => `<span style="background:#e8f0fe;color:#1a3558;padding:2px 6px;border-radius:4px;margin-right:3px;">${p}</span>`).join('') : '<span style="color:#bbb;">Sin asignar</span>'}</td>
-              </tr>`).join('')}
-            </tbody>
-          </table>
+        <div style="">
+          <div class="data-table-wrap">
+            <table class="data-table">
+              <thead><tr>
+                <th>Clave validación</th>
+                <th>Descripción</th>
+                <th>Tipo</th>
+                <th>Versión</th>
+                <th>Plataformas</th>
+              </tr></thead>
+              <tbody>
+                ${vals.map(v => `<tr>
+                  <td style="font-family:monospace;font-size:12px;font-weight:600;color:#1a3558;">${v.CLAVE_VALIDACION}</td>
+                  <td style="font-size:12px;">${v.DESCRIPCION_VALIDACION || '<span style="color:#bbb;font-style:italic;">—</span>'}</td>
+                  <td style="font-size:12px;">${v.TIPO_VALIDACION || '—'}</td>
+                  <td style="text-align:center;"><span style="font-size:11px;background:#f0f4ff;color:#1a3558;padding:2px 7px;border-radius:10px;font-family:monospace;">${v.VERSION_CARGA || '—'}</span></td>
+                  <td style="font-size:11px;">${v.plataformas.length ? v.plataformas.map(p => `<span style="background:#e8f0fe;color:#1a3558;padding:2px 6px;border-radius:4px;margin-right:3px;">${p}</span>`).join('') : '<span style="color:#bbb;">Sin asignar</span>'}</td>
+                </tr>`).join('')}
+              </tbody>
+            </table>
+          </div>
         </div>`;
-    } catch(e) { wrap.innerHTML = '<p style="color:#e74c3c;">Error: ' + e.message + '</p>'; }
+      // Sincronizar scroll horizontal arriba ↔ abajo
+      const scrollTop  = document.getElementById('invv-scroll-top');
+      const scrollGhost = document.getElementById('invv-scroll-ghost');
+      const tableWrap  = wrap.querySelector('.data-table-wrap');
+      if (tableWrap) {
+        scrollGhost.style.width = tableWrap.scrollWidth + 'px';
+        scrollTop.onscroll  = () => { tableWrap.scrollLeft = scrollTop.scrollLeft; };
+        tableWrap.onscroll  = () => { scrollTop.scrollLeft = tableWrap.scrollLeft; };
+      }
+    } catch(e) { wrap.innerHTML = `<div style=""><p style="color:#e74c3c;">Error: ${e.message}</p></div>`; }
   }
 
   // ── Validaciones por Cliente ──────────────────────────────
