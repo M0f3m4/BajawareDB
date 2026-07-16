@@ -868,42 +868,33 @@ router.post('/inventario-validaciones/plataformas-asignadas', requireAuth, async
 });
 
 // ── POST asignar plataformas a validaciones ────────────────
-// Lógica: (CLAVE_VALIDACION, CLAVE_PLATAFORMA, CLAVE_REP) exacto → omitir
-//         (CLAVE_VALIDACION, CLAVE_PLATAFORMA) con diferente CLAVE_REP → actualizar CLAVE_REP
+// Lógica: (CLAVE_VALIDACION, CLAVE_PLATAFORMA) ya existe (con cualquier CLAVE_REP) → omitir
 //         no existe → insertar
 router.post('/inventario-validaciones/asignar-plataformas', requireAuth, async (req, res) => {
   try {
     const { asignaciones = [], version = '1.0.0' } = req.body;
-    let creados = 0, actualizados = 0, omitidos = 0;
+    let creados = 0, omitidos = 0, conflictos = 0;
     for (const a of asignaciones) {
       const { clave_validacion, clave_rep, tipo_validacion, descripcion, plataforma } = a;
-      const existeExacto = await query(`
-        SELECT 1 FROM REPORTE_VALIDACION
-        WHERE CLAVE_VALIDACION=${esc(clave_validacion)} AND CLAVE_PLATAFORMA=${esc(plataforma)} AND CLAVE_REP=${esc(clave_rep)}
-      `);
-      if (existeExacto.length) { omitidos++; continue; }
-      const existeOtroRep = await query(`
-        SELECT 1 FROM REPORTE_VALIDACION
+      const existe = await query(`
+        SELECT CLAVE_REP FROM REPORTE_VALIDACION
         WHERE CLAVE_VALIDACION=${esc(clave_validacion)} AND CLAVE_PLATAFORMA=${esc(plataforma)}
       `);
-      if (existeOtroRep.length) {
-        await query(`
-          UPDATE REPORTE_VALIDACION SET CLAVE_REP=${esc(clave_rep)}
-          WHERE CLAVE_VALIDACION=${esc(clave_validacion)} AND CLAVE_PLATAFORMA=${esc(plataforma)}
-        `);
-        actualizados++;
-      } else {
-        await query(`
-          INSERT INTO REPORTE_VALIDACION
-            (CLAVE_VALIDACION, CLAVE_REP, CLAVE_PLATAFORMA, TIPO_VALIDACION, DESCRIPCION, DOCUMENTADO, PROGRAMADO, CERTIFICADO, ESTATUS, VERSION, VERSION_CARGA)
-          VALUES
-            (${esc(clave_validacion)}, ${esc(clave_rep)}, ${esc(plataforma)}, ${esc(tipo_validacion)}, ${esc(descripcion)},
-             'N', 'N', 'N', 'NO DOCUMENTADO', '0', ${esc(version)})
-        `);
-        creados++;
+      if (existe.length) {
+        if (existe[0].CLAVE_REP !== clave_rep) conflictos++;
+        else omitidos++;
+        continue;
       }
+      await query(`
+        INSERT INTO REPORTE_VALIDACION
+          (CLAVE_VALIDACION, CLAVE_REP, CLAVE_PLATAFORMA, TIPO_VALIDACION, DESCRIPCION, DOCUMENTADO, PROGRAMADO, CERTIFICADO, ESTATUS, VERSION, VERSION_CARGA)
+        VALUES
+          (${esc(clave_validacion)}, ${esc(clave_rep)}, ${esc(plataforma)}, ${esc(tipo_validacion)}, ${esc(descripcion)},
+           'N', 'N', 'N', 'NO DOCUMENTADO', '0', ${esc(version)})
+      `);
+      creados++;
     }
-    res.json({ ok: true, creados, actualizados, omitidos });
+    res.json({ ok: true, creados, omitidos, conflictos });
   } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
 });
 
