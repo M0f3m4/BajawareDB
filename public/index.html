@@ -983,6 +983,7 @@
           <button onclick="loadInvReportes()" style="padding:7px 16px;background:#1a3558;color:#fff;border:none;border-radius:6px;font-size:13px;cursor:pointer;">Buscar</button>
         </div>
         <div id="invr-count" style="font-size:12px;color:#888;margin-bottom:8px;"></div>
+        <div id="invr-scroll-top" style="overflow-x:auto;overflow-y:hidden;height:16px;"><div id="invr-scroll-ghost" style="height:1px;"></div></div>
         <div class="data-table-wrap" id="invr-content"><div class="loading">Cargando...</div></div>
       </div>
       <div class="content-section" id="sec-inv-catalogos"><h2 class="section-title">Inventario — Catálogos</h2><div class="placeholder-card"><div class="icon">📚</div>Próximamente</div></div>
@@ -1025,6 +1026,7 @@
           <button onclick="loadEstatus()" style="padding:7px 16px;background:#1a3558;color:#fff;border:none;border-radius:6px;font-size:13px;cursor:pointer;">Buscar</button>
         </div>
         <div id="est-count" style="font-size:12px;color:#888;margin-bottom:8px;"></div>
+        <div id="est-scroll-top" style="overflow-x:auto;overflow-y:hidden;height:16px;"><div id="est-scroll-ghost" style="height:1px;"></div></div>
         <div class="data-table-wrap" id="est-content"><div class="loading">Cargando...</div></div>
       </div>
       <div class="content-section" id="sec-cont-lista"><h2 class="section-title">Contratos — Lista</h2><div class="placeholder-card"><div class="icon">📝</div>Próximamente</div></div>
@@ -3332,6 +3334,12 @@
         <thead><tr>${cols.map(c => `<th>${c}</th>`).join('')}</tr></thead>
         <tbody>${data.data.map(row => `<tr>${cols.map(c => `<td>${row[c] ?? ''}</td>`).join('')}</tr>`).join('')}</tbody>
       </table>`;
+      // Sync scroll arriba
+      const scrollTop   = document.getElementById('invr-scroll-top');
+      const scrollGhost = document.getElementById('invr-scroll-ghost');
+      scrollGhost.style.width = wrap.scrollWidth + 'px';
+      scrollTop.onscroll = () => { wrap.scrollLeft = scrollTop.scrollLeft; };
+      wrap.onscroll      = () => { scrollTop.scrollLeft = wrap.scrollLeft; };
     } catch (e) {
       count.textContent = '';
       wrap.innerHTML = '<div class="loading">Error: ' + e.message + '</div>';
@@ -3419,7 +3427,7 @@
 
       wrap.innerHTML = `<table class="data-table">
         <thead><tr>
-          <th>Reporte</th><th>Plataforma</th><th>Versión</th><th>Estatus</th>
+          <th>Reporte</th><th>Plataforma</th><th>Versión Est.</th><th>Versión Carga</th><th>Estatus</th>
           <th style="text-align:center;">DOC</th>
           <th style="text-align:center;">PROG</th>
           <th style="text-align:center;">CERT</th>
@@ -3429,6 +3437,7 @@
           <td><strong style="color:#1a3558;">${r.CLAVE_REP ?? '—'}</strong></td>
           <td><span style="font-size:11px;background:#f0f2f5;padding:1px 6px;border-radius:4px;">${r.CLAVE_PLATAFORMA ?? '—'}</span></td>
           <td style="font-size:11px;color:#888;">${r.VERSION ?? '—'}</td>
+          <td style="text-align:center;"><span style="font-size:11px;background:#f0f4ff;color:#1a3558;padding:2px 7px;border-radius:10px;font-family:monospace;">${r.VERSION_CARGA ?? '—'}</span></td>
           <td>${estatusBadge(r.ESTATUS)}</td>
           ${cell3(r.DOCUMENTADO,  r.DOC_FECHA_ESTIMADA,  r.DOC_FECHA_REAL,  r.USER_DOC)}
           ${cell3(r.PROGRAMADO,   r.PROG_FECHA_ESTIMADA, r.PROG_FECHA_REAL,  r.USER_PROG)}
@@ -3437,6 +3446,12 @@
           <td style="font-size:11px;color:#888;">${r.QA_BETA ?? '—'}</td>
         </tr>`).join('')}</tbody>
       </table>`;
+      // Sync scroll arriba
+      const scrollTop  = document.getElementById('est-scroll-top');
+      const scrollGhost = document.getElementById('est-scroll-ghost');
+      scrollGhost.style.width = (wrap.scrollWidth) + 'px';
+      scrollTop.onscroll = () => { wrap.scrollLeft = scrollTop.scrollLeft; };
+      wrap.onscroll      = () => { scrollTop.scrollLeft = wrap.scrollLeft; };
     } catch (e) {
       count.textContent = '';
       wrap.innerHTML = '<div class="loading">Error: ' + e.message + '</div>';

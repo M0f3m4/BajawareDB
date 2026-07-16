@@ -444,14 +444,16 @@ router.get('/estatus-reportes', requireAuth, async (req, res) => {
   try {
     const rows = await query(`
       SELECT TOP 200
-        CLAVE_REP, CLAVE_PLATAFORMA, VERSION, ESTATUS,
-        DOCUMENTADO, DOC_FECHA_ESTIMADA, DOC_FECHA_REAL, USER_DOC,
-        PROGRAMADO,  PROG_FECHA_ESTIMADA, PROG_FECHA_REAL, USER_PROG,
-        CERTIFICADO, CERT_FECHA_ESTIMADA, CERT_FECHA_REAL, USER_CERT,
-        QA_ALPHA, QA_BETA
-      FROM ESTATUS_REPORTE
+        er.CLAVE_REP, er.CLAVE_PLATAFORMA, er.VERSION, er.ESTATUS,
+        er.DOCUMENTADO, er.DOC_FECHA_ESTIMADA, er.DOC_FECHA_REAL, er.USER_DOC,
+        er.PROGRAMADO,  er.PROG_FECHA_ESTIMADA, er.PROG_FECHA_REAL, er.USER_PROG,
+        er.CERTIFICADO, er.CERT_FECHA_ESTIMADA, er.CERT_FECHA_REAL, er.USER_CERT,
+        er.QA_ALPHA, er.QA_BETA,
+        ir.VERSION_CARGA
+      FROM ESTATUS_REPORTE er
+      LEFT JOIN INVENTARIO_REPORTES ir ON ir.CLAVE_REP = er.CLAVE_REP
       ${where}
-      ORDER BY CERT_FECHA_ESTIMADA ASC
+      ORDER BY er.CERT_FECHA_ESTIMADA ASC
     `);
     res.json({ ok: true, total: rows.length, data: rows });
   } catch (err) {
