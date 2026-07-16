@@ -2937,8 +2937,6 @@
     document.getElementById('usuario-nombre').value = '';
     document.getElementById('usuario-rol').value = 'lector';
     document.getElementById('usuario-password').value = '';
-    document.getElementById('usuario-pass-label').textContent = 'Contraseña';
-    document.getElementById('usuario-pass-section').style.display = '';
     document.getElementById('modal-usuario-error').style.display = 'none';
     document.getElementById('modal-usuario').classList.add('open');
   }
@@ -2951,8 +2949,6 @@
     document.getElementById('usuario-nombre').value = nombre;
     document.getElementById('usuario-rol').value = rol;
     document.getElementById('usuario-password').value = '';
-    document.getElementById('usuario-pass-label').textContent = 'Nueva contraseña (dejar vacío para no cambiar)';
-    document.getElementById('usuario-pass-section').style.display = '';
     document.getElementById('modal-usuario-error').style.display = 'none';
     document.getElementById('modal-usuario').classList.add('open');
   }
@@ -2974,16 +2970,10 @@
       errEl.style.display = 'block';
       return;
     }
-    if (!id && !password) {
-      errEl.textContent = 'La contraseña es requerida para nuevos usuarios';
-      errEl.style.display = 'block';
-      return;
-    }
-
     try {
       const url    = id ? `/api/usuarios/${id}` : '/api/usuarios';
       const method = id ? 'PUT' : 'POST';
-      const body   = id ? { nombre, rol } : { username, nombre, rol, password };
+      const body   = id ? { nombre, rol } : { username, nombre, rol };
       const res    = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
