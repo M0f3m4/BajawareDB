@@ -4756,28 +4756,36 @@
     } catch(e) {}
 
     const n = _invPlatValidaciones.length;
-    document.getElementById('inv-plat-count').textContent = `${n} validaciones serán asignadas a la plataforma seleccionada.`;
+    document.getElementById('inv-plat-count').textContent = `${n} validaciones serán asignadas a las plataformas seleccionadas.`;
 
-    // Opciones: una por plataforma + TODAS
+    // Opciones: TODAS (checkbox maestro) + una por plataforma
     const opciones = document.getElementById('inv-plat-opciones');
-    opciones.innerHTML = ['TODAS', ..._invPlataformas].map((p, i) => `
+    opciones.innerHTML = `
+      <label style="display:flex;align-items:center;gap:10px;padding:8px 12px;border:1px solid #1a3558;border-radius:8px;cursor:pointer;font-size:13px;background:#f0f4ff;">
+        <input type="checkbox" id="inv-plat-todas" onchange="invPlatToggleTodas(this.checked)" style="accent-color:#1a3558;width:15px;height:15px;">
+        📋 <strong>TODAS las plataformas</strong>
+      </label>
+      ${_invPlataformas.map(p => `
       <label style="display:flex;align-items:center;gap:10px;padding:8px 12px;border:1px solid #ddd;border-radius:8px;cursor:pointer;font-size:13px;background:#fafafa;">
-        <input type="radio" name="inv-plat-radio" value="${p}" ${i===0?'checked':''} style="accent-color:#1a3558;">
-        ${p === 'TODAS' ? '📋 <strong>TODAS las plataformas</strong>' : p}
-      </label>`).join('');
+        <input type="checkbox" class="inv-plat-cb" value="${p}" style="accent-color:#1a3558;width:15px;height:15px;">
+        ${p}
+      </label>`).join('')}`;
 
     document.getElementById('inv-plat-msg').innerHTML = '';
     document.getElementById('inv-plat-modal').style.display = 'flex';
   }
 
+  function invPlatToggleTodas(checked) {
+    document.querySelectorAll('.inv-plat-cb').forEach(cb => cb.checked = checked);
+  }
+
   async function invPlatConfirmar() {
-    const radio = document.querySelector('input[name="inv-plat-radio"]:checked');
-    if (!radio) {
-      document.getElementById('inv-plat-msg').innerHTML = '<span style="color:#e67e22;">Selecciona una plataforma.</span>';
+    const checked = [...document.querySelectorAll('.inv-plat-cb:checked')].map(cb => cb.value);
+    if (!checked.length) {
+      document.getElementById('inv-plat-msg').innerHTML = '<span style="color:#e67e22;">Selecciona al menos una plataforma.</span>';
       return;
     }
-    const seleccion = radio.value;
-    const plataformas = seleccion === 'TODAS' ? _invPlataformas : [seleccion];
+    const plataformas = checked;
 
     const asignaciones = [];
     for (const v of _invPlatValidaciones) {
