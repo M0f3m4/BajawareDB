@@ -282,6 +282,42 @@ router.get('/clientes/:clave/validaciones', requireAuth, async (req, res) => {
   }
 });
 
+// ── GET versiones de carga para un reporte (para dropdown) ─
+router.get('/estatus-reporte/versiones', requireAuth, async (req, res) => {
+  try {
+    const clave = (req.query.clave_rep || '').trim();
+    if (!clave) return res.json({ ok: true, data: [] });
+    const rows = await query(`
+      SELECT DISTINCT VERSION_CARGA
+      FROM INVENTARIO_REPORTES_HIST
+      WHERE CLAVE_REP=${esc(clave)} AND VERSION_CARGA IS NOT NULL
+      ORDER BY VERSION_CARGA DESC
+    `);
+    res.json({ ok: true, data: rows.map(r => r.VERSION_CARGA) });
+  } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
+});
+
+// ── GET versiones de carga para validaciones de un reporte ─
+router.get('/estatus-validacion/versiones', requireAuth, async (req, res) => {
+  try {
+    const clave = (req.query.clave_rep || '').trim();
+    if (!clave) return res.json({ ok: true, data: [] });
+    const todosRV = await getRVClaves();
+    const matched = todosRV.filter(c =>
+      c === clave || (c.lastIndexOf('_') > 0 && c.slice(0, c.lastIndexOf('_')) === clave)
+    );
+    if (!matched.length) return res.json({ ok: true, data: [] });
+    const inList = matched.map(c => `'${c.replace(/'/g, "''")}'`).join(',');
+    const rows = await query(`
+      SELECT DISTINCT VERSION_CARGA
+      FROM REPORTE_VALIDACION
+      WHERE CLAVE_REP IN (${inList}) AND VERSION_CARGA IS NOT NULL
+      ORDER BY VERSION_CARGA DESC
+    `);
+    res.json({ ok: true, data: rows.map(r => r.VERSION_CARGA) });
+  } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
+});
+
 // ── GET estatus de un reporte ─────────────────────────────
 router.get('/estatus-reporte/:clave', requireAuth, async (req, res) => {
   try {
@@ -854,43 +890,6 @@ router.post('/inventario-validaciones/asignar-plataformas', requireAuth, async (
       }
     }
     res.json({ ok: true, creados, omitidos });
-  } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
-});
-
-// ── GET versiones de carga para un reporte (para dropdown) ─
-router.get('/estatus-reporte/versiones', requireAuth, async (req, res) => {
-  try {
-    const clave = (req.query.clave_rep || '').trim();
-    if (!clave) return res.json({ ok: true, data: [] });
-    const rows = await query(`
-      SELECT DISTINCT VERSION_CARGA
-      FROM INVENTARIO_REPORTES_HIST
-      WHERE CLAVE_REP=${esc(clave)} AND VERSION_CARGA IS NOT NULL
-      ORDER BY VERSION_CARGA DESC
-    `);
-    res.json({ ok: true, data: rows.map(r => r.VERSION_CARGA) });
-  } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
-});
-
-// ── GET versiones de carga para validaciones de un reporte ─
-router.get('/estatus-validacion/versiones', requireAuth, async (req, res) => {
-  try {
-    const clave = (req.query.clave_rep || '').trim();
-    if (!clave) return res.json({ ok: true, data: [] });
-    // Primero expandir el clave_rep base a los CLAVE_REP extendidos en REPORTE_VALIDACION
-    const todosRV = await getRVClaves();
-    const matched = todosRV.filter(c =>
-      c === clave || (c.lastIndexOf('_') > 0 && c.slice(0, c.lastIndexOf('_')) === clave)
-    );
-    if (!matched.length) return res.json({ ok: true, data: [] });
-    const inList = matched.map(c => `'${c.replace(/'/g, "''")}'`).join(',');
-    const rows = await query(`
-      SELECT DISTINCT VERSION_CARGA
-      FROM REPORTE_VALIDACION
-      WHERE CLAVE_REP IN (${inList}) AND VERSION_CARGA IS NOT NULL
-      ORDER BY VERSION_CARGA DESC
-    `);
-    res.json({ ok: true, data: rows.map(r => r.VERSION_CARGA) });
   } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
 });
 
