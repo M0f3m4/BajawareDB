@@ -612,11 +612,13 @@ router.post('/inventario-reportes/upload', requireAuth, upload.single('archivo')
     const rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
     let insertados = 0, actualizados = 0, errores = 0;
     for (const r of rows) {
-      const clave = String(r.CLAVE_REP || '').trim();
+      const clave   = String(r.CLAVE_REP      || '').trim();
+      const version = String(r.VERSION_CARGA  || '1.0.0').trim();
       if (!clave) continue;
       try {
-        const existe = await query(`SELECT 1 FROM INVENTARIO_REPORTES WHERE CLAVE_REP=${esc(clave)}`);
-        if (!existe.length) {
+        const existeInv = await query(`SELECT VERSION_CARGA FROM INVENTARIO_REPORTES WHERE CLAVE_REP=${esc(clave)}`);
+        if (!existeInv.length) {
+          // Reporte nuevo — INSERT
           await query(`
             INSERT INTO INVENTARIO_REPORTES (
               CLAVE_REP, CLAVE_PAIS, CLAVE_ENTIDADREGULADA, CLAVE_REG,
@@ -637,20 +639,25 @@ router.post('/inventario-reportes/upload', requireAuth, upload.single('archivo')
           `);
           insertados++;
         } else {
-          await query(`
-            UPDATE INVENTARIO_REPORTES SET
-              CLAVE_PAIS=${esc(r.CLAVE_PAIS)}, CLAVE_ENTIDADREGULADA=${esc(r.CLAVE_ENTIDADREGULADA)},
-              CLAVE_REG=${esc(r.CLAVE_REG)}, CLAVE_SERIE=${esc(r.CLAVE_SERIE)},
-              CLAVE_GRUPO=${esc(r.CLAVE_GRUPO)}, REPORTE=${esc(r.REPORTE)},
-              CLAVE_SECCION_REP=${esc(r.CLAVE_SECCION_REP)}, CLAVE_VERSION_REPORTE=${esc(r.CLAVE_VERSION_REPORTE)},
-              CLAVE_PERIODO=${esc(r.CLAVE_PERIODO)}, DESCRIPCION_ESP=${esc(r.DESCRIPCION_ESP)},
-              CLAVE_REGULACION_REP=${esc(r.CLAVE_REGULACION_REP)}, CLAVE_REP_GENERAL=${esc(r.CLAVE_REP_GENERAL)},
-              VERSION_CARGA=${esc(version)}, FECHA_ACTUALIZADA=GETDATE()
-            WHERE CLAVE_REP=${esc(clave)}
-          `);
-          actualizados++;
+          const versionActual = existeInv[0].VERSION_CARGA;
+          if (versionActual !== version) {
+            // VERSION_CARGA cambió — UPDATE inventario
+            await query(`
+              UPDATE INVENTARIO_REPORTES SET
+                CLAVE_PAIS=${esc(r.CLAVE_PAIS)}, CLAVE_ENTIDADREGULADA=${esc(r.CLAVE_ENTIDADREGULADA)},
+                CLAVE_REG=${esc(r.CLAVE_REG)}, CLAVE_SERIE=${esc(r.CLAVE_SERIE)},
+                CLAVE_GRUPO=${esc(r.CLAVE_GRUPO)}, REPORTE=${esc(r.REPORTE)},
+                CLAVE_SECCION_REP=${esc(r.CLAVE_SECCION_REP)}, CLAVE_VERSION_REPORTE=${esc(r.CLAVE_VERSION_REPORTE)},
+                CLAVE_PERIODO=${esc(r.CLAVE_PERIODO)}, DESCRIPCION_ESP=${esc(r.DESCRIPCION_ESP)},
+                CLAVE_REGULACION_REP=${esc(r.CLAVE_REGULACION_REP)}, CLAVE_REP_GENERAL=${esc(r.CLAVE_REP_GENERAL)},
+                VERSION_CARGA=${esc(version)}, FECHA_ACTUALIZADA=GETDATE()
+              WHERE CLAVE_REP=${esc(clave)}
+            `);
+            actualizados++;
+          }
+          // Si misma versión, no se toca inventario
         }
-        // Registrar historial en INVENTARIO_REPORTES_HIST
+        // Registrar en hist y versiones solo si es nueva combinación CLAVE_REP + VERSION_CARGA
         try {
           const existeHist = await query(`SELECT 1 FROM INVENTARIO_REPORTES_HIST WHERE CLAVE_REP=${esc(clave)} AND VERSION_CARGA=${esc(version)}`);
           if (!existeHist.length) {
@@ -667,18 +674,12 @@ router.post('/inventario-reportes/upload', requireAuth, upload.single('archivo')
                  ${esc(r.CARACTERISTICAS)}, ${esc(r.CLAVE_REGULACION_REP)}, ${esc(r.CLAVE_REP_GENERAL)},
                  ${r.FECHA_REGULACION ? esc(r.FECHA_REGULACION) : 'NULL'})
             `);
+            await query(`
+              INSERT INTO INVENTARIO_VERSIONES (TIPO_OBJETO, CLAVE_OBJ, VERSION, REGULACION, TIPO_VERSION, DESCRIPCION, ESTATUS, USUARIO)
+              VALUES ('REPORTE', ${esc(clave)}, ${esc(version)}, ${esc(regulacion)}, ${esc(tipo_version)}, ${esc(descripcion)}, 'IDENTIFICADO', ${esc(usuario)})
+            `);
           }
         } catch(e3) { console.warn('[inv-rep-hist] error:', e3.message); }
-        // Registrar versión en INVENTARIO_VERSIONES
-        try {
-          if (force) {
-            await query(`DELETE FROM INVENTARIO_VERSIONES WHERE TIPO_OBJETO='REPORTE' AND CLAVE_OBJ=${esc(clave)} AND VERSION=${esc(version)}`);
-          }
-          await query(`
-            INSERT INTO INVENTARIO_VERSIONES (TIPO_OBJETO, CLAVE_OBJ, VERSION, REGULACION, TIPO_VERSION, DESCRIPCION, ESTATUS, USUARIO)
-            VALUES ('REPORTE', ${esc(clave)}, ${esc(version)}, ${esc(regulacion)}, ${esc(tipo_version)}, ${esc(descripcion)}, 'IDENTIFICADO', ${esc(usuario)})
-          `);
-        } catch(e3) { console.warn('[inv-versiones-rep] error:', e3.message); }
       } catch(e2) { console.error('[upload-rep] fila error:', e2.message); errores++; }
     }
     res.json({ ok: true, insertados, actualizados, errores });
