@@ -4615,15 +4615,20 @@
     const colIdxMap = {};
     for (let c = ref.s.c; c <= ref.e.c; c++) {
       const hCell = ws2[XLSX.utils.encode_cell({r: ref.s.r, c})];
-      if (hCell && (hCell.v === colEntidad || hCell.v === colObjeto)) colIdxMap[hCell.v] = c;
+      if (hCell && (hCell.v === colEntidad || hCell.v === colObjeto || hCell.v === 'VERSION_CARGA')) colIdxMap[hCell.v] = c;
     }
     const clavesSet = new Set();
     const objetosSet = new Set();
+    const paresRep = []; // pares {clave_rep, version} para reportes
     for (let r = ref.s.r + 1; r <= ref.e.r; r++) {
-      const ce = colIdxMap[colEntidad] !== undefined ? ws2[XLSX.utils.encode_cell({r, c: colIdxMap[colEntidad]})] : null;
-      const co = colIdxMap[colObjeto]  !== undefined ? ws2[XLSX.utils.encode_cell({r, c: colIdxMap[colObjeto]})]  : null;
+      const ce  = colIdxMap[colEntidad]     !== undefined ? ws2[XLSX.utils.encode_cell({r, c: colIdxMap[colEntidad]})]     : null;
+      const co  = colIdxMap[colObjeto]      !== undefined ? ws2[XLSX.utils.encode_cell({r, c: colIdxMap[colObjeto]})]      : null;
+      const cv  = colIdxMap['VERSION_CARGA'] !== undefined ? ws2[XLSX.utils.encode_cell({r, c: colIdxMap['VERSION_CARGA']})] : null;
       if (ce && ce.v) clavesSet.add(String(ce.v).trim());
-      if (co && co.v) objetosSet.add(String(co.v).trim());
+      if (co && co.v) {
+        objetosSet.add(String(co.v).trim());
+        if (isRep) paresRep.push({ clave_rep: String(co.v).trim(), version: cv ? String(cv.v).trim() : '1.0.0' });
+      }
     }
     btn.textContent = '📤 Verificar y cargar'; btn.disabled = false;
 
@@ -4632,7 +4637,7 @@
       ? '/api/contratos/inventario-reportes/check'
       : '/api/contratos/inventario-validaciones/check';
     const checkBody = isRep
-      ? { version, claves_entidad: [...clavesSet], claves_rep: [...objetosSet] }
+      ? { pares: paresRep, claves_entidad: [...clavesSet] }
       : { version, claves_rep: [...clavesSet], claves_validacion: [...objetosSet] };
 
     let check;

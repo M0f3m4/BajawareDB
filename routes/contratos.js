@@ -579,12 +579,14 @@ router.get('/buscar-validacion', requireAuth, async (req, res) => {
 // ── POST check inventario reportes ────────────────────────
 router.post('/inventario-reportes/check', requireAuth, async (req, res) => {
   try {
-    const { version, claves_entidad = [], claves_rep = [] } = req.body;
+    const { pares = [], claves_entidad = [] } = req.body;
+    // Contar exactamente los pares (CLAVE_REP, VERSION_CARGA) que ya existen en hist
     let version_count = 0;
-    if (claves_rep.length) {
-      const vals = claves_rep.map(c => `(${esc(c)})`).join(',');
-      const vCheck = await query(`SELECT COUNT(*) AS cnt FROM INVENTARIO_VERSIONES WHERE TIPO_OBJETO='REPORTE' AND VERSION=${esc(version)} AND CLAVE_OBJ IN (SELECT c FROM (VALUES ${vals}) AS t(c))`);
-      version_count = vCheck[0].cnt;
+    if (pares.length) {
+      for (const p of pares) {
+        const existe = await query(`SELECT 1 FROM INVENTARIO_REPORTES_HIST WHERE CLAVE_REP=${esc(p.clave_rep)} AND VERSION_CARGA=${esc(p.version)}`);
+        if (existe.length) version_count++;
+      }
     }
     let invalidas = [];
     if (claves_entidad.length) {
