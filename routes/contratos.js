@@ -672,14 +672,20 @@ router.post('/inventario-validaciones/check', requireAuth, async (req, res) => {
     const { version, claves_rep = [], claves_validacion = [] } = req.body;
     let version_count = 0;
     if (claves_validacion.length) {
-      const vals = claves_validacion.map(c => `(${esc(c)})`).join(',');
-      const vCheck = await query(`SELECT COUNT(*) AS cnt FROM INVENTARIO_VERSIONES WHERE TIPO_OBJETO='VALIDACION' AND VERSION=${esc(version)} AND CLAVE_OBJ IN (SELECT c FROM (VALUES ${vals}) AS t(c))`);
+      // Contar exactamente las CLAVE_VALIDACION del Excel que ya tienen esa versión
+      const valsVal = claves_validacion.map(c => `(${esc(c)})`).join(',');
+      const vCheck = await query(`
+        SELECT COUNT(*) AS cnt FROM INVENTARIO_VERSIONES
+        WHERE TIPO_OBJETO='VALIDACION'
+          AND VERSION=${esc(version)}
+          AND CLAVE_OBJ IN (SELECT c FROM (VALUES ${valsVal}) AS t(c))
+      `);
       version_count = vCheck[0].cnt;
     }
     let invalidas = [];
     if (claves_rep.length) {
       const vals = claves_rep.map(c => `(${esc(c)})`).join(',');
-      const rows = await query(`SELECT t.c FROM (VALUES ${vals}) AS t(c) WHERE NOT EXISTS (SELECT 1 FROM INVENTARIO_REPORTES WHERE CLAVE_REP = t.c)`);
+      const rows = await query(`SELECT t.c FROM (VALUES ${vals}) AS t(c) WHERE NOT EXISTS (SELECT 1 FROM INVENTARIO_REPORTES WHERE LTRIM(RTRIM(CLAVE_REP)) = LTRIM(RTRIM(t.c)))`);
       invalidas = rows.map(r => r.c);
     }
     res.json({ ok: true, version_existe: version_count > 0, version_count, claves_rep_invalidas: invalidas });
