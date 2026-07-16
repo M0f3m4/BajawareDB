@@ -407,6 +407,7 @@ router.get('/inventario/reportes', requireAuth, async (req, res) => {
         ir.CLAVE_REP, ir.REPORTE, ir.CLAVE_ENTIDADREGULADA, ir.CLAVE_REG,
         ir.CLAVE_GRUPO, ir.CLAVE_PERIODO, ir.CLAVE_VERSION_REPORTE,
         ir.DESCRIPCION_ESP, ir.VIGENTE, ir.FECHA_ACTUALIZADA,
+        ir.VERSION_CARGA,
         r.REGULADOR AS REGULADOR_NOMBRE
       FROM INVENTARIO_REPORTES ir
       LEFT JOIN CAT_REGULADORES r ON r.CLAVE_REG = ir.CLAVE_REG
@@ -438,9 +439,9 @@ router.get('/inventario/filtros', requireAuth, async (req, res) => {
 router.get('/estatus-reportes', requireAuth, async (req, res) => {
   const { plataforma, estatus, texto } = req.query;
   let where = 'WHERE 1=1';
-  if (plataforma) where += ` AND CLAVE_PLATAFORMA = '${plataforma.replace(/'/g,"''")}'`;
-  if (estatus)    where += ` AND ESTATUS = '${estatus.replace(/'/g,"''")}'`;
-  if (texto)      where += ` AND CLAVE_REP LIKE '%${texto.replace(/'/g,"''")}%'`;
+  if (plataforma) where += ` AND er.CLAVE_PLATAFORMA = '${plataforma.replace(/'/g,"''")}'`;
+  if (estatus)    where += ` AND er.ESTATUS = '${estatus.replace(/'/g,"''")}'`;
+  if (texto)      where += ` AND er.CLAVE_REP LIKE '%${texto.replace(/'/g,"''")}%'`;
   try {
     const rows = await query(`
       SELECT TOP 200
