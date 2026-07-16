@@ -513,6 +513,7 @@
       <div class="sub-menu" id="sub-inv">
         <div class="sub-item" onclick="showSection('inv-layouts')">Layouts</div>
         <div class="sub-item" onclick="showSection('inv-reportes')">Inventario</div>
+        <div class="sub-item" onclick="showSection('inv-validaciones')">Validaciones</div>
         <div class="sub-item" onclick="showSection('inv-estatus')">Estatus Reportes</div>
         <div class="sub-item" onclick="showSection('inv-catalogos')">Catálogos</div>
       </div>
@@ -985,6 +986,29 @@
         <div class="data-table-wrap" id="invr-content"><div class="loading">Cargando...</div></div>
       </div>
       <div class="content-section" id="sec-inv-catalogos"><h2 class="section-title">Inventario — Catálogos</h2><div class="placeholder-card"><div class="icon">📚</div>Próximamente</div></div>
+
+      <!-- Inventario de Validaciones -->
+      <div class="content-section" id="sec-inv-validaciones">
+        <h2 class="section-title">Inventario — Validaciones</h2>
+        <div class="toolbar" style="flex-wrap:wrap;gap:10px;margin-bottom:16px;align-items:flex-end;">
+          <div>
+            <label style="font-size:11px;font-weight:600;color:#555;display:block;margin-bottom:4px;">Entidad regulada</label>
+            <select id="invv-entidad" onchange="invvOnEntidadChange()"
+              style="padding:7px 12px;border:1px solid #ddd;border-radius:6px;font-size:13px;min-width:180px;">
+              <option value="">— Selecciona entidad —</option>
+            </select>
+          </div>
+          <div>
+            <label style="font-size:11px;font-weight:600;color:#555;display:block;margin-bottom:4px;">Reporte</label>
+            <select id="invv-rep" onchange="invvCargar()" disabled
+              style="padding:7px 12px;border:1px solid #ddd;border-radius:6px;font-size:13px;min-width:200px;">
+              <option value="">— Selecciona reporte —</option>
+            </select>
+          </div>
+          <span id="invv-badge" style="font-size:11px;background:#e8f0fe;color:#1a3558;padding:3px 10px;border-radius:10px;font-weight:600;display:none;"></span>
+        </div>
+        <div id="invv-content"><p style="color:#aaa;font-size:13px;">Selecciona una entidad y un reporte.</p></div>
+      </div>
 
       <!-- Estatus de Reportes -->
       <div class="content-section" id="sec-inv-estatus">
@@ -4035,6 +4059,91 @@
   }
 
 
+  // ── Inventario de Validaciones ────────────────────────────
+  async function initInvValidaciones() {
+    const sel = document.getElementById('invv-entidad');
+    if (sel.options.length > 1) return;
+    try {
+      const r = await fetch('/api/contratos/inventario-validaciones/entidades').then(x => x.json());
+      if (r.ok) r.data.forEach(e => {
+        const o = document.createElement('option');
+        o.value = o.textContent = e;
+        sel.appendChild(o);
+      });
+    } catch(e) {}
+  }
+
+  async function invvOnEntidadChange() {
+    const entidad = document.getElementById('invv-entidad').value;
+    const selRep  = document.getElementById('invv-rep');
+    const wrap    = document.getElementById('invv-content');
+    const badge   = document.getElementById('invv-badge');
+    selRep.innerHTML = '<option value="">— Selecciona reporte —</option>';
+    selRep.disabled = true;
+    badge.style.display = 'none';
+    wrap.innerHTML = '<p style="color:#aaa;font-size:13px;">Selecciona un reporte.</p>';
+    if (!entidad) return;
+    try {
+      const r = await fetch(`/api/contratos/inventario-validaciones/reportes-por-entidad?entidad=${encodeURIComponent(entidad)}`).then(x => x.json());
+      if (r.ok) {
+        r.data.forEach(rep => {
+          const o = document.createElement('option');
+          o.value = o.textContent = rep;
+          selRep.appendChild(o);
+        });
+        selRep.disabled = false;
+      }
+    } catch(e) {}
+  }
+
+  async function invvCargar() {
+    const entidad = document.getElementById('invv-entidad').value;
+    const rep     = document.getElementById('invv-rep').value;
+    const wrap    = document.getElementById('invv-content');
+    const badge   = document.getElementById('invv-badge');
+    if (!entidad || !rep) return;
+    wrap.innerHTML = '<div class="loading">Cargando...</div>';
+    badge.style.display = 'none';
+    try {
+      const r = await fetch(`/api/contratos/inventario-validaciones/lista?entidad=${encodeURIComponent(entidad)}&rep=${encodeURIComponent(rep)}`).then(x => x.json());
+      if (!r.ok) { wrap.innerHTML = `<p style="color:#e74c3c;">Error: ${r.message}</p>`; return; }
+      const data = r.data || [];
+      // Agrupar por validación (puede haber una fila por plataforma)
+      const mapaVal = {};
+      for (const row of data) {
+        if (!mapaVal[row.CLAVE_VALIDACION]) {
+          mapaVal[row.CLAVE_VALIDACION] = { ...row, plataformas: [] };
+        }
+        if (row.CLAVE_PLATAFORMA) mapaVal[row.CLAVE_VALIDACION].plataformas.push(row.CLAVE_PLATAFORMA);
+      }
+      const vals = Object.values(mapaVal);
+      badge.textContent = `${vals.length} validaciones`;
+      badge.style.display = 'inline-block';
+      if (!vals.length) { wrap.innerHTML = '<p style="color:#aaa;font-size:13px;">Sin validaciones.</p>'; return; }
+      wrap.innerHTML = `
+        <div class="data-table-wrap">
+          <table class="data-table">
+            <thead><tr>
+              <th>Clave validación</th>
+              <th>Descripción</th>
+              <th>Tipo</th>
+              <th>Versión</th>
+              <th>Plataformas</th>
+            </tr></thead>
+            <tbody>
+              ${vals.map(v => `<tr>
+                <td style="font-family:monospace;font-size:12px;font-weight:600;color:#1a3558;">${v.CLAVE_VALIDACION}</td>
+                <td style="font-size:12px;">${v.DESCRIPCION_VALIDACION || '<span style="color:#bbb;font-style:italic;">—</span>'}</td>
+                <td style="font-size:12px;">${v.TIPO_VALIDACION || '—'}</td>
+                <td style="text-align:center;"><span style="font-size:11px;background:#f0f4ff;color:#1a3558;padding:2px 7px;border-radius:10px;font-family:monospace;">${v.VERSION_CARGA || '—'}</span></td>
+                <td style="font-size:11px;">${v.plataformas.length ? v.plataformas.map(p => `<span style="background:#e8f0fe;color:#1a3558;padding:2px 6px;border-radius:4px;margin-right:3px;">${p}</span>`).join('') : '<span style="color:#bbb;">Sin asignar</span>'}</td>
+              </tr>`).join('')}
+            </tbody>
+          </table>
+        </div>`;
+    } catch(e) { wrap.innerHTML = '<p style="color:#e74c3c;">Error: ' + e.message + '</p>'; }
+  }
+
   // ── Validaciones por Cliente ──────────────────────────────
   let vcliData = [];
 
@@ -4960,6 +5069,7 @@
     'sofipo-reportes':  loadSofipoReportes,
     'sofipo-cruce':         () => {},
     'bc-val-cliente-view':  () => initValCliente(),
+    'inv-validaciones':     () => initInvValidaciones(),
   };
   const loaded = {};
 

@@ -827,6 +827,48 @@ router.post('/inventario-validaciones/asignar-plataformas', requireAuth, async (
   } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
 });
 
+// ── GET entidades del inventario de validaciones ──────────
+router.get('/inventario-validaciones/entidades', requireAuth, async (req, res) => {
+  try {
+    const rows = await query(`SELECT DISTINCT CLAVE_ENTIDADREGULADA FROM INVENTARIO_VALIDACIONES WHERE CLAVE_ENTIDADREGULADA IS NOT NULL ORDER BY CLAVE_ENTIDADREGULADA`);
+    res.json({ ok: true, data: rows.map(r => r.CLAVE_ENTIDADREGULADA) });
+  } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
+});
+
+// ── GET reportes del inventario filtrados por entidad ─────
+router.get('/inventario-validaciones/reportes-por-entidad', requireAuth, async (req, res) => {
+  try {
+    const entidad = (req.query.entidad || '').trim();
+    const w = entidad ? `WHERE CLAVE_ENTIDADREGULADA=${esc(entidad)} AND CLAVE_REP IS NOT NULL` : `WHERE CLAVE_REP IS NOT NULL`;
+    const rows = await query(`SELECT DISTINCT CLAVE_REP FROM INVENTARIO_VALIDACIONES ${w} ORDER BY CLAVE_REP`);
+    res.json({ ok: true, data: rows.map(r => r.CLAVE_REP) });
+  } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
+});
+
+// ── GET validaciones del inventario por entidad + reporte ─
+router.get('/inventario-validaciones/lista', requireAuth, async (req, res) => {
+  try {
+    const entidad = (req.query.entidad || '').trim();
+    const rep     = (req.query.rep || '').trim();
+    const w = [
+      entidad ? `iv.CLAVE_ENTIDADREGULADA=${esc(entidad)}` : '',
+      rep     ? `iv.CLAVE_REP=${esc(rep)}` : ''
+    ].filter(Boolean).join(' AND ');
+    const rows = await query(`
+      SELECT
+        iv.CLAVE_VALIDACION, iv.CLAVE_REP, iv.CLAVE_ENTIDADREGULADA,
+        iv.CLAVE_REG, iv.DESCRIPCION_VALIDACION, iv.TIPO_VALIDACION,
+        iv.TIPO_VALIDACION_CALC, iv.VERSION_CARGA,
+        rv.CLAVE_PLATAFORMA, rv.ESTATUS, rv.DOCUMENTADO, rv.PROGRAMADO, rv.CERTIFICADO
+      FROM INVENTARIO_VALIDACIONES iv
+      LEFT JOIN REPORTE_VALIDACION rv ON rv.CLAVE_VALIDACION = iv.CLAVE_VALIDACION
+      ${w ? 'WHERE ' + w : ''}
+      ORDER BY iv.CLAVE_VALIDACION, rv.CLAVE_PLATAFORMA
+    `);
+    res.json({ ok: true, data: rows });
+  } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
+});
+
 // ── POST carga Excel contratos (2 hojas) ──────────────────
 router.post('/contratos/upload', requireAuth, upload.single('archivo'), async (req, res) => {
   if (!req.file) return res.status(400).json({ ok: false, message: 'No se recibió archivo' });
