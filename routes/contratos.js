@@ -650,6 +650,25 @@ router.post('/inventario-reportes/upload', requireAuth, upload.single('archivo')
           `);
           actualizados++;
         }
+        // Registrar historial en INVENTARIO_REPORTES_HIST
+        try {
+          const existeHist = await query(`SELECT 1 FROM INVENTARIO_REPORTES_HIST WHERE CLAVE_REP=${esc(clave)} AND VERSION_CARGA=${esc(version)}`);
+          if (!existeHist.length) {
+            await query(`
+              INSERT INTO INVENTARIO_REPORTES_HIST
+                (CLAVE_REP, VERSION_CARGA, CLAVE_PAIS, CLAVE_ENTIDADREGULADA, CLAVE_REG,
+                 CLAVE_SERIE, SUBSERIE, CLAVE_GRUPO, REPORTE, CLAVE_SECCION_REP,
+                 CLAVE_VERSION_REPORTE, CLAVE_PERIODO, DESCRIPCION_ESP, CLAVE_FECHA_ENT_REP,
+                 CARACTERISTICAS, CLAVE_REGULACION_REP, CLAVE_REP_GENERAL, FECHA_REGULACION)
+              VALUES
+                (${esc(clave)}, ${esc(version)}, ${esc(r.CLAVE_PAIS)}, ${esc(r.CLAVE_ENTIDADREGULADA)}, ${esc(r.CLAVE_REG)},
+                 ${esc(r.CLAVE_SERIE)}, ${esc(r.SUBSERIE)}, ${esc(r.CLAVE_GRUPO)}, ${esc(r.REPORTE)}, ${esc(r.CLAVE_SECCION_REP)},
+                 ${esc(r.CLAVE_VERSION_REPORTE)}, ${esc(r.CLAVE_PERIODO)}, ${esc(r.DESCRIPCION_ESP)}, ${esc(r.CLAVE_FECHA_ENT_REP)},
+                 ${esc(r.CARACTERISTICAS)}, ${esc(r.CLAVE_REGULACION_REP)}, ${esc(r.CLAVE_REP_GENERAL)},
+                 ${r.FECHA_REGULACION ? esc(r.FECHA_REGULACION) : 'NULL'})
+            `);
+          }
+        } catch(e3) { console.warn('[inv-rep-hist] error:', e3.message); }
         // Registrar versión en INVENTARIO_VERSIONES
         try {
           if (force) {
