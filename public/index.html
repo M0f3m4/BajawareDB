@@ -1153,6 +1153,7 @@
             <div>
               <label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px;">Clave Reporte</label>
               <input id="upd-rep-clave" type="text" placeholder="Ej. MX_BM_CUP_01_21"
+                oninput="updRepCargarVersiones()"
                 style="width:100%;padding:7px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;">
             </div>
             <div>
@@ -1168,13 +1169,20 @@
               </select>
             </div>
           </div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;">
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin-bottom:14px;">
             <div>
               <label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px;">Nueva Etapa</label>
               <select id="upd-rep-etapa" style="width:100%;padding:7px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;">
                 <option value="DOCUMENTADO">DOCUMENTADO</option>
                 <option value="PROGRAMADO">PROGRAMADO</option>
                 <option value="CERTIFICADO">CERTIFICADO</option>
+              </select>
+            </div>
+            <div>
+              <label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px;">Versión de Carga</label>
+              <select id="upd-rep-version"
+                style="width:100%;padding:7px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;box-sizing:border-box;">
+                <option value="">— Todas —</option>
               </select>
             </div>
             <div>
@@ -1250,6 +1258,13 @@
                   <option value="DOCUMENTADO">DOCUMENTADO</option>
                   <option value="PROGRAMADO">PROGRAMADO</option>
                   <option value="CERTIFICADO">CERTIFICADO</option>
+                </select>
+              </div>
+              <div>
+                <label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px;">Versión de Carga</label>
+                <select id="upd-val-version"
+                  style="padding:7px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;min-width:120px;">
+                  <option value="">— Todas —</option>
                 </select>
               </div>
               <div>
@@ -4339,6 +4354,7 @@
     showSection('bc-actualizar-rep');
     document.getElementById('upd-rep-clave').value = clave;
     document.getElementById('upd-rep-plataforma').value = plataforma;
+    updRepCargarVersiones();
   }
 
   let _uvQuick = {};
@@ -4389,6 +4405,7 @@
     const clave_rep       = document.getElementById('upd-rep-clave').value.trim();
     const clave_plataforma= document.getElementById('upd-rep-plataforma').value.trim();
     const etapa           = document.getElementById('upd-rep-etapa').value;
+    const version         = document.getElementById('upd-rep-version').value.trim();
     const fecha           = document.getElementById('upd-rep-fecha').value;
     const msg             = document.getElementById('upd-rep-msg');
     if (!clave_rep || !clave_plataforma) { msg.innerHTML = '<span style="color:#e74c3c;">Completa clave y plataforma.</span>'; return; }
@@ -4397,7 +4414,7 @@
       const r = await fetch('/api/contratos/estatus-reporte', {
         method: 'PUT',
         headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({ clave_rep, clave_plataforma, etapa, fecha, desmarcar })
+        body: JSON.stringify({ clave_rep, clave_plataforma, etapa, fecha, desmarcar, version })
       }).then(x => x.json());
       const accion = desmarcar ? 'desmarcado' : 'marcado';
       msg.innerHTML = r.ok
@@ -4466,6 +4483,8 @@
     if (!plat && _uvData[0]?.CLAVE_PLATAFORMA) {
       document.getElementById('upd-val-plataforma').value = _uvData[0].CLAVE_PLATAFORMA;
     }
+    // cargar versiones disponibles para este reporte
+    updValCargarVersiones(rep);
     uvRenderTabla();
   }
 
@@ -4517,12 +4536,13 @@
     const claves    = cbs.map(cb => cb.dataset.clave);
     const clave_rep = cbs[0].dataset.rep;
     const etapa     = document.getElementById('upd-val-etapa').value;
+    const version   = document.getElementById('upd-val-version').value.trim();
     const fecha     = document.getElementById('upd-val-fecha').value;
     msg.innerHTML   = `Actualizando ${claves.length} validaciones...`;
     try {
       const r = await fetch('/api/contratos/estatus-validacion-bulk', {
         method: 'PUT', headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({ claves, clave_rep, clave_plataforma, etapa, fecha, desmarcar })
+        body: JSON.stringify({ claves, clave_rep, clave_plataforma, etapa, fecha, desmarcar, version })
       }).then(x=>x.json());
       if (r.ok) {
         msg.innerHTML = `<span style="color:#27ae60;">✅ ${r.updated} validaciones ${desmarcar?'desmarcadas':'marcadas'} como ${etapa}.</span>`;
@@ -4539,6 +4559,35 @@
       document.getElementById('uv-sugg') && (document.getElementById('uv-sugg').style.display='none');
   });
 
+  let _updRepVerTimer;
+  async function updRepCargarVersiones() {
+    clearTimeout(_updRepVerTimer);
+    _updRepVerTimer = setTimeout(async () => {
+      const clave = document.getElementById('upd-rep-clave').value.trim();
+      const sel   = document.getElementById('upd-rep-version');
+      sel.innerHTML = '<option value="">— Todas —</option>';
+      if (!clave || clave.length < 3) return;
+      try {
+        const r = await fetch('/api/contratos/estatus-reporte/versiones?clave_rep=' + encodeURIComponent(clave)).then(x => x.json());
+        (r.data || []).forEach(v => {
+          const o = document.createElement('option'); o.value = v; o.textContent = v; sel.appendChild(o);
+        });
+      } catch(e) {}
+    }, 350);
+  }
+
+  async function updValCargarVersiones(clave_rep) {
+    const sel = document.getElementById('upd-val-version');
+    sel.innerHTML = '<option value="">— Todas —</option>';
+    if (!clave_rep) return;
+    try {
+      const r = await fetch('/api/contratos/estatus-validacion/versiones?clave_rep=' + encodeURIComponent(clave_rep)).then(x => x.json());
+      (r.data || []).forEach(v => {
+        const o = document.createElement('option'); o.value = v; o.textContent = v; sel.appendChild(o);
+      });
+    } catch(e) {}
+  }
+
   let updRepTimer;
   async function buscarReporteUpd() {
     clearTimeout(updRepTimer);
@@ -4550,7 +4599,7 @@
         const r = await fetch('/api/inventario/reportes?q=' + encodeURIComponent(q)).then(x => x.json());
         const data = r.data || [];
         wrap.innerHTML = data.slice(0,10).map(rep => `
-          <div onclick="document.getElementById('upd-rep-clave').value='${rep.CLAVE_REP}'"
+          <div onclick="document.getElementById('upd-rep-clave').value='${rep.CLAVE_REP}';updRepCargarVersiones();"
             style="padding:5px 8px;cursor:pointer;border-bottom:1px solid #f0f0f0;hover:background:#f8f9fa;">
             <strong>${rep.CLAVE_REP}</strong> — <span style="color:#888;">${rep.DESCRIPCION_ESP||''}</span>
           </div>`).join('') || '<div style="color:#aaa;padding:5px;">Sin resultados.</div>';

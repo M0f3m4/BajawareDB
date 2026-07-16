@@ -369,9 +369,10 @@ router.get('/bitacora', requireAuth, async (req, res) => {
 // etapa: 'DOCUMENTADO' | 'PROGRAMADO' | 'CERTIFICADO'
 router.put('/estatus-reporte', requireAuth, async (req, res) => {
   try {
-    const { clave_rep, clave_plataforma, etapa, fecha, desmarcar } = req.body;
-    const usuario  = req.session.user?.username || 'sistema';
-    const fechaVal = fecha ? esc(fecha) : 'GETDATE()';
+    const { clave_rep, clave_plataforma, etapa, fecha, desmarcar, version } = req.body;
+    const usuario       = req.session.user?.username || 'sistema';
+    const fechaVal      = fecha ? esc(fecha) : 'GETDATE()';
+    const versionFilter = version ? ` AND VERSION_CARGA=${esc(version)}` : '';
 
     // Cascada MARCAR:    CERT→doc+prog+cert | PROG→doc+prog | DOC→doc
     // Cascada DESMARCAR: DOC→los3           | PROG→prog+cert | CERT→cert
@@ -392,7 +393,7 @@ router.put('/estatus-reporte', requireAuth, async (req, res) => {
 
     const existe = await query(`
       SELECT 1 FROM ESTATUS_REPORTE
-      WHERE CLAVE_REP_GENERAL=${esc(clave_rep)} AND CLAVE_PLATAFORMA=${esc(clave_plataforma)}
+      WHERE CLAVE_REP_GENERAL=${esc(clave_rep)} AND CLAVE_PLATAFORMA=${esc(clave_plataforma)}${versionFilter}
     `);
 
     if (existe.length) {
@@ -400,15 +401,15 @@ router.put('/estatus-reporte', requireAuth, async (req, res) => {
         UPDATE ESTATUS_REPORTE SET
           DOCUMENTADO=${docVal}, PROGRAMADO=${progVal}, CERTIFICADO=${certVal},
           ESTATUS=${esc(nuevoEstatus)}
-        WHERE CLAVE_REP_GENERAL=${esc(clave_rep)} AND CLAVE_PLATAFORMA=${esc(clave_plataforma)}
+        WHERE CLAVE_REP_GENERAL=${esc(clave_rep)} AND CLAVE_PLATAFORMA=${esc(clave_plataforma)}${versionFilter}
       `);
     } else {
       await query(`
         INSERT INTO ESTATUS_REPORTE
-          (CLAVE_REP, CLAVE_REP_GENERAL, CLAVE_PLATAFORMA, VERSION,
+          (CLAVE_REP, CLAVE_REP_GENERAL, CLAVE_PLATAFORMA, VERSION, VERSION_CARGA,
            DOCUMENTADO, PROGRAMADO, CERTIFICADO, ESTATUS)
         VALUES
-          (${esc(clave_rep)}, ${esc(clave_rep)}, ${esc(clave_plataforma)}, '00',
+          (${esc(clave_rep)}, ${esc(clave_rep)}, ${esc(clave_plataforma)}, '00', ${esc(version || null)},
            ${docVal}, ${progVal}, ${certVal}, ${esc(nuevoEstatus)})
       `);
     }
@@ -505,10 +506,11 @@ router.get('/validaciones-por-reporte', requireAuth, async (req, res) => {
 // ── PUT bulk update de validaciones ──────────────────────────────────────
 router.put('/estatus-validacion-bulk', requireAuth, async (req, res) => {
   try {
-    const { claves, clave_rep, clave_plataforma, etapa, fecha, desmarcar } = req.body;
+    const { claves, clave_rep, clave_plataforma, etapa, fecha, desmarcar, version } = req.body;
     if (!claves?.length) return res.json({ ok: false, message: 'No hay validaciones seleccionadas' });
-    const usuario  = req.session.user?.username || 'sistema';
-    const fechaVal = fecha ? esc(fecha) : 'GETDATE()';
+    const usuario   = req.session.user?.username || 'sistema';
+    const fechaVal  = fecha ? esc(fecha) : 'GETDATE()';
+    const versionFilter = version ? ` AND VERSION_CARGA=${esc(version)}` : '';
 
     let docVal, progVal, certVal, nuevoEstatus;
     if (etapa === 'IDENTIFICADO') {
@@ -534,14 +536,14 @@ router.put('/estatus-validacion-bulk', requireAuth, async (req, res) => {
     for (const clave_validacion of claves) {
       const existe = await query(`
         SELECT 1 FROM REPORTE_VALIDACION
-        WHERE CLAVE_VALIDACION=${esc(clave_validacion)} AND CLAVE_PLATAFORMA=${esc(clave_plataforma)}
+        WHERE CLAVE_VALIDACION=${esc(clave_validacion)} AND CLAVE_PLATAFORMA=${esc(clave_plataforma)}${versionFilter}
       `);
       if (existe.length) {
         await query(`
           UPDATE REPORTE_VALIDACION SET
             DOCUMENTADO=${docVal}, PROGRAMADO=${progVal}, CERTIFICADO=${certVal},
             ESTATUS=${esc(nuevoEstatus)} ${docFecha}${progFecha}${certFecha}
-          WHERE CLAVE_VALIDACION=${esc(clave_validacion)} AND CLAVE_PLATAFORMA=${esc(clave_plataforma)}
+          WHERE CLAVE_VALIDACION=${esc(clave_validacion)} AND CLAVE_PLATAFORMA=${esc(clave_plataforma)}${versionFilter}
         `);
         updated++;
       } else if (etapa !== 'IDENTIFICADO' && !desmarcar) {
@@ -852,6 +854,43 @@ router.post('/inventario-validaciones/asignar-plataformas', requireAuth, async (
       }
     }
     res.json({ ok: true, creados, omitidos });
+  } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
+});
+
+// ── GET versiones de carga para un reporte (para dropdown) ─
+router.get('/estatus-reporte/versiones', requireAuth, async (req, res) => {
+  try {
+    const clave = (req.query.clave_rep || '').trim();
+    if (!clave) return res.json({ ok: true, data: [] });
+    const rows = await query(`
+      SELECT DISTINCT VERSION_CARGA
+      FROM INVENTARIO_REPORTES_HIST
+      WHERE CLAVE_REP=${esc(clave)} AND VERSION_CARGA IS NOT NULL
+      ORDER BY VERSION_CARGA DESC
+    `);
+    res.json({ ok: true, data: rows.map(r => r.VERSION_CARGA) });
+  } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
+});
+
+// ── GET versiones de carga para validaciones de un reporte ─
+router.get('/estatus-validacion/versiones', requireAuth, async (req, res) => {
+  try {
+    const clave = (req.query.clave_rep || '').trim();
+    if (!clave) return res.json({ ok: true, data: [] });
+    // Primero expandir el clave_rep base a los CLAVE_REP extendidos en REPORTE_VALIDACION
+    const todosRV = await getRVClaves();
+    const matched = todosRV.filter(c =>
+      c === clave || (c.lastIndexOf('_') > 0 && c.slice(0, c.lastIndexOf('_')) === clave)
+    );
+    if (!matched.length) return res.json({ ok: true, data: [] });
+    const inList = matched.map(c => `'${c.replace(/'/g, "''")}'`).join(',');
+    const rows = await query(`
+      SELECT DISTINCT VERSION_CARGA
+      FROM REPORTE_VALIDACION
+      WHERE CLAVE_REP IN (${inList}) AND VERSION_CARGA IS NOT NULL
+      ORDER BY VERSION_CARGA DESC
+    `);
+    res.json({ ok: true, data: rows.map(r => r.VERSION_CARGA) });
   } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
 });
 
