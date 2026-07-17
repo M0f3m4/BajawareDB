@@ -652,11 +652,15 @@ router.post('/inventario-reportes/upload', requireAuth, upload.single('archivo')
     const rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
     let insertados = 0, actualizados = 0, errores = 0;
     for (const r of rows) {
-      const clave   = String(r.CLAVE_REP      || '').trim();
-      const version = String(r.VERSION_CARGA  || '1.0.0').trim();
+      const clave = String(r.CLAVE_REP || '').trim();
       if (!clave) continue;
       try {
-        const existeInv = await query(`SELECT VERSION_CARGA FROM INVENTARIO_REPORTES WHERE CLAVE_REP=${esc(clave)}`);
+        const existeInv = await query(`
+          SELECT CLAVE_PAIS, CLAVE_ENTIDADREGULADA, CLAVE_REG, CLAVE_SERIE, SUBSERIE,
+                 CLAVE_GRUPO, REPORTE, CLAVE_SECCION_REP, CLAVE_VERSION_REPORTE, CLAVE_PERIODO,
+                 DESCRIPCION_ESP, CLAVE_FECHA_ENT_REP, CARACTERISTICAS,
+                 CLAVE_REGULACION_REP, CLAVE_REP_GENERAL, FECHA_REGULACION
+          FROM INVENTARIO_REPORTES WHERE CLAVE_REP=${esc(clave)}`);
         if (!existeInv.length) {
           // Reporte nuevo — INSERT
           await query(`
@@ -679,23 +683,44 @@ router.post('/inventario-reportes/upload', requireAuth, upload.single('archivo')
           `);
           insertados++;
         } else {
-          const versionActual = existeInv[0].VERSION_CARGA;
-          if (versionActual !== version) {
-            // VERSION_CARGA cambió — UPDATE inventario
+          // Comparar campos fila por fila — solo UPDATE si algo cambió
+          const bd = existeInv[0];
+          const str = v => (v == null ? '' : String(v).trim());
+          const cambio =
+            str(bd.CLAVE_PAIS)              !== str(r.CLAVE_PAIS)              ||
+            str(bd.CLAVE_ENTIDADREGULADA)   !== str(r.CLAVE_ENTIDADREGULADA)   ||
+            str(bd.CLAVE_REG)               !== str(r.CLAVE_REG)               ||
+            str(bd.CLAVE_SERIE)             !== str(r.CLAVE_SERIE)             ||
+            str(bd.SUBSERIE)                !== str(r.SUBSERIE)                ||
+            str(bd.CLAVE_GRUPO)             !== str(r.CLAVE_GRUPO)             ||
+            str(bd.REPORTE)                 !== str(r.REPORTE)                 ||
+            str(bd.CLAVE_SECCION_REP)       !== str(r.CLAVE_SECCION_REP)       ||
+            str(bd.CLAVE_VERSION_REPORTE)   !== str(r.CLAVE_VERSION_REPORTE)   ||
+            str(bd.CLAVE_PERIODO)           !== str(r.CLAVE_PERIODO)           ||
+            str(bd.DESCRIPCION_ESP)         !== str(r.DESCRIPCION_ESP)         ||
+            str(bd.CLAVE_FECHA_ENT_REP)     !== str(r.CLAVE_FECHA_ENT_REP)     ||
+            str(bd.CARACTERISTICAS)         !== str(r.CARACTERISTICAS)         ||
+            str(bd.CLAVE_REGULACION_REP)    !== str(r.CLAVE_REGULACION_REP)    ||
+            str(bd.CLAVE_REP_GENERAL)       !== str(r.CLAVE_REP_GENERAL)       ||
+            str(bd.FECHA_REGULACION)        !== str(r.FECHA_REGULACION);
+
+          if (cambio) {
             await query(`
               UPDATE INVENTARIO_REPORTES SET
                 CLAVE_PAIS=${esc(r.CLAVE_PAIS)}, CLAVE_ENTIDADREGULADA=${esc(r.CLAVE_ENTIDADREGULADA)},
                 CLAVE_REG=${esc(r.CLAVE_REG)}, CLAVE_SERIE=${esc(r.CLAVE_SERIE)},
-                CLAVE_GRUPO=${esc(r.CLAVE_GRUPO)}, REPORTE=${esc(r.REPORTE)},
+                SUBSERIE=${esc(r.SUBSERIE)}, CLAVE_GRUPO=${esc(r.CLAVE_GRUPO)}, REPORTE=${esc(r.REPORTE)},
                 CLAVE_SECCION_REP=${esc(r.CLAVE_SECCION_REP)}, CLAVE_VERSION_REPORTE=${esc(r.CLAVE_VERSION_REPORTE)},
                 CLAVE_PERIODO=${esc(r.CLAVE_PERIODO)}, DESCRIPCION_ESP=${esc(r.DESCRIPCION_ESP)},
+                CLAVE_FECHA_ENT_REP=${esc(r.CLAVE_FECHA_ENT_REP)}, CARACTERISTICAS=${esc(r.CARACTERISTICAS)},
                 CLAVE_REGULACION_REP=${esc(r.CLAVE_REGULACION_REP)}, CLAVE_REP_GENERAL=${esc(r.CLAVE_REP_GENERAL)},
+                FECHA_REGULACION=${r.FECHA_REGULACION ? esc(r.FECHA_REGULACION) : 'NULL'},
                 VERSION_CARGA=${esc(version)}, FECHA_ACTUALIZADA=GETDATE()
               WHERE CLAVE_REP=${esc(clave)}
             `);
             actualizados++;
           }
-          // Si misma versión, no se toca inventario
+          // Sin cambios — no toca inventario
         }
         // Registrar en hist y versiones solo si es nueva combinación CLAVE_REP + VERSION_CARGA
         try {
@@ -1000,8 +1025,7 @@ router.get('/inventario-reportes/export', requireAuth, async (req, res) => {
              CLAVE_SERIE, SUBSERIE, CLAVE_GRUPO, REPORTE,
              CLAVE_SECCION_REP, CLAVE_VERSION_REPORTE, CLAVE_PERIODO,
              DESCRIPCION_ESP, CLAVE_FECHA_ENT_REP, CARACTERISTICAS,
-             CLAVE_REGULACION_REP, CLAVE_REP_GENERAL, FECHA_REGULACION, VIGENTE,
-             VERSION_CARGA
+             CLAVE_REGULACION_REP, CLAVE_REP_GENERAL, FECHA_REGULACION, VIGENTE
       FROM INVENTARIO_REPORTES
       ORDER BY CLAVE_REP
     `);

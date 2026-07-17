@@ -1332,19 +1332,18 @@
 
         <!-- Tab: Reportes -->
         <div id="panel-inv-rep">
-          <p style="font-size:13px;color:#666;margin-bottom:12px;">
-            Exporta el inventario actual de la BD, edita las filas que necesites y vuelve a subir el mismo archivo.
-          </p>
+          <p style="font-size:13px;color:#666;margin-bottom:4px;">Columnas del Excel:</p>
+          <p style="font-size:11px;color:#aaa;font-family:monospace;margin-bottom:16px;">CLAVE_REP | CLAVE_PAIS | CLAVE_ENTIDADREGULADA | CLAVE_REG | CLAVE_SERIE | SUBSERIE | CLAVE_GRUPO | REPORTE | CLAVE_SECCION_REP | CLAVE_VERSION_REPORTE | CLAVE_PERIODO | DESCRIPCION_ESP | CLAVE_FECHA_ENT_REP | CARACTERISTICAS | CLAVE_REGULACION_REP | CLAVE_REP_GENERAL | FECHA_REGULACION | VIGENTE</p>
           <div style="display:flex;gap:10px;align-items:center;margin-bottom:12px;">
             <input id="bc-inv-rep-file" type="file" accept=".xlsx,.xls" style="font-size:13px;">
-            <button onclick="exportarInventarioReportes()"
+            <button onclick="descargarTemplate('reportes')"
               style="padding:6px 14px;background:#f0f4f8;color:#1a3558;border:1px solid #c0cfe0;border-radius:6px;font-size:12px;cursor:pointer;">
-              📤 Exportar desde BD
+              📥 Template
             </button>
           </div>
           <button onclick="cargarInventarioReportes()"
             style="padding:8px 24px;background:#1a3558;color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;">
-            📥 Cargar Excel
+            📤 Cargar
           </button>
           <div id="bc-inv-rep-msg" style="margin-top:12px;font-size:13px;"></div>
         </div>
@@ -4690,7 +4689,7 @@
       if (ce && ce.v) clavesSet.add(String(ce.v).trim());
       if (co && co.v) {
         objetosSet.add(String(co.v).trim());
-        if (isRep) paresRep.push({ clave_rep: String(co.v).trim(), version: cv ? String(cv.v).trim() : '1.0.0' });
+        if (isRep) paresRep.push({ clave_rep: String(co.v).trim(), version });
       }
     }
     btn.textContent = '📤 Verificar y cargar'; btn.disabled = false;
