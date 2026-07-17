@@ -868,23 +868,19 @@ router.post('/inventario-validaciones/plataformas-asignadas', requireAuth, async
 });
 
 // ── POST asignar plataformas a validaciones ────────────────
-// Lógica: (CLAVE_VALIDACION, CLAVE_PLATAFORMA) ya existe (con cualquier CLAVE_REP) → omitir
-//         no existe → insertar
+// Lógica: (CLAVE_VALIDACION, CLAVE_PLATAFORMA, CLAVE_REP) exacto existe → omitir
+//         no existe esa combinación exacta → insertar (permite compartir validaciones entre reportes)
 router.post('/inventario-validaciones/asignar-plataformas', requireAuth, async (req, res) => {
   try {
     const { asignaciones = [], version = '1.0.0' } = req.body;
-    let creados = 0, omitidos = 0, conflictos = 0;
+    let creados = 0, omitidos = 0;
     for (const a of asignaciones) {
       const { clave_validacion, clave_rep, tipo_validacion, descripcion, plataforma } = a;
       const existe = await query(`
-        SELECT CLAVE_REP FROM REPORTE_VALIDACION
-        WHERE CLAVE_VALIDACION=${esc(clave_validacion)} AND CLAVE_PLATAFORMA=${esc(plataforma)}
+        SELECT 1 FROM REPORTE_VALIDACION
+        WHERE CLAVE_VALIDACION=${esc(clave_validacion)} AND CLAVE_PLATAFORMA=${esc(plataforma)} AND CLAVE_REP=${esc(clave_rep)}
       `);
-      if (existe.length) {
-        if (existe[0].CLAVE_REP !== clave_rep) conflictos++;
-        else omitidos++;
-        continue;
-      }
+      if (existe.length) { omitidos++; continue; }
       await query(`
         INSERT INTO REPORTE_VALIDACION
           (CLAVE_VALIDACION, CLAVE_REP, CLAVE_PLATAFORMA, TIPO_VALIDACION, DESCRIPCION, DOCUMENTADO, PROGRAMADO, CERTIFICADO, ESTATUS, VERSION, VERSION_CARGA)
@@ -894,7 +890,7 @@ router.post('/inventario-validaciones/asignar-plataformas', requireAuth, async (
       `);
       creados++;
     }
-    res.json({ ok: true, creados, omitidos, conflictos });
+    res.json({ ok: true, creados, omitidos });
   } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
 });
 

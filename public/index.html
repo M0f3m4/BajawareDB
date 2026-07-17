@@ -4856,8 +4856,7 @@
         body: JSON.stringify({ asignaciones, version: _invPlatVersion })
       }).then(x => x.json());
       if (r.ok) {
-        const confMsg = r.conflictos ? ` ⚠️ ${r.conflictos} con conflicto de reporte (ya asignadas a otro reporte en esa plataforma).` : '';
-        document.getElementById('inv-plat-msg').innerHTML = `<span style="color:#27ae60;">✅ ${r.creados} creadas, ${r.omitidos} ya existían.${confMsg}</span>`;
+        document.getElementById('inv-plat-msg').innerHTML = `<span style="color:#27ae60;">✅ ${r.creados} creadas, ${r.omitidos} ya existían.</span>`;
       } else {
         document.getElementById('inv-plat-msg').innerHTML = `<span style="color:#e74c3c;">❌ ${r.message}</span>`;
       }
