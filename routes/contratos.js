@@ -427,17 +427,30 @@ router.put('/estatus-reporte', requireAuth, async (req, res) => {
       nuevoEstatus = etapa;
     }
 
-    const existe = await query(`
+    const existeExacto = await query(`
       SELECT 1 FROM ESTATUS_REPORTE
       WHERE CLAVE_REP=${esc(clave_rep)} AND CLAVE_PLATAFORMA=${esc(clave_plataforma)}${versionFilter}
     `);
+    const existeGeneral = await query(`
+      SELECT 1 FROM ESTATUS_REPORTE
+      WHERE CLAVE_REP=${esc(clave_rep)} AND CLAVE_PLATAFORMA=${esc(clave_plataforma)}
+    `);
 
-    if (existe.length) {
+    if (existeExacto.length || (!versionFilter && existeGeneral.length)) {
       await query(`
         UPDATE ESTATUS_REPORTE SET
           DOCUMENTADO=${docVal}, PROGRAMADO=${progVal}, CERTIFICADO=${certVal},
           ESTATUS=${esc(nuevoEstatus)}
+          ${version ? `, VERSION_CARGA=${esc(version)}` : ''}
         WHERE CLAVE_REP=${esc(clave_rep)} AND CLAVE_PLATAFORMA=${esc(clave_plataforma)}${versionFilter}
+      `);
+    } else if (existeGeneral.length) {
+      // Existe registro pero con diferente versión — actualizar y asignar nueva versión
+      await query(`
+        UPDATE ESTATUS_REPORTE SET
+          DOCUMENTADO=${docVal}, PROGRAMADO=${progVal}, CERTIFICADO=${certVal},
+          ESTATUS=${esc(nuevoEstatus)}, VERSION_CARGA=${esc(version)}
+        WHERE CLAVE_REP=${esc(clave_rep)} AND CLAVE_PLATAFORMA=${esc(clave_plataforma)}
       `);
     } else {
       const invRow = await query(`SELECT CLAVE_REP_GENERAL FROM INVENTARIO_REPORTES WHERE CLAVE_REP=${esc(clave_rep)}`);
@@ -749,7 +762,34 @@ router.post('/inventario-reportes/upload', requireAuth, upload.single('archivo')
         } catch(e3) { console.warn('[inv-rep-hist] error:', e3.message); }
       } catch(e2) { console.error('[upload-rep] fila error:', e2.message); errores++; }
     }
-    res.json({ ok: true, insertados, actualizados, errores });
+    res.json({ ok: true, insertados, actualizados, errores, reportes: rows.map(r => ({ CLAVE_REP: String(r.CLAVE_REP||'').trim(), CLAVE_REP_GENERAL: String(r.CLAVE_REP_GENERAL||'').trim() })).filter(r => r.CLAVE_REP) });
+  } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
+});
+
+// ── POST asignar plataformas a reportes ───────────────────
+router.post('/inventario-reportes/asignar-plataformas', requireAuth, async (req, res) => {
+  try {
+    const { asignaciones = [], version = '1.0.0' } = req.body;
+    let creados = 0, omitidos = 0;
+    for (const a of asignaciones) {
+      const { clave_rep, clave_rep_general, plataforma } = a;
+      const existe = await query(`
+        SELECT 1 FROM ESTATUS_REPORTE
+        WHERE CLAVE_REP=${esc(clave_rep)} AND CLAVE_PLATAFORMA=${esc(plataforma)} AND VERSION_CARGA=${esc(version)}
+      `);
+      if (existe.length) { omitidos++; continue; }
+      const repGeneral = clave_rep_general || clave_rep;
+      await query(`
+        INSERT INTO ESTATUS_REPORTE
+          (CLAVE_REP, CLAVE_REP_GENERAL, CLAVE_PLATAFORMA, VERSION, VERSION_CARGA,
+           DOCUMENTADO, PROGRAMADO, CERTIFICADO, ESTATUS)
+        VALUES
+          (${esc(clave_rep)}, ${esc(repGeneral)}, ${esc(plataforma)}, '00', ${esc(version)},
+           'NO', 'NO', 'NO', 'NO DOCUMENTADO')
+      `);
+      creados++;
+    }
+    res.json({ ok: true, creados, omitidos });
   } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
 });
 

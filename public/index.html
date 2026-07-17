@@ -1522,6 +1522,27 @@
         </div>
       </div>
 
+      <!-- Modal: asignación de plataformas post-upload REPORTES -->
+      <div id="inv-plat-rep-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;align-items:center;justify-content:center;">
+        <div style="background:#fff;border-radius:12px;padding:28px 32px;width:420px;max-width:95vw;box-shadow:0 8px 32px rgba(0,0,0,.2);">
+          <h3 style="margin:0 0 4px;font-size:15px;color:#1a3558;">🖥️ Asignar plataforma</h3>
+          <p id="inv-plat-rep-count" style="font-size:12px;color:#888;margin:0 0 20px;"></p>
+          <div id="inv-plat-rep-msg" style="margin-bottom:12px;font-size:13px;"></div>
+          <label style="font-size:11px;font-weight:600;color:#555;display:block;margin-bottom:8px;">Selecciona la plataforma:</label>
+          <div id="inv-plat-rep-opciones" style="display:grid;gap:8px;"></div>
+          <div style="display:flex;gap:10px;margin-top:24px;justify-content:flex-end;">
+            <button onclick="document.getElementById('inv-plat-rep-modal').style.display='none'"
+              style="padding:8px 20px;background:#f0f4f8;color:#555;border:1px solid #ddd;border-radius:6px;font-size:13px;cursor:pointer;">
+              Cerrar
+            </button>
+            <button onclick="invPlatRepConfirmar()"
+              style="padding:8px 24px;background:#1a3558;color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;">
+              ✅ Asignar
+            </button>
+          </div>
+        </div>
+      </div>
+
       <!-- SOFIPO: Layouts -->
       <div class="content-section" id="sec-sofipo-layouts">
         <h2 class="section-title">🗂️ SOFIPO — Layouts</h2>
@@ -4790,6 +4811,12 @@
         _invPlatVersion = version;
         await invPlatAbrir();
       }
+      // Para reportes: abrir modal de asignación de plataformas
+      if (isRep && r.reportes && r.reportes.length) {
+        _invPlatReportes = r.reportes;
+        _invPlatRepVersion = version;
+        await invPlatRepAbrir();
+      }
     } catch(e) { msg.innerHTML = '<span style="color:#e74c3c;">Error: ' + e.message + '</span>'; }
   }
 
@@ -4859,6 +4886,64 @@
         document.getElementById('inv-plat-msg').innerHTML = `<span style="color:#e74c3c;">❌ ${r.message}</span>`;
       }
     } catch(e) { document.getElementById('inv-plat-msg').innerHTML = '<span style="color:#e74c3c;">Error: ' + e.message + '</span>'; }
+  }
+
+  let _invPlatReportes = [];
+  let _invPlatRepVersion = '1.0.0';
+
+  async function invPlatRepAbrir() {
+    try {
+      const rp = await fetch('/api/contratos/cat-plataformas').then(x => x.json());
+      if (rp.ok && rp.data.length) _invPlataformas = rp.data;
+    } catch(e) {}
+
+    const n = _invPlatReportes.length;
+    document.getElementById('inv-plat-rep-count').textContent = `${n} reporte${n !== 1 ? 's' : ''} serán asignados a las plataformas seleccionadas.`;
+
+    const opciones = document.getElementById('inv-plat-rep-opciones');
+    opciones.innerHTML = `
+      <label style="display:flex;align-items:center;gap:10px;padding:8px 12px;border:1px solid #1a3558;border-radius:8px;cursor:pointer;font-size:13px;background:#f0f4ff;">
+        <input type="checkbox" id="inv-plat-rep-todas" onchange="invPlatRepToggleTodas(this.checked)" style="accent-color:#1a3558;width:15px;height:15px;">
+        📋 <strong>TODAS las plataformas</strong>
+      </label>
+      ${_invPlataformas.map(p => `
+      <label style="display:flex;align-items:center;gap:10px;padding:8px 12px;border:1px solid #ddd;border-radius:8px;cursor:pointer;font-size:13px;background:#fafafa;">
+        <input type="checkbox" class="inv-plat-rep-cb" value="${p}" style="accent-color:#1a3558;width:15px;height:15px;">
+        ${p}
+      </label>`).join('')}`;
+
+    document.getElementById('inv-plat-rep-msg').innerHTML = '';
+    document.getElementById('inv-plat-rep-modal').style.display = 'flex';
+  }
+
+  function invPlatRepToggleTodas(checked) {
+    document.querySelectorAll('.inv-plat-rep-cb').forEach(cb => cb.checked = checked);
+  }
+
+  async function invPlatRepConfirmar() {
+    const checked = [...document.querySelectorAll('.inv-plat-rep-cb:checked')].map(cb => cb.value);
+    if (!checked.length) {
+      document.getElementById('inv-plat-rep-msg').innerHTML = '<span style="color:#e67e22;">Selecciona al menos una plataforma.</span>';
+      return;
+    }
+    const asignaciones = [];
+    for (const rep of _invPlatReportes) {
+      for (const plat of checked) {
+        asignaciones.push({ clave_rep: rep.CLAVE_REP, clave_rep_general: rep.CLAVE_REP_GENERAL, plataforma: plat });
+      }
+    }
+    document.getElementById('inv-plat-rep-msg').innerHTML = 'Guardando...';
+    try {
+      const r = await fetch('/api/contratos/inventario-reportes/asignar-plataformas', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ asignaciones, version: _invPlatRepVersion })
+      }).then(x => x.json());
+      if (r.ok) {
+        document.getElementById('inv-plat-rep-msg').innerHTML = `<span style="color:#27ae60;">✅ ${r.creados} creados, ${r.omitidos} ya existían.</span>`;
+      } else {
+        document.getElementById('inv-plat-rep-msg').innerHTML = `<span style="color:#e74c3c;">❌ ${r.message}</span>`;
+      }
+    } catch(e) { document.getElementById('inv-plat-rep-msg').innerHTML = '<span style="color:#e74c3c;">Error: ' + e.message + '</span>'; }
   }
 
   async function cargarContratos() {
