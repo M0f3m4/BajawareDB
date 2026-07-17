@@ -429,7 +429,7 @@ router.put('/estatus-reporte', requireAuth, async (req, res) => {
 
     const existe = await query(`
       SELECT 1 FROM ESTATUS_REPORTE
-      WHERE CLAVE_REP_GENERAL=${esc(clave_rep)} AND CLAVE_PLATAFORMA=${esc(clave_plataforma)}${versionFilter}
+      WHERE CLAVE_REP=${esc(clave_rep)} AND CLAVE_PLATAFORMA=${esc(clave_plataforma)}${versionFilter}
     `);
 
     if (existe.length) {
@@ -437,15 +437,17 @@ router.put('/estatus-reporte', requireAuth, async (req, res) => {
         UPDATE ESTATUS_REPORTE SET
           DOCUMENTADO=${docVal}, PROGRAMADO=${progVal}, CERTIFICADO=${certVal},
           ESTATUS=${esc(nuevoEstatus)}
-        WHERE CLAVE_REP_GENERAL=${esc(clave_rep)} AND CLAVE_PLATAFORMA=${esc(clave_plataforma)}${versionFilter}
+        WHERE CLAVE_REP=${esc(clave_rep)} AND CLAVE_PLATAFORMA=${esc(clave_plataforma)}${versionFilter}
       `);
     } else {
+      const invRow = await query(`SELECT CLAVE_REP_GENERAL FROM INVENTARIO_REPORTES WHERE CLAVE_REP=${esc(clave_rep)}`);
+      const claveRepGeneral = invRow.length ? invRow[0].CLAVE_REP_GENERAL : clave_rep;
       await query(`
         INSERT INTO ESTATUS_REPORTE
           (CLAVE_REP, CLAVE_REP_GENERAL, CLAVE_PLATAFORMA, VERSION, VERSION_CARGA,
            DOCUMENTADO, PROGRAMADO, CERTIFICADO, ESTATUS)
         VALUES
-          (${esc(clave_rep)}, ${esc(clave_rep)}, ${esc(clave_plataforma)}, '00', ${esc(version || null)},
+          (${esc(clave_rep)}, ${esc(claveRepGeneral)}, ${esc(clave_plataforma)}, '00', ${esc(version || null)},
            ${docVal}, ${progVal}, ${certVal}, ${esc(nuevoEstatus)})
       `);
     }
