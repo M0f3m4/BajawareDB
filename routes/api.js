@@ -429,9 +429,9 @@ router.get('/inventario/filtros', requireAuth, async (req, res) => {
       query(`SELECT CLAVE_ENTIDADREGULADA, ENTIDAD_REGULADA FROM CAT_ENTIDAD_REGULADA ORDER BY ENTIDAD_REGULADA`),
       query(`SELECT DISTINCT CLAVE_GRUPO FROM INVENTARIO_REPORTES WHERE CLAVE_GRUPO IS NOT NULL ORDER BY CLAVE_GRUPO`),
       query(`SELECT CLAVE_PERIODO, PERIODO FROM CAT_PERIODICIDAD ORDER BY PERIODO`),
-      query(`SELECT DISTINCT CLAVE_PAIS FROM INVENTARIO_REPORTES WHERE CLAVE_PAIS IS NOT NULL ORDER BY CLAVE_PAIS`)
+      query(`SELECT CLAVE_PAIS, PAIS FROM CAT_PAISES ORDER BY PAIS`)
     ]);
-    res.json({ ok: true, data: { regs, entidades, grupos: grupos.map(g => g.CLAVE_GRUPO), periodos, paises: paises.map(p => p.CLAVE_PAIS) } });
+    res.json({ ok: true, data: { regs, entidades, grupos: grupos.map(g => g.CLAVE_GRUPO), periodos, paises } });
   } catch (err) {
     res.status(500).json({ ok: false, message: err.message });
   }

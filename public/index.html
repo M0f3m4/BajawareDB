@@ -3328,7 +3328,7 @@
         };
 
         // backend devuelve: { regs, entidades, grupos (strings), periodos, paises (strings) }
-        addOpts('invr-pais',    f.paises     || [], null, null);   // ya son strings
+        addOpts('invr-pais',    f.paises     || [], 'CLAVE_PAIS', 'PAIS');
         addOpts('invr-reg',     f.regs      || [], 'CLAVE_REG',           'REGULADOR');
         addOpts('invr-entidad', f.entidades  || [], 'CLAVE_ENTIDADREGULADA', 'ENTIDAD_REGULADA');
         addOpts('invr-grupo',   f.grupos     || [], null, null);   // ya son strings
