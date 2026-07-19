@@ -967,6 +967,9 @@
       <div class="content-section" id="sec-inv-reportes">
         <h2 class="section-title">Inventario — Reportes</h2>
         <div class="toolbar" style="flex-wrap:wrap;gap:8px;margin-bottom:14px;">
+          <select id="invr-pais" onchange="loadInvReportes()" style="min-width:120px;">
+            <option value="">Todos los países</option>
+          </select>
           <select id="invr-reg" onchange="loadInvReportes()" style="min-width:160px;">
             <option value="">Todos los reguladores</option>
           </select>
@@ -3324,7 +3327,8 @@
           });
         };
 
-        // backend devuelve: { regs, entidades, grupos (strings), periodos }
+        // backend devuelve: { regs, entidades, grupos (strings), periodos, paises (strings) }
+        addOpts('invr-pais',    f.paises     || [], null, null);   // ya son strings
         addOpts('invr-reg',     f.regs      || [], 'CLAVE_REG',           'REGULADOR');
         addOpts('invr-entidad', f.entidades  || [], 'CLAVE_ENTIDADREGULADA', 'ENTIDAD_REGULADA');
         addOpts('invr-grupo',   f.grupos     || [], null, null);   // ya son strings
@@ -3339,6 +3343,7 @@
     const count = document.getElementById('invr-count');
     wrap.innerHTML = '<div class="loading">Buscando...</div>';
 
+    const pais    = document.getElementById('invr-pais').value;
     const reg     = document.getElementById('invr-reg').value;
     const entidad = document.getElementById('invr-entidad').value;
     const grupo   = document.getElementById('invr-grupo').value;
@@ -3346,6 +3351,7 @@
     const texto   = document.getElementById('invr-texto').value.trim();
 
     let url = '/api/inventario/reportes?x=1';
+    if (pais)    url += '&pais='    + encodeURIComponent(pais);
     if (reg)     url += '&reg='     + encodeURIComponent(reg);
     if (entidad) url += '&entidad=' + encodeURIComponent(entidad);
     if (grupo)   url += '&grupo='   + encodeURIComponent(grupo);
