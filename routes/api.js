@@ -396,11 +396,11 @@ router.get('/soporte/cliente/:clave/fixes', requireAuth, async (req, res) => {
 router.get('/inventario/reportes', requireAuth, async (req, res) => {
   const { reg, entidad, grupo, periodo, texto } = req.query;
   let where = 'WHERE 1=1';
-  if (reg)     where += ` AND CLAVE_REG = '${reg.replace(/'/g,"''")}'`;
-  if (entidad) where += ` AND CLAVE_ENTIDADREGULADA = '${entidad.replace(/'/g,"''")}'`;
-  if (grupo)   where += ` AND CLAVE_GRUPO = '${grupo.replace(/'/g,"''")}'`;
-  if (periodo) where += ` AND CLAVE_PERIODO = '${periodo.replace(/'/g,"''")}'`;
-  if (texto)   where += ` AND (CLAVE_REP LIKE '%${texto.replace(/'/g,"''")}%' OR REPORTE LIKE '%${texto.replace(/'/g,"''")}%' OR DESCRIPCION_ESP LIKE '%${texto.replace(/'/g,"''")}%')`;
+  if (reg)     where += ` AND ir.CLAVE_REG = '${reg.replace(/'/g,"''")}'`;
+  if (entidad) where += ` AND ir.CLAVE_ENTIDADREGULADA = '${entidad.replace(/'/g,"''")}'`;
+  if (grupo)   where += ` AND ir.CLAVE_GRUPO = '${grupo.replace(/'/g,"''")}'`;
+  if (periodo) where += ` AND ir.CLAVE_PERIODO = '${periodo.replace(/'/g,"''")}'`;
+  if (texto)   where += ` AND (ir.CLAVE_REP LIKE '%${texto.replace(/'/g,"''")}%' OR ir.REPORTE LIKE '%${texto.replace(/'/g,"''")}%' OR ir.DESCRIPCION_ESP LIKE '%${texto.replace(/'/g,"''")}%')`;
   try {
     const rows = await query(`
       SELECT TOP 200
