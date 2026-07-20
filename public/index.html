@@ -4519,7 +4519,7 @@
 
   async function updRepCargarCatEstatus() {
     const sel = document.getElementById('upd-rep-estatus');
-    if (sel.options.length > 1) return; // ya cargado
+    sel.innerHTML = '<option value="">— Selecciona estatus —</option>';
     try {
       const r = await fetch('/api/contratos/cat-estatus').then(x => x.json());
       (r.data || []).forEach(e => {
