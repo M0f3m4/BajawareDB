@@ -4058,7 +4058,19 @@
     return '<span style="color:#27ae60;font-weight:700;">✓</span>';
   }
   function estatusPill(e) {
-    const color = e==='CERTIFICADO'?'#27ae60':e==='PROGRAMADO'?'#2980b9':e==='DOCUMENTADO'?'#8e44ad':'#aaa';
+    const colors = {
+      'CERTIFICADO':     '#27ae60',
+      'EN CERTIFICACION':'#52be80',
+      'PROGRAMADO':      '#2980b9',
+      'EN PROGRAMACION': '#5dade2',
+      'ANALIZADO':       '#1a5276',
+      'EN ANALISIS PROG':'#2471a3',
+      'DOCUMENTADO':     '#8e44ad',
+      'EN DOCUMENTACION':'#a569bd',
+      'IDENTIFICADO':    '#f39c12',
+      'NO DOCUMENTADO':  '#aaa',
+    };
+    const color = colors[e] || '#aaa';
     return e ? `<span style="background:${color};color:#fff;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;">${e}</span>` : '';
   }
   function etapaPill(e) {
@@ -4618,6 +4630,9 @@
         // Recargar tabla de estatus por contrato si hay uno seleccionado
         const contratoSel = document.getElementById('bc-rep-contrato');
         if (contratoSel && contratoSel.value) loadReportesContrato();
+        // Recargar tabla de estatus en inventario si está visible
+        const estWrap = document.getElementById('est-content');
+        if (estWrap && estWrap.innerHTML && !estWrap.innerHTML.includes('Cargando')) loadEstatus();
         // Limpiar formulario
         document.getElementById('upd-rep-clave').value = '';
         document.getElementById('upd-rep-plataforma').value = '';
