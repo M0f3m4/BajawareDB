@@ -291,20 +291,11 @@ router.get('/estatus-reporte/versiones', requireAuth, async (req, res) => {
     // Con plataforma: versiones de ESTATUS_REPORTE para ese (rep, plataforma)
     // Sin plataforma: versiones de INVENTARIO_REPORTES_HIST para el reporte
     let rows;
-    if (plataforma) {
-      rows = await query(`
-        SELECT DISTINCT VERSION_CARGA FROM ESTATUS_REPORTE
-        WHERE CLAVE_REP=${esc(clave)} AND CLAVE_PLATAFORMA=${esc(plataforma)}
-          AND VERSION_CARGA IS NOT NULL
-        ORDER BY VERSION_CARGA DESC
-      `);
-    } else {
-      rows = await query(`
-        SELECT DISTINCT VERSION_CARGA FROM INVENTARIO_REPORTES_HIST
-        WHERE CLAVE_REP=${esc(clave)} AND VERSION_CARGA IS NOT NULL
-        ORDER BY VERSION_CARGA DESC
-      `);
-    }
+    rows = await query(`
+      SELECT DISTINCT VERSION_CARGA FROM INVENTARIO_REPORTES_HIST
+      WHERE CLAVE_REP=${esc(clave)} AND VERSION_CARGA IS NOT NULL
+      ORDER BY VERSION_CARGA DESC
+    `);
     res.json({ ok: true, data: rows.map(r => r.VERSION_CARGA) });
   } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
 });
@@ -929,7 +920,7 @@ router.get('/cat-plataformas', requireAuth, async (req, res) => {
 // ── GET catálogo de estatus ───────────────────────────────
 router.get('/cat-estatus', requireAuth, async (req, res) => {
   try {
-    const rows = await query(`SELECT CLAVE_ESTATUS FROM CAT_ESTATUS ORDER BY ID_ESTATUS`);
+    const rows = await query(`SELECT CLAVE_ESTATUS FROM CAT_ESTATUSINT_REPVAL ORDER BY ID_ESTATUS`);
     res.json({ ok: true, data: rows.map(r => r.CLAVE_ESTATUS) });
   } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
 });
