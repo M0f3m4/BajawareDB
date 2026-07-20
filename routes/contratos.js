@@ -914,6 +914,51 @@ router.get('/cat-plataformas', requireAuth, async (req, res) => {
   } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
 });
 
+// ── GET catálogo de estatus ───────────────────────────────
+router.get('/cat-estatus', requireAuth, async (req, res) => {
+  try {
+    const rows = await query(`SELECT ESTATUS FROM CAT_ESTATUS ORDER BY ID_ESTATUS`);
+    res.json({ ok: true, data: rows.map(r => r.ESTATUS) });
+  } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
+});
+
+// ── PUT actualizar estatus secuencial de reporte ──────────
+router.put('/estatus-reporte/estatus', requireAuth, async (req, res) => {
+  try {
+    const { clave_rep, clave_plataforma, estatus, version } = req.body;
+    const usuario = req.session.user?.username || 'sistema';
+    const versionFilter = version ? ` AND VERSION_CARGA=${esc(version)}` : '';
+
+    const existe = await query(`
+      SELECT 1 FROM ESTATUS_REPORTE
+      WHERE CLAVE_REP=${esc(clave_rep)} AND CLAVE_PLATAFORMA=${esc(clave_plataforma)}${versionFilter}
+    `);
+
+    if (existe.length) {
+      await query(`
+        UPDATE ESTATUS_REPORTE SET
+          ESTATUS=${esc(estatus)}, FECHA_ESTATUS=GETDATE(), USER_ESTATUS=${esc(usuario)}
+          ${version ? `, VERSION_CARGA=${esc(version)}` : ''}
+        WHERE CLAVE_REP=${esc(clave_rep)} AND CLAVE_PLATAFORMA=${esc(clave_plataforma)}${versionFilter}
+      `);
+    } else {
+      const invRow = await query(`SELECT CLAVE_REP_GENERAL FROM INVENTARIO_REPORTES WHERE CLAVE_REP=${esc(clave_rep)}`);
+      const claveRepGeneral = invRow.length ? invRow[0].CLAVE_REP_GENERAL : clave_rep;
+      await query(`
+        INSERT INTO ESTATUS_REPORTE
+          (CLAVE_REP, CLAVE_REP_GENERAL, CLAVE_PLATAFORMA, VERSION, VERSION_CARGA,
+           DOCUMENTADO, PROGRAMADO, CERTIFICADO, ESTATUS, FECHA_ESTATUS, USER_ESTATUS)
+        VALUES
+          (${esc(clave_rep)}, ${esc(claveRepGeneral)}, ${esc(clave_plataforma)}, '00', ${esc(version || null)},
+           'NO', 'NO', 'NO', ${esc(estatus)}, GETDATE(), ${esc(usuario)})
+      `);
+    }
+    await auditLog(usuario, 'estatus-reporte', 'ESTATUS',
+      { clave_rep, clave_plataforma, estatus });
+    res.json({ ok: true });
+  } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
+});
+
 // ── POST plataformas ya asignadas a lista de validaciones ─
 router.post('/inventario-validaciones/plataformas-asignadas', requireAuth, async (req, res) => {
   try {

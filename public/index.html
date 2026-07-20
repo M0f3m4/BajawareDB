@@ -1551,6 +1551,31 @@
         </div>
       </div>
 
+      <!-- Modal: actualizar estatus secuencial reporte -->
+      <div id="rep-estatus-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;align-items:center;justify-content:center;">
+        <div style="background:#fff;border-radius:12px;padding:28px 32px;width:420px;max-width:95vw;box-shadow:0 8px 32px rgba(0,0,0,.2);">
+          <h3 style="margin:0 0 4px;font-size:15px;color:#1a3558;">📋 Actualizar Estatus</h3>
+          <p id="rep-estatus-modal-info" style="font-size:12px;color:#888;margin:0 0 20px;font-family:monospace;"></p>
+          <div style="display:grid;gap:14px;">
+            <div>
+              <label style="font-size:11px;font-weight:600;color:#555;display:block;margin-bottom:4px;">Estatus</label>
+              <select id="rep-estatus-select" style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;"></select>
+            </div>
+          </div>
+          <div id="rep-estatus-msg" style="margin-top:12px;font-size:13px;min-height:18px;"></div>
+          <div style="display:flex;gap:10px;margin-top:20px;justify-content:flex-end;">
+            <button onclick="document.getElementById('rep-estatus-modal').style.display='none'"
+              style="padding:7px 18px;background:#f0f4f8;color:#555;border:1px solid #ddd;border-radius:6px;font-size:13px;cursor:pointer;">
+              Cancelar
+            </button>
+            <button onclick="repEstatusConfirmar()"
+              style="padding:7px 18px;background:#1a3558;color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;">
+              ✅ Guardar
+            </button>
+          </div>
+        </div>
+      </div>
+
       <!-- SOFIPO: Layouts -->
       <div class="content-section" id="sec-sofipo-layouts">
         <h2 class="section-title">🗂️ SOFIPO — Layouts</h2>
@@ -4111,16 +4136,64 @@
           <td style="padding:6px 10px;text-align:center;">${etapaBadge(r.PROGRAMADO)}</td>
           <td style="padding:6px 10px;text-align:center;">${etapaBadge(r.CERTIFICADO)}</td>
           <td style="padding:6px 10px;text-align:center;">${estatusPill(r.ESTATUS)}</td>
-          <td style="padding:6px 10px;text-align:center;">
+          <td style="padding:6px 10px;text-align:center;white-space:nowrap;">
             <button onclick="precargarActualizarRep('${r.CLAVE_REP}','${r.CLAVE_PLATAFORMA||''}')"
-              style="padding:3px 8px;background:#1a3558;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:11px;">
-              Actualizar
+              style="padding:3px 8px;background:#1a3558;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:11px;margin-right:4px;">
+              Etapas
+            </button>
+            <button onclick="repEstatusAbrir('${r.CLAVE_REP}','${r.CLAVE_PLATAFORMA||''}','${r.VERSION_CARGA||''}','${r.ESTATUS||''}')"
+              style="padding:3px 8px;background:#8e44ad;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:11px;">
+              Estatus
             </button>
           </td>
         </tr>`).join('')}
       </tbody></table>`;
   }
 
+
+  let _repEstatusCurrent = {};
+  let _catEstatus = [];
+
+  async function repEstatusAbrir(clave_rep, clave_plataforma, version, estatusActual) {
+    _repEstatusCurrent = { clave_rep, clave_plataforma, version };
+    document.getElementById('rep-estatus-modal-info').textContent = `${clave_rep} · ${clave_plataforma}`;
+    document.getElementById('rep-estatus-msg').innerHTML = '';
+
+    const sel = document.getElementById('rep-estatus-select');
+    if (!_catEstatus.length) {
+      try {
+        const r = await fetch('/api/contratos/cat-estatus').then(x => x.json());
+        _catEstatus = r.data || [];
+      } catch(e) {}
+    }
+    sel.innerHTML = _catEstatus.map(e =>
+      `<option value="${e}" ${e === estatusActual ? 'selected' : ''}>${e}</option>`
+    ).join('');
+
+    document.getElementById('rep-estatus-modal').style.display = 'flex';
+  }
+
+  async function repEstatusConfirmar() {
+    const estatus = document.getElementById('rep-estatus-select').value;
+    const { clave_rep, clave_plataforma, version } = _repEstatusCurrent;
+    document.getElementById('rep-estatus-msg').innerHTML = 'Guardando...';
+    try {
+      const r = await fetch('/api/contratos/estatus-reporte/estatus', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clave_rep, clave_plataforma, estatus, version })
+      }).then(x => x.json());
+      if (r.ok) {
+        document.getElementById('rep-estatus-msg').innerHTML = `<span style="color:#27ae60;">✅ Estatus actualizado a <strong>${estatus}</strong>.</span>`;
+        setTimeout(() => {
+          document.getElementById('rep-estatus-modal').style.display = 'none';
+          loadReportesContrato();
+        }, 800);
+      } else {
+        document.getElementById('rep-estatus-msg').innerHTML = `<span style="color:#e74c3c;">❌ ${r.message}</span>`;
+      }
+    } catch(e) { document.getElementById('rep-estatus-msg').innerHTML = `<span style="color:#e74c3c;">Error: ${e.message}</span>`; }
+  }
 
   function exportarReportesContrato() {
     if (!bcRepData || !bcRepData.length) return;
