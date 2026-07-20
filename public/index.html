@@ -1303,6 +1303,19 @@
               </button>
             </div>
             <div id="upd-val-msg" style="margin-top:10px;font-size:13px;"></div>
+            <hr style="border:none;border-top:1px solid #eee;margin:14px 0;">
+            <div style="display:flex;align-items:flex-end;gap:12px;">
+              <div style="flex:1;">
+                <label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px;">Estatus Intermedio</label>
+                <select id="upd-val-estatus" style="width:100%;padding:7px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;">
+                  <option value="">— Selecciona estatus —</option>
+                </select>
+              </div>
+              <button onclick="uvAplicarEstatus()"
+                style="padding:8px 20px;background:#8e44ad;color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap;">
+                💾 Guardar Estatus
+              </button>
+            </div>
           </div>
           <div id="uv-tabla"></div>
         </div>
@@ -4804,6 +4817,47 @@
     document.querySelectorAll('.uv-cb').forEach(cb => cb.checked = checked);
   }
 
+  async function uvCargarCatEstatus() {
+    const sel = document.getElementById('upd-val-estatus');
+    sel.innerHTML = '<option value="">— Selecciona estatus —</option>';
+    try {
+      const r = await fetch('/api/contratos/cat-estatus').then(x => x.json());
+      (r.data || []).forEach(e => {
+        const o = document.createElement('option');
+        o.value = o.textContent = e;
+        sel.appendChild(o);
+      });
+    } catch(e) {}
+  }
+
+  async function uvAplicarEstatus() {
+    const cbs = [...document.querySelectorAll('.uv-cb:checked')];
+    const msg = document.getElementById('upd-val-msg');
+    if (!cbs.length) { msg.innerHTML = '<span style="color:#e74c3c;">Selecciona al menos una validación.</span>'; return; }
+    const estatus = document.getElementById('upd-val-estatus').value;
+    if (!estatus) { msg.innerHTML = '<span style="color:#e74c3c;">Selecciona un estatus.</span>'; return; }
+    const clave_plataforma = document.getElementById('upd-val-plataforma').value.trim();
+    if (!clave_plataforma) { msg.innerHTML = '<span style="color:#e74c3c;">Ingresa la plataforma.</span>'; return; }
+    const version = document.getElementById('upd-val-version').value.trim();
+    msg.innerHTML = `Actualizando ${cbs.length} validaciones...`;
+    let ok = 0, fail = 0;
+    for (const cb of cbs) {
+      try {
+        const r = await fetch('/api/contratos/estatus-validacion/estatus', {
+          method: 'PUT', headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({ clave_validacion: cb.dataset.clave, clave_plataforma, estatus, version: version || null })
+        }).then(x => x.json());
+        r.ok ? ok++ : fail++;
+      } catch(e) { fail++; }
+    }
+    if (fail === 0) {
+      msg.innerHTML = `<span style="color:#27ae60;">✅ Estatus <strong>${estatus}</strong> aplicado a ${ok} validaciones.</span>`;
+      await uvCargar();
+    } else {
+      msg.innerHTML = `<span style="color:#e74c3c;">❌ ${fail} con error, ${ok} exitosas.</span>`;
+    }
+  }
+
   async function uvAplicar(desmarcar) {
     const cbs  = [...document.querySelectorAll('.uv-cb:checked')];
     const msg  = document.getElementById('upd-val-msg');
@@ -5552,7 +5606,7 @@
     'qa-alertas':       loadQaAlertas,
     'bc-consulta-rep':    () => { initBC(); },
     'bc-actualizar-rep':  () => { updRepCargarCatEstatus(); },
-    'bc-actualizar-val':  () => {},
+    'bc-actualizar-val':  () => { uvCargarCatEstatus(); },
     'bc-carga-inv':       () => {},
     'bc-rep-clientes':    () => {},
     'sofipo-layouts':     loadSofipoLayouts,
