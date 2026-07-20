@@ -286,13 +286,25 @@ router.get('/clientes/:clave/validaciones', requireAuth, async (req, res) => {
 router.get('/estatus-reporte/versiones', requireAuth, async (req, res) => {
   try {
     const clave = (req.query.clave_rep || '').trim();
+    const plataforma = (req.query.clave_plataforma || '').trim();
     if (!clave) return res.json({ ok: true, data: [] });
-    const rows = await query(`
-      SELECT DISTINCT VERSION_CARGA
-      FROM INVENTARIO_REPORTES_HIST
-      WHERE CLAVE_REP=${esc(clave)} AND VERSION_CARGA IS NOT NULL
-      ORDER BY VERSION_CARGA DESC
-    `);
+    // Con plataforma: versiones de ESTATUS_REPORTE para ese (rep, plataforma)
+    // Sin plataforma: versiones de INVENTARIO_REPORTES_HIST para el reporte
+    let rows;
+    if (plataforma) {
+      rows = await query(`
+        SELECT DISTINCT VERSION_CARGA FROM ESTATUS_REPORTE
+        WHERE CLAVE_REP=${esc(clave)} AND CLAVE_PLATAFORMA=${esc(plataforma)}
+          AND VERSION_CARGA IS NOT NULL
+        ORDER BY VERSION_CARGA DESC
+      `);
+    } else {
+      rows = await query(`
+        SELECT DISTINCT VERSION_CARGA FROM INVENTARIO_REPORTES_HIST
+        WHERE CLAVE_REP=${esc(clave)} AND VERSION_CARGA IS NOT NULL
+        ORDER BY VERSION_CARGA DESC
+      `);
+    }
     res.json({ ok: true, data: rows.map(r => r.VERSION_CARGA) });
   } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
 });
@@ -927,17 +939,18 @@ router.put('/estatus-reporte/estatus', requireAuth, async (req, res) => {
   try {
     const { clave_rep, clave_plataforma, estatus, version } = req.body;
     const usuario = req.session.user?.username || 'sistema';
+    const versionFilter = version ? ` AND VERSION_CARGA=${esc(version)}` : '';
 
     const existe = await query(`
       SELECT 1 FROM ESTATUS_REPORTE
-      WHERE CLAVE_REP=${esc(clave_rep)} AND CLAVE_PLATAFORMA=${esc(clave_plataforma)}
+      WHERE CLAVE_REP=${esc(clave_rep)} AND CLAVE_PLATAFORMA=${esc(clave_plataforma)}${versionFilter}
     `);
 
     if (existe.length) {
       await query(`
         UPDATE ESTATUS_REPORTE SET
           ESTATUS=${esc(estatus)}, FECHA_ESTATUS=GETDATE(), USER_ESTATUS=${esc(usuario)}
-        WHERE CLAVE_REP=${esc(clave_rep)} AND CLAVE_PLATAFORMA=${esc(clave_plataforma)}
+        WHERE CLAVE_REP=${esc(clave_rep)} AND CLAVE_PLATAFORMA=${esc(clave_plataforma)}${versionFilter}
       `);
     } else {
       const invRow = await query(`SELECT CLAVE_REP_GENERAL FROM INVENTARIO_REPORTES WHERE CLAVE_REP=${esc(clave_rep)}`);
@@ -952,7 +965,7 @@ router.put('/estatus-reporte/estatus', requireAuth, async (req, res) => {
       `);
     }
     await auditLog(usuario, 'estatus-reporte', 'ESTATUS',
-      { clave_rep, clave_plataforma, estatus });
+      { clave_rep, clave_plataforma, version: version || 'todas', estatus });
     res.json({ ok: true });
   } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
 });

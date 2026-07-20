@@ -1558,6 +1558,12 @@
           <p id="rep-estatus-modal-info" style="font-size:12px;color:#888;margin:0 0 20px;font-family:monospace;"></p>
           <div style="display:grid;gap:14px;">
             <div>
+              <label style="font-size:11px;font-weight:600;color:#555;display:block;margin-bottom:4px;">Versión de Carga</label>
+              <select id="rep-estatus-version" style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;">
+                <option value="">— Todas —</option>
+              </select>
+            </div>
+            <div>
               <label style="font-size:11px;font-weight:600;color:#555;display:block;margin-bottom:4px;">Estatus</label>
               <select id="rep-estatus-select" style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;"></select>
             </div>
@@ -4155,10 +4161,24 @@
   let _catEstatus = [];
 
   async function repEstatusAbrir(clave_rep, clave_plataforma, version, estatusActual) {
-    _repEstatusCurrent = { clave_rep, clave_plataforma, version };
+    _repEstatusCurrent = { clave_rep, clave_plataforma };
     document.getElementById('rep-estatus-modal-info').textContent = `${clave_rep} · ${clave_plataforma}`;
     document.getElementById('rep-estatus-msg').innerHTML = '';
 
+    // Cargar versiones disponibles para este (rep, plataforma)
+    const selVer = document.getElementById('rep-estatus-version');
+    selVer.innerHTML = '<option value="">— Todas —</option>';
+    try {
+      const rv = await fetch(`/api/contratos/estatus-reporte/versiones?clave_rep=${encodeURIComponent(clave_rep)}&clave_plataforma=${encodeURIComponent(clave_plataforma)}`).then(x => x.json());
+      (rv.data || []).forEach(v => {
+        const o = document.createElement('option');
+        o.value = v; o.textContent = v;
+        if (v === version) o.selected = true;
+        selVer.appendChild(o);
+      });
+    } catch(e) {}
+
+    // Cargar catálogo estatus
     const sel = document.getElementById('rep-estatus-select');
     if (!_catEstatus.length) {
       try {
@@ -4175,7 +4195,8 @@
 
   async function repEstatusConfirmar() {
     const estatus = document.getElementById('rep-estatus-select').value;
-    const { clave_rep, clave_plataforma, version } = _repEstatusCurrent;
+    const version = document.getElementById('rep-estatus-version').value;
+    const { clave_rep, clave_plataforma } = _repEstatusCurrent;
     document.getElementById('rep-estatus-msg').innerHTML = 'Guardando...';
     try {
       const r = await fetch('/api/contratos/estatus-reporte/estatus', {
