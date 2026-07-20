@@ -1109,7 +1109,12 @@
             style="padding:7px 12px;border:1px solid #ddd;border-radius:6px;font-size:13px;width:220px;">
         </div>
         <!-- Resumen badges -->
-        <div id="bc-rep-resumen" style="display:none;margin-bottom:14px;display:flex;gap:10px;flex-wrap:wrap;"></div>
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px;">
+          <div id="bc-rep-resumen" style="display:none;gap:10px;flex-wrap:wrap;display:flex;"></div>
+          <button id="bc-rep-export-btn" onclick="exportarReportesContrato()" style="display:none;padding:5px 14px;background:#27ae60;color:#fff;border:none;border-radius:6px;font-size:12px;cursor:pointer;margin-left:auto;">
+            📥 Exportar Excel
+          </button>
+        </div>
         <div id="bc-rep-content"><p style="color:#aaa;font-size:13px;">Selecciona un cliente y contrato.</p></div>
       </div>
 
@@ -4067,6 +4072,7 @@
         <span style="background:#8e44ad;color:#fff;padding:4px 12px;border-radius:12px;font-size:12px;">📝 Documentados: ${res.documentados||0}/${res.total||0}</span>
         <span style="background:#2980b9;color:#fff;padding:4px 12px;border-radius:12px;font-size:12px;">💻 Programados: ${res.programados||0}/${res.total||0}</span>
         <span style="background:#27ae60;color:#fff;padding:4px 12px;border-radius:12px;font-size:12px;">✅ Certificados: ${res.certificados||0}/${res.total||0}</span>`;
+      document.getElementById('bc-rep-export-btn').style.display = bcRepData.length ? '' : 'none';
       renderReportesContrato(bcRepData);
     } catch(e) { wrap.innerHTML = '<div class="loading">Error: ' + e.message + '</div>'; }
   }
@@ -4115,6 +4121,26 @@
       </tbody></table>`;
   }
 
+
+  function exportarReportesContrato() {
+    if (!bcRepData || !bcRepData.length) return;
+    const contrato = document.getElementById('bc-rep-contrato').value;
+    const rows = bcRepData.map(r => ({
+      'Clave Reporte':   r.CLAVE_REP       || '',
+      'Descripción':     r.DESCRIPCION_ESP  || '',
+      'Plataforma':      r.CLAVE_PLATAFORMA || '',
+      'Versión':         r.VERSION_CARGA    || '',
+      'Etapa Contrato':  r.ETAPA            || '',
+      'Documentado':     r.DOCUMENTADO      || '',
+      'Programado':      r.PROGRAMADO       || '',
+      'Certificado':     r.CERTIFICADO      || '',
+      'Estatus':         r.ESTATUS          || ''
+    }));
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.json_to_sheet(rows);
+    XLSX.utils.book_append_sheet(wb, ws, 'Reportes');
+    XLSX.writeFile(wb, `estatus_reportes_${contrato}.xlsx`);
+  }
 
   // ── Inventario de Validaciones ────────────────────────────
   async function initInvValidaciones() {
