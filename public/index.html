@@ -1199,7 +1199,7 @@
                 style="width:100%;padding:7px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;">
             </div>
           </div>
-          <div style="display:flex;align-items:center;gap:16px;margin-bottom:8px;">
+          <div style="display:flex;align-items:center;gap:16px;margin-bottom:16px;">
             <button onclick="actualizarEstatusReporte(false)"
               style="padding:8px 24px;background:#1a3558;color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;">
               ✓ Marcar Etapa
@@ -1207,6 +1207,19 @@
             <button onclick="actualizarEstatusReporte(true)"
               style="padding:8px 24px;background:#e74c3c;color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;">
               ✗ Desmarcar Etapa
+            </button>
+          </div>
+          <hr style="border:none;border-top:1px solid #eee;margin:0 0 16px;">
+          <div style="display:flex;align-items:flex-end;gap:12px;">
+            <div style="flex:1;">
+              <label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px;">Estatus Intermedio</label>
+              <select id="upd-rep-estatus" style="width:100%;padding:7px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;">
+                <option value="">— Selecciona estatus —</option>
+              </select>
+            </div>
+            <button onclick="actualizarEstatusIntermedio()"
+              style="padding:8px 20px;background:#8e44ad;color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap;">
+              💾 Guardar Estatus
             </button>
           </div>
           <div id="upd-rep-msg" style="margin-top:12px;font-size:13px;"></div>
@@ -4496,11 +4509,46 @@
       </div>`).join('');
   }
 
-  function precargarActualizarRep(clave, plataforma) {
+  async function precargarActualizarRep(clave, plataforma) {
     showSection('bc-actualizar-rep');
     document.getElementById('upd-rep-clave').value = clave;
     document.getElementById('upd-rep-plataforma').value = plataforma;
     updRepCargarVersiones();
+    await updRepCargarCatEstatus();
+  }
+
+  async function updRepCargarCatEstatus() {
+    const sel = document.getElementById('upd-rep-estatus');
+    if (sel.options.length > 1) return; // ya cargado
+    try {
+      const r = await fetch('/api/contratos/cat-estatus').then(x => x.json());
+      (r.data || []).forEach(e => {
+        const o = document.createElement('option');
+        o.value = o.textContent = e;
+        sel.appendChild(o);
+      });
+    } catch(e) {}
+  }
+
+  async function actualizarEstatusIntermedio() {
+    const clave_rep     = document.getElementById('upd-rep-clave').value.trim();
+    const clave_plataforma = document.getElementById('upd-rep-plataforma').value;
+    const estatus       = document.getElementById('upd-rep-estatus').value;
+    const version       = document.getElementById('upd-rep-version').value;
+    const msg           = document.getElementById('upd-rep-msg');
+    if (!clave_rep || !clave_plataforma) { msg.innerHTML = '<span style="color:#e74c3c;">Ingresa clave y plataforma.</span>'; return; }
+    if (!estatus) { msg.innerHTML = '<span style="color:#e74c3c;">Selecciona un estatus.</span>'; return; }
+    msg.innerHTML = 'Guardando...';
+    try {
+      const r = await fetch('/api/contratos/estatus-reporte/estatus', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clave_rep, clave_plataforma, estatus, version: version || null })
+      }).then(x => x.json());
+      msg.innerHTML = r.ok
+        ? `<span style="color:#27ae60;">✅ Estatus actualizado a <strong>${estatus}</strong>.</span>`
+        : `<span style="color:#e74c3c;">❌ ${r.message}</span>`;
+    } catch(e) { msg.innerHTML = `<span style="color:#e74c3c;">Error: ${e.message}</span>`; }
   }
 
   let _uvQuick = {};
@@ -5361,7 +5409,7 @@
     'chi-proyectos':  loadChiProyectos,
     'qa-alertas':       loadQaAlertas,
     'bc-consulta-rep':    () => { initBC(); },
-    'bc-actualizar-rep':  () => {},
+    'bc-actualizar-rep':  () => { updRepCargarCatEstatus(); },
     'bc-actualizar-val':  () => {},
     'bc-carga-inv':       () => {},
     'bc-rep-clientes':    () => {},
