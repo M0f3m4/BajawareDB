@@ -4153,7 +4153,8 @@
         <th style="padding:7px 10px;text-align:center;">Doc</th>
         <th style="padding:7px 10px;text-align:center;">Prog</th>
         <th style="padding:7px 10px;text-align:center;">Cert</th>
-        <th style="padding:7px 10px;text-align:center;">Estatus</th>
+        <th style="padding:7px 10px;text-align:center;">Estatus Reporte</th>
+        <th style="padding:7px 10px;text-align:center;">Último Cambio</th>
         <th style="padding:7px 10px;text-align:center;">Acción</th>
       </tr></thead>
       <tbody>${data.map((r,i) => `
@@ -4167,6 +4168,11 @@
           <td style="padding:6px 10px;text-align:center;">${etapaBadge(r.PROGRAMADO)}</td>
           <td style="padding:6px 10px;text-align:center;">${etapaBadge(r.CERTIFICADO)}</td>
           <td style="padding:6px 10px;text-align:center;">${estatusPill(r.ESTATUS)}</td>
+          <td style="padding:6px 10px;text-align:center;font-size:11px;color:#555;">
+            ${(r.USER_ESTATUS || r.USER_CERT || r.USER_PROG || r.USER_DOC)
+              ? `<span style="font-weight:600;">${r.USER_ESTATUS || r.USER_CERT || r.USER_PROG || r.USER_DOC}</span>`
+              : '<span style="color:#ccc;">—</span>'}
+          </td>
           <td style="padding:6px 10px;text-align:center;white-space:nowrap;">
             <button onclick="precargarActualizarRep('${r.CLAVE_REP}','${r.CLAVE_PLATAFORMA||''}')"
               style="padding:3px 8px;background:#1a3558;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:11px;margin-right:4px;">

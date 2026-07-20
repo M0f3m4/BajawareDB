@@ -116,6 +116,8 @@ router.get('/contratos/:clave/reportes', requireAuth, async (req, res) => {
         er.CERTIFICADO,
         er.CERT_FECHA_REAL,
         er.ESTATUS,
+        er.USER_DOC, er.USER_PROG, er.USER_CERT,
+        er.USER_ESTATUS, er.FECHA_ESTATUS,
         COALESCE(er.CLAVE_PLATAFORMA, c.CLAVE_PLATAFORMA) AS CLAVE_PLATAFORMA,
         er.VERSION,
         ir.VERSION_CARGA
