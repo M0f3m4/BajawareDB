@@ -920,7 +920,11 @@ router.get('/cat-plataformas', requireAuth, async (req, res) => {
 // ── GET catálogo de estatus ───────────────────────────────
 router.get('/cat-estatus', requireAuth, async (req, res) => {
   try {
-    const rows = await query(`SELECT CLAVE_ESTATUS FROM CAT_ESTATUSINT_REPVAL ORDER BY ID_ESTATUS`);
+    const rows = await query(`
+      SELECT ce.CLAVE_ESTATUS FROM CAT_ESTATUS ce
+      INNER JOIN CAT_ESTATUSINT_REPVAL cv ON cv.CLAVE_ESTATUS = ce.CLAVE_ESTATUS
+      ORDER BY cv.ID_ESTATUS
+    `);
     res.json({ ok: true, data: rows.map(r => r.CLAVE_ESTATUS) });
   } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
 });
