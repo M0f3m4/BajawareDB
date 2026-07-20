@@ -1543,6 +1543,37 @@
         </div>
       </div>
 
+      <!-- Modal: actualizar estatus secuencial validación -->
+      <div id="val-estatus-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;align-items:center;justify-content:center;">
+        <div style="background:#fff;border-radius:12px;padding:28px 32px;width:420px;max-width:95vw;box-shadow:0 8px 32px rgba(0,0,0,.2);">
+          <h3 style="margin:0 0 4px;font-size:15px;color:#1a3558;">📋 Actualizar Estatus Validación</h3>
+          <p id="val-estatus-modal-info" style="font-size:12px;color:#888;margin:0 0 20px;font-family:monospace;"></p>
+          <div style="display:grid;gap:14px;">
+            <div>
+              <label style="font-size:11px;font-weight:600;color:#555;display:block;margin-bottom:4px;">Versión de Carga</label>
+              <select id="val-estatus-version" style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;">
+                <option value="">— Todas —</option>
+              </select>
+            </div>
+            <div>
+              <label style="font-size:11px;font-weight:600;color:#555;display:block;margin-bottom:4px;">Estatus</label>
+              <select id="val-estatus-select" style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;"></select>
+            </div>
+          </div>
+          <div id="val-estatus-msg" style="margin-top:12px;font-size:13px;min-height:18px;"></div>
+          <div style="display:flex;gap:10px;margin-top:20px;justify-content:flex-end;">
+            <button onclick="document.getElementById('val-estatus-modal').style.display='none'"
+              style="padding:7px 18px;background:#f0f4f8;color:#555;border:1px solid #ddd;border-radius:6px;font-size:13px;cursor:pointer;">
+              Cancelar
+            </button>
+            <button onclick="valEstatusConfirmar()"
+              style="padding:7px 18px;background:#1a3558;color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;">
+              ✅ Guardar
+            </button>
+          </div>
+        </div>
+      </div>
+
       <!-- Modal: asignación de plataformas post-upload REPORTES -->
       <div id="inv-plat-rep-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;align-items:center;justify-content:center;">
         <div style="background:#fff;border-radius:12px;padding:28px 32px;width:420px;max-width:95vw;box-shadow:0 8px 32px rgba(0,0,0,.2);">
@@ -4506,7 +4537,8 @@
                 <th style="padding:6px 12px;text-align:center;white-space:nowrap;border-bottom:2px solid #c5d0dc;">Doc</th>
                 <th style="padding:6px 12px;text-align:center;white-space:nowrap;border-bottom:2px solid #c5d0dc;">Prog</th>
                 <th style="padding:6px 12px;text-align:center;white-space:nowrap;border-bottom:2px solid #c5d0dc;">Cert</th>
-                <th style="padding:6px 12px;text-align:center;white-space:nowrap;border-bottom:2px solid #c5d0dc;">Estatus</th>
+                <th style="padding:6px 12px;text-align:center;white-space:nowrap;border-bottom:2px solid #c5d0dc;">Estatus Proyecto</th>
+                <th style="padding:6px 12px;text-align:center;white-space:nowrap;border-bottom:2px solid #c5d0dc;">Último Cambio</th>
                 <th style="padding:6px 12px;text-align:center;white-space:nowrap;border-bottom:2px solid #c5d0dc;">Plataforma</th>
                 <th style="padding:6px 12px;text-align:center;white-space:nowrap;border-bottom:2px solid #c5d0dc;">Versión</th>
                 <th style="padding:6px 12px;text-align:center;white-space:nowrap;border-bottom:2px solid #c5d0dc;">Acción</th>
@@ -4522,13 +4554,32 @@
                 <td style="padding:5px 12px;text-align:center;">${etapaBadge(v.PROGRAMADO)}</td>
                 <td style="padding:5px 12px;text-align:center;">${etapaBadge(v.CERTIFICADO)}</td>
                 <td style="padding:5px 12px;text-align:center;">${estatusPill(v.ESTATUS)}</td>
+                <td style="padding:5px 12px;text-align:center;font-size:11px;color:#555;">
+                  ${(() => {
+                    const candidatos = [
+                      { user: v.USER_ESTATUS, fecha: v.FECHA_ESTATUS },
+                      { user: v.USER_CERT,    fecha: v.CERT_FECHA_REAL },
+                      { user: v.USER_PROG,    fecha: v.PROG_FECHA_REAL },
+                      { user: v.USER_DOC,     fecha: v.DOC_FECHA_REAL },
+                    ].filter(c => c.user);
+                    if (!candidatos.length) return '<span style="color:#ccc;">—</span>';
+                    candidatos.sort((a,b) => (b.fecha||'') > (a.fecha||'') ? 1 : -1);
+                    const c = candidatos[0];
+                    const fecha = c.fecha ? new Date(c.fecha).toLocaleDateString('es-MX') : '';
+                    return `<span style="font-weight:600;">${c.user}</span>${fecha ? `<br><span style="color:#aaa;font-size:10px;">${fecha}</span>` : ''}`;
+                  })()}
+                </td>
                 <td style="padding:5px 12px;text-align:center;white-space:nowrap;">${v.CLAVE_PLATAFORMA||''}</td>
                 <td style="padding:5px 12px;text-align:center;"><span style="font-size:11px;background:#f0f4ff;color:#1a3558;padding:2px 7px;border-radius:10px;font-family:monospace;">${v.VERSION_CARGA||'—'}</span></td>
-                <td style="padding:5px 12px;text-align:center;">
+                <td style="padding:5px 12px;text-align:center;white-space:nowrap;">
                   <button onclick="precargarActualizarVal('${v.CLAVE_VALIDACION}','${v.CLAVE_REP}','${v.CLAVE_PLATAFORMA||''}')"
-                    style="padding:3px 8px;background:#1a3558;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:11px;"
+                    style="padding:3px 8px;background:#1a3558;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:11px;margin-right:4px;"
                     title="Actualiza para todos los clientes que compartan esta validación">
-                    Actualizar
+                    Etapas
+                  </button>
+                  <button onclick="valEstatusAbrir('${v.CLAVE_VALIDACION}','${v.CLAVE_PLATAFORMA||''}','${v.VERSION_CARGA||''}','${v.ESTATUS||''}')"
+                    style="padding:3px 8px;background:#8e44ad;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:11px;">
+                    Estatus
                   </button>
                 </td>
               </tr>`).join('')}
@@ -5092,6 +5143,65 @@
         document.getElementById('inv-plat-msg').innerHTML = `<span style="color:#e74c3c;">❌ ${r.message}</span>`;
       }
     } catch(e) { document.getElementById('inv-plat-msg').innerHTML = '<span style="color:#e74c3c;">Error: ' + e.message + '</span>'; }
+  }
+
+  let _valEstatusCurrent = {};
+
+  async function valEstatusAbrir(clave_validacion, clave_plataforma, version, estatusActual) {
+    _valEstatusCurrent = { clave_validacion, clave_plataforma };
+    document.getElementById('val-estatus-modal-info').textContent = `${clave_validacion} · ${clave_plataforma}`;
+    document.getElementById('val-estatus-msg').innerHTML = '';
+
+    // Versiones disponibles
+    const selVer = document.getElementById('val-estatus-version');
+    selVer.innerHTML = '<option value="">— Todas —</option>';
+    try {
+      const rv = await fetch(`/api/contratos/estatus-validacion/versiones?clave_rep=${encodeURIComponent(clave_validacion)}`).then(x => x.json());
+      (rv.data || []).forEach(v => {
+        const o = document.createElement('option');
+        o.value = v; o.textContent = v;
+        if (v === version) o.selected = true;
+        selVer.appendChild(o);
+      });
+    } catch(e) {}
+
+    // Catálogo estatus
+    const sel = document.getElementById('val-estatus-select');
+    sel.innerHTML = '';
+    if (!_catEstatus.length) {
+      try {
+        const r = await fetch('/api/contratos/cat-estatus').then(x => x.json());
+        _catEstatus = r.data || [];
+      } catch(e) {}
+    }
+    sel.innerHTML = _catEstatus.map(e =>
+      `<option value="${e}" ${e === estatusActual ? 'selected' : ''}>${e}</option>`
+    ).join('');
+
+    document.getElementById('val-estatus-modal').style.display = 'flex';
+  }
+
+  async function valEstatusConfirmar() {
+    const estatus = document.getElementById('val-estatus-select').value;
+    const version = document.getElementById('val-estatus-version').value;
+    const { clave_validacion, clave_plataforma } = _valEstatusCurrent;
+    document.getElementById('val-estatus-msg').innerHTML = 'Guardando...';
+    try {
+      const r = await fetch('/api/contratos/estatus-validacion/estatus', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clave_validacion, clave_plataforma, estatus, version: version || null })
+      }).then(x => x.json());
+      if (r.ok) {
+        document.getElementById('val-estatus-msg').innerHTML = `<span style="color:#27ae60;">✅ Estatus actualizado a <strong>${estatus}</strong>.</span>`;
+        setTimeout(() => {
+          document.getElementById('val-estatus-modal').style.display = 'none';
+          loadValCliente();
+        }, 800);
+      } else {
+        document.getElementById('val-estatus-msg').innerHTML = `<span style="color:#e74c3c;">❌ ${r.message}</span>`;
+      }
+    } catch(e) { document.getElementById('val-estatus-msg').innerHTML = `<span style="color:#e74c3c;">Error: ${e.message}</span>`; }
   }
 
   let _invPlatReportes = [];

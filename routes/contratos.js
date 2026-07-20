@@ -229,8 +229,11 @@ router.get('/clientes/:clave/validaciones', requireAuth, async (req, res) => {
       const inList = matched.map(c => `'${c.replace(/'/g, "''")}'`).join(',');
       rows = await query(`
         SELECT rv.CLAVE_VALIDACION, rv.CLAVE_REP, rv.TIPO_VALIDACION, rv.DESCRIPCION,
-               rv.DOCUMENTADO, rv.DOC_FECHA_REAL, rv.PROGRAMADO, rv.PROG_FECHA_REAL,
-               rv.CERTIFICADO, rv.CERT_FECHA_REAL, rv.ESTATUS, rv.CLAVE_PLATAFORMA, rv.VERSION, rv.VERSION_CARGA
+               rv.DOCUMENTADO, rv.DOC_FECHA_REAL, rv.USER_DOC,
+               rv.PROGRAMADO, rv.PROG_FECHA_REAL, rv.USER_PROG,
+               rv.CERTIFICADO, rv.CERT_FECHA_REAL, rv.USER_CERT,
+               rv.ESTATUS, rv.USER_ESTATUS, rv.FECHA_ESTATUS,
+               rv.CLAVE_PLATAFORMA, rv.VERSION, rv.VERSION_CARGA
         FROM REPORTE_VALIDACION rv
         WHERE rv.CLAVE_REP IN (${inList})
         ${platFilter}
@@ -262,8 +265,11 @@ router.get('/clientes/:clave/validaciones', requireAuth, async (req, res) => {
       const inList = matched.map(c => `'${c.replace(/'/g, "''")}'`).join(',');
       rows = await query(`
         SELECT rv.CLAVE_VALIDACION, rv.CLAVE_REP, rv.TIPO_VALIDACION, rv.DESCRIPCION,
-               rv.DOCUMENTADO, rv.DOC_FECHA_REAL, rv.PROGRAMADO, rv.PROG_FECHA_REAL,
-               rv.CERTIFICADO, rv.CERT_FECHA_REAL, rv.ESTATUS, rv.CLAVE_PLATAFORMA, rv.VERSION, rv.VERSION_CARGA
+               rv.DOCUMENTADO, rv.DOC_FECHA_REAL, rv.USER_DOC,
+               rv.PROGRAMADO, rv.PROG_FECHA_REAL, rv.USER_PROG,
+               rv.CERTIFICADO, rv.CERT_FECHA_REAL, rv.USER_CERT,
+               rv.ESTATUS, rv.USER_ESTATUS, rv.FECHA_ESTATUS,
+               rv.CLAVE_PLATAFORMA, rv.VERSION, rv.VERSION_CARGA
         FROM REPORTE_VALIDACION rv
         WHERE rv.CLAVE_REP IN (${inList})
         ${platFilter}
@@ -478,6 +484,31 @@ router.put('/estatus-reporte', requireAuth, async (req, res) => {
 // ── PUT actualizar estatus de validación ──────────────────
 // Cascada MARCAR:    DOC→doc | PROG→doc+prog | CERT→doc+prog+cert
 // Cascada DESMARCAR: DOC→los 3 | PROG→prog+cert | CERT→cert
+// ── PUT actualizar estatus secuencial de validación ───────
+router.put('/estatus-validacion/estatus', requireAuth, async (req, res) => {
+  try {
+    const { clave_validacion, clave_plataforma, estatus, version } = req.body;
+    const usuario = req.session.user?.username || 'sistema';
+    const versionFilter = version ? ` AND VERSION_CARGA=${esc(version)}` : '';
+
+    const existe = await query(`
+      SELECT 1 FROM REPORTE_VALIDACION
+      WHERE CLAVE_VALIDACION=${esc(clave_validacion)} AND CLAVE_PLATAFORMA=${esc(clave_plataforma)}${versionFilter}
+    `);
+
+    if (existe.length) {
+      await query(`
+        UPDATE REPORTE_VALIDACION SET
+          ESTATUS=${esc(estatus)}, FECHA_ESTATUS=GETDATE(), USER_ESTATUS=${esc(usuario)}
+        WHERE CLAVE_VALIDACION=${esc(clave_validacion)} AND CLAVE_PLATAFORMA=${esc(clave_plataforma)}${versionFilter}
+      `);
+    }
+    await auditLog(usuario, 'estatus-validacion', 'ESTATUS',
+      { clave_validacion, clave_plataforma, version: version || 'todas', estatus });
+    res.json({ ok: true });
+  } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
+});
+
 router.put('/estatus-validacion', requireAuth, async (req, res) => {
   try {
     const { clave_validacion, clave_rep, clave_plataforma, etapa, fecha, desmarcar } = req.body;
