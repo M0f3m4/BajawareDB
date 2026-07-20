@@ -4169,9 +4169,20 @@
           <td style="padding:6px 10px;text-align:center;">${etapaBadge(r.CERTIFICADO)}</td>
           <td style="padding:6px 10px;text-align:center;">${estatusPill(r.ESTATUS)}</td>
           <td style="padding:6px 10px;text-align:center;font-size:11px;color:#555;">
-            ${(r.USER_ESTATUS || r.USER_CERT || r.USER_PROG || r.USER_DOC)
-              ? `<span style="font-weight:600;">${r.USER_ESTATUS || r.USER_CERT || r.USER_PROG || r.USER_DOC}</span>`
-              : '<span style="color:#ccc;">—</span>'}
+            ${(() => {
+              const candidatos = [
+                { user: r.USER_ESTATUS, fecha: r.FECHA_ESTATUS },
+                { user: r.USER_CERT,    fecha: r.CERT_FECHA_REAL },
+                { user: r.USER_PROG,    fecha: r.PROG_FECHA_REAL },
+                { user: r.USER_DOC,     fecha: r.DOC_FECHA_REAL },
+              ].filter(c => c.user);
+              if (!candidatos.length) return '<span style="color:#ccc;">—</span>';
+              // Ordenar por fecha más reciente
+              candidatos.sort((a,b) => (b.fecha||'') > (a.fecha||'') ? 1 : -1);
+              const c = candidatos[0];
+              const fecha = c.fecha ? new Date(c.fecha).toLocaleDateString('es-MX') : '';
+              return `<span style="font-weight:600;">${c.user}</span>${fecha ? `<br><span style="color:#aaa;font-size:10px;">${fecha}</span>` : ''}`;
+            })()}
           </td>
           <td style="padding:6px 10px;text-align:center;white-space:nowrap;">
             <button onclick="precargarActualizarRep('${r.CLAVE_REP}','${r.CLAVE_PLATAFORMA||''}')"
