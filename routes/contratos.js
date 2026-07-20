@@ -917,8 +917,8 @@ router.get('/cat-plataformas', requireAuth, async (req, res) => {
 // ── GET catálogo de estatus ───────────────────────────────
 router.get('/cat-estatus', requireAuth, async (req, res) => {
   try {
-    const rows = await query(`SELECT ESTATUS FROM CAT_ESTATUS ORDER BY ID_ESTATUS`);
-    res.json({ ok: true, data: rows.map(r => r.ESTATUS) });
+    const rows = await query(`SELECT CLAVE_ESTATUS FROM CAT_ESTATUS ORDER BY ID_ESTATUS`);
+    res.json({ ok: true, data: rows.map(r => r.CLAVE_ESTATUS) });
   } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
 });
 
