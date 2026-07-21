@@ -1544,6 +1544,7 @@
               <div style="flex:1;">
                 <label style="font-size:11px;font-weight:600;color:#555;display:block;margin-bottom:4px;">Versión (todos)</label>
                 <input id="inv-ver-rep-todos" type="text" placeholder="ej. 3.10.1"
+                  oninput="invVerRepAplicarTodos()"
                   style="width:100%;padding:6px 10px;border:1px solid #ddd;border-radius:6px;font-size:12px;box-sizing:border-box;">
               </div>
               <div style="flex:1;">
@@ -5032,7 +5033,7 @@
     document.getElementById('inv-ver-form-section').style.display = 'none';
     document.getElementById('inv-ver-check-section').style.display = 'none';
     document.getElementById('inv-ver-rep-versions-section').style.display = '';
-    document.getElementById('inv-ver-rep-todos').value = defaultVer;
+    document.getElementById('inv-ver-rep-todos').value = '';
     // Ensanchar modal para la tabla
     document.getElementById('inv-ver-modal').querySelector('div').style.width = '580px';
 
@@ -5044,7 +5045,7 @@
       ${_invVerRepRows.map(clave => `
       <div style="display:grid;grid-template-columns:1fr 110px 110px;gap:8px;align-items:center;padding:7px 14px;border-bottom:1px solid #f0f0f0;">
         <span style="font-family:monospace;font-size:12px;color:#1a3558;font-weight:600;">${clave}</span>
-        <input class="inv-ver-rep-version-input" data-clave="${clave}" type="text" value="${defaultVer}"
+        <input class="inv-ver-rep-version-input" data-clave="${clave}" type="text" value=""
           placeholder="ej. 3.10.1"
           style="padding:5px 8px;border:1px solid #ddd;border-radius:6px;font-size:12px;width:100%;box-sizing:border-box;">
         <select class="inv-ver-rep-tipo-input" data-clave="${clave}"
@@ -5066,9 +5067,13 @@
 
   async function invVerSubirConVersiones() {
     const versiones = {}, tipos = {};
+    let vacio = false;
     document.querySelectorAll('.inv-ver-rep-version-input').forEach(inp => {
-      versiones[inp.dataset.clave] = inp.value.trim() || '1.0.0';
+      const v = inp.value.trim();
+      if (!v) { inp.style.borderColor = '#e74c3c'; vacio = true; }
+      else { inp.style.borderColor = '#ddd'; versiones[inp.dataset.clave] = v; }
     });
+    if (vacio) { alert('Asigna una versión a todos los reportes antes de continuar.'); return; }
     document.querySelectorAll('.inv-ver-rep-tipo-input').forEach(sel => {
       tipos[sel.dataset.clave] = sel.value;
     });
@@ -5257,6 +5262,7 @@
       if (isRep && r.reportes && r.reportes.length) {
         _invPlatReportes = r.reportes;
         _invPlatRepVersion = version;
+        _invPlatRepVersionesMap = versiones || null; // mapa por reporte si existe
         await invPlatRepAbrir();
       }
     } catch(e) { msg.innerHTML = '<span style="color:#e74c3c;">Error: ' + e.message + '</span>'; }
@@ -5391,6 +5397,7 @@
 
   let _invPlatReportes = [];
   let _invPlatRepVersion = '1.0.0';
+  let _invPlatRepVersionesMap = null;
 
   async function invPlatRepAbrir() {
     try {
@@ -5429,15 +5436,18 @@
     }
     const asignaciones = [];
     for (const rep of _invPlatReportes) {
+      const versionRep = _invPlatRepVersionesMap
+        ? (_invPlatRepVersionesMap[rep.CLAVE_REP] || _invPlatRepVersion || '1.0.0')
+        : (_invPlatRepVersion || '1.0.0');
       for (const plat of checked) {
-        asignaciones.push({ clave_rep: rep.CLAVE_REP, clave_rep_general: rep.CLAVE_REP_GENERAL, plataforma: plat });
+        asignaciones.push({ clave_rep: rep.CLAVE_REP, clave_rep_general: rep.CLAVE_REP_GENERAL, plataforma: plat, version: versionRep });
       }
     }
     document.getElementById('inv-plat-rep-msg').innerHTML = 'Guardando...';
     try {
       const r = await fetch('/api/contratos/inventario-reportes/asignar-plataformas', {
         method: 'POST', headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({ asignaciones, version: _invPlatRepVersion })
+        body: JSON.stringify({ asignaciones })
       }).then(x => x.json());
       if (r.ok) {
         document.getElementById('inv-plat-rep-msg').innerHTML = `<span style="color:#27ae60;">✅ ${r.creados} creados, ${r.omitidos} ya existían.</span>`;
