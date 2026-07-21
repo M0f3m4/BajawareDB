@@ -796,13 +796,26 @@ router.post('/inventario-reportes/upload', requireAuth, upload.single('archivo')
                  CLAVE_REGULACION_REP, CLAVE_REP_GENERAL, FECHA_REGULACION
           FROM INVENTARIO_REPORTES WHERE CLAVE_REP=${esc(clave)}`);
         if (!existeInv.length) {
-          // Asegurar que CLAVE_REP_GENERAL existe en CAT_REPORTES_GENERALES
-          if (r.CLAVE_REP_GENERAL) {
-            const existeGen = await query(`SELECT 1 FROM CAT_REPORTES_GENERALES WHERE CLAVE_REP_GENERAL=${esc(r.CLAVE_REP_GENERAL)}`);
-            if (!existeGen.length) {
-              await query(`INSERT INTO CAT_REPORTES_GENERALES (CLAVE_REP_GENERAL) VALUES (${esc(r.CLAVE_REP_GENERAL)})`);
+          // Auto-insertar en catálogos si la clave no existe
+          const autoInsert = async (tabla, campoClave, campoNombre, valor) => {
+            if (!valor) return;
+            const existe = await query(`SELECT 1 FROM ${tabla} WHERE ${campoClave}=${esc(valor)}`);
+            if (!existe.length) {
+              if (campoNombre) {
+                await query(`INSERT INTO ${tabla} (${campoClave}, ${campoNombre}) VALUES (${esc(valor)}, ${esc(valor)})`);
+              } else {
+                await query(`INSERT INTO ${tabla} (${campoClave}) VALUES (${esc(valor)})`);
+              }
             }
-          }
+          };
+          await autoInsert('CAT_REPORTES_GENERALES', 'CLAVE_REP_GENERAL',    null,                    r.CLAVE_REP_GENERAL);
+          await autoInsert('CAT_VERSION_REPORTE',    'CLAVE_VERSION_REPORTE', 'NOMBRE_VERSION_REP',    r.CLAVE_VERSION_REPORTE);
+          await autoInsert('CAT_PAISES',             'CLAVE_PAIS',            'PAIS',                  r.CLAVE_PAIS);
+          await autoInsert('CAT_ENTIDAD_REGULADA',   'CLAVE_ENTIDADREGULADA', null,                    r.CLAVE_ENTIDADREGULADA);
+          await autoInsert('CAT_REGULADORES',        'CLAVE_REG',             'REGULADOR',             r.CLAVE_REG);
+          await autoInsert('CAT_GRUPO',              'CLAVE_GRUPO',           'NOMBRE_GRUPO',          r.CLAVE_GRUPO);
+          await autoInsert('CAT_PERIODICIDAD',       'CLAVE_PERIODO',         'PERIODO',               r.CLAVE_PERIODO);
+          await autoInsert('CAT_REGULACION',         'CLAVE_REGULACION_REP',  'NOMBRE_REGULACION_REP', r.CLAVE_REGULACION_REP);
           // Reporte nuevo — INSERT
           await query(`
             INSERT INTO INVENTARIO_REPORTES (
