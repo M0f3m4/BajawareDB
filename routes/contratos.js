@@ -170,6 +170,7 @@ router.get('/contratos/:clave/reportes', requireAuth, async (req, res) => {
         ir.DESCRIPCION_ESP,
         ir.CLAVE_ENTIDADREGULADA,
         COALESCE(ir.REPORTE, cr.CLAVE_REP) AS REPORTE,
+        er.ID_ESTATUS_REP,
         er.DOCUMENTADO,
         er.DOC_FECHA_REAL,
         er.PROGRAMADO,
@@ -181,12 +182,16 @@ router.get('/contratos/:clave/reportes', requireAuth, async (req, res) => {
         er.USER_ESTATUS, er.FECHA_ESTATUS,
         COALESCE(er.CLAVE_PLATAFORMA, c.CLAVE_PLATAFORMA) AS CLAVE_PLATAFORMA,
         er.VERSION,
-        ir.VERSION_CARGA
+        er.VERSION_CARGA
       FROM CONTRATOS_REPORTES cr
       LEFT JOIN CONTRATOS c            ON c.CLAVE_CONTRATO = cr.CLAVE_CONTRATO
       LEFT JOIN INVENTARIO_REPORTES ir ON ir.CLAVE_REP_GENERAL = cr.CLAVE_REP
-      LEFT JOIN ESTATUS_REPORTE er     ON er.CLAVE_REP_GENERAL = cr.CLAVE_REP
-                                      AND er.CLAVE_PLATAFORMA = c.CLAVE_PLATAFORMA
+      LEFT JOIN ESTATUS_REPORTE er     ON er.ID_ESTATUS_REP = (
+        SELECT TOP 1 ID_ESTATUS_REP FROM ESTATUS_REPORTE
+        WHERE CLAVE_REP_GENERAL = cr.CLAVE_REP
+          AND CLAVE_PLATAFORMA = c.CLAVE_PLATAFORMA
+        ORDER BY ID_ESTATUS_REP DESC
+      )
       WHERE cr.CLAVE_CONTRATO=${esc(req.params.clave)}
       ORDER BY cr.CLAVE_REP
     `);
@@ -477,7 +482,7 @@ router.get('/bitacora', requireAuth, async (req, res) => {
 // etapa: 'DOCUMENTADO' | 'PROGRAMADO' | 'CERTIFICADO'
 router.put('/estatus-reporte', requireAuth, async (req, res) => {
   try {
-    const { clave_rep, clave_plataforma, etapa, fecha, desmarcar, version } = req.body;
+    const { clave_rep, clave_plataforma, etapa, fecha, desmarcar, version, id_estatus_rep } = req.body;
     const usuario       = req.session.user?.username || 'sistema';
     const fechaVal      = fecha ? esc(fecha) : 'GETDATE()';
     const versionFilter = version ? ` AND VERSION_CARGA=${esc(version)}` : '';
@@ -497,6 +502,19 @@ router.put('/estatus-reporte', requireAuth, async (req, res) => {
       progVal      = (etapa === 'PROGRAMADO' || etapa === 'CERTIFICADO') ? "'SI'" : "'NO'";
       certVal      = etapa === 'CERTIFICADO' ? "'SI'" : "'NO'";
       nuevoEstatus = etapa;
+    }
+
+    // Si viene ID, actualizar directamente por ID (evita crear duplicados)
+    if (id_estatus_rep) {
+      await query(`
+        UPDATE ESTATUS_REPORTE SET
+          DOCUMENTADO=${docVal}, PROGRAMADO=${progVal}, CERTIFICADO=${certVal},
+          ESTATUS=${esc(nuevoEstatus)}
+        WHERE ID_ESTATUS_REP=${parseInt(id_estatus_rep)}
+      `);
+      await auditLog(usuario, 'estatus-reporte', desmarcar ? 'DESMARCAR' : 'MARCAR',
+        { id_estatus_rep, clave_rep, clave_plataforma, etapa, resultado: nuevoEstatus });
+      return res.json({ ok: true });
     }
 
     const existeExacto = await query(`
@@ -1033,10 +1051,21 @@ router.get('/cat-estatus', requireAuth, async (req, res) => {
 // ── PUT actualizar estatus secuencial de reporte ──────────
 router.put('/estatus-reporte/estatus', requireAuth, async (req, res) => {
   try {
-    const { clave_rep, clave_plataforma, estatus, version } = req.body;
+    const { clave_rep, clave_plataforma, estatus, version, id_estatus_rep } = req.body;
     const usuario = req.session.user?.username || 'sistema';
-    const versionFilter = version ? ` AND VERSION_CARGA=${esc(version)}` : '';
 
+    // Si viene ID, actualizar directamente por ID
+    if (id_estatus_rep) {
+      await query(`
+        UPDATE ESTATUS_REPORTE SET
+          ESTATUS=${esc(estatus)}, FECHA_ESTATUS=GETDATE(), USER_ESTATUS=${esc(usuario)}
+        WHERE ID_ESTATUS_REP=${parseInt(id_estatus_rep)}
+      `);
+      await auditLog(usuario, 'estatus-reporte', 'ESTATUS', { id_estatus_rep, clave_rep, clave_plataforma, estatus });
+      return res.json({ ok: true });
+    }
+
+    const versionFilter = version ? ` AND VERSION_CARGA=${esc(version)}` : '';
     const existe = await query(`
       SELECT 1 FROM ESTATUS_REPORTE
       WHERE CLAVE_REP=${esc(clave_rep)} AND CLAVE_PLATAFORMA=${esc(clave_plataforma)}${versionFilter}

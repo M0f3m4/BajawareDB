@@ -4468,11 +4468,11 @@
             })()}
           </td>
           <td style="padding:6px 10px;text-align:center;white-space:nowrap;">
-            <button onclick="precargarActualizarRep('${r.CLAVE_REP}','${r.CLAVE_PLATAFORMA||''}')"
+            <button onclick="precargarActualizarRep('${r.CLAVE_REP}','${r.CLAVE_PLATAFORMA||''}',${r.ID_ESTATUS_REP||'null'})"
               style="padding:3px 8px;background:#1a3558;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:11px;margin-right:4px;">
               Etapas
             </button>
-            <button onclick="repEstatusAbrir('${r.CLAVE_REP}','${r.CLAVE_PLATAFORMA||''}','${r.VERSION_CARGA||''}','${r.ESTATUS||''}')"
+            <button onclick="repEstatusAbrir('${r.CLAVE_REP}','${r.CLAVE_PLATAFORMA||''}','${r.VERSION_CARGA||''}','${r.ESTATUS||''}',${r.ID_ESTATUS_REP||'null'})"
               style="padding:3px 8px;background:#8e44ad;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:11px;">
               Estatus
             </button>
@@ -4485,8 +4485,8 @@
   let _repEstatusCurrent = {};
   let _catEstatus = [];
 
-  async function repEstatusAbrir(clave_rep, clave_plataforma, version, estatusActual) {
-    _repEstatusCurrent = { clave_rep, clave_plataforma };
+  async function repEstatusAbrir(clave_rep, clave_plataforma, version, estatusActual, id_estatus_rep) {
+    _repEstatusCurrent = { clave_rep, clave_plataforma, id_estatus_rep };
     document.getElementById('rep-estatus-modal-info').textContent = `${clave_rep} · ${clave_plataforma}`;
     document.getElementById('rep-estatus-msg').innerHTML = '';
 
@@ -4521,13 +4521,13 @@
   async function repEstatusConfirmar() {
     const estatus = document.getElementById('rep-estatus-select').value;
     const version = document.getElementById('rep-estatus-version').value;
-    const { clave_rep, clave_plataforma } = _repEstatusCurrent;
+    const { clave_rep, clave_plataforma, id_estatus_rep } = _repEstatusCurrent;
     document.getElementById('rep-estatus-msg').innerHTML = 'Guardando...';
     try {
       const r = await fetch('/api/contratos/estatus-reporte/estatus', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ clave_rep, clave_plataforma, estatus, version })
+        body: JSON.stringify({ clave_rep, clave_plataforma, estatus, version, id_estatus_rep: id_estatus_rep || null })
       }).then(x => x.json());
       if (r.ok) {
         document.getElementById('rep-estatus-msg').innerHTML = `<span style="color:#27ae60;">✅ Estatus actualizado a <strong>${estatus}</strong>.</span>`;
@@ -4863,10 +4863,11 @@
       </div>`).join('');
   }
 
-  async function precargarActualizarRep(clave, plataforma) {
+  async function precargarActualizarRep(clave, plataforma, id_estatus_rep) {
     showSection('bc-actualizar-rep');
     document.getElementById('upd-rep-clave').value = clave;
     document.getElementById('upd-rep-plataforma').value = plataforma;
+    document.getElementById('upd-rep-clave').dataset.idEstatusRep = id_estatus_rep || '';
     updRepCargarVersiones();
     await updRepCargarCatEstatus();
   }
@@ -4950,7 +4951,9 @@
   }
 
   async function actualizarEstatusReporte(desmarcar = false) {
-    const clave_rep       = document.getElementById('upd-rep-clave').value.trim();
+    const claveEl         = document.getElementById('upd-rep-clave');
+    const clave_rep       = claveEl.value.trim();
+    const id_estatus_rep  = claveEl.dataset.idEstatusRep || null;
     const clave_plataforma= document.getElementById('upd-rep-plataforma').value.trim();
     const etapa           = document.getElementById('upd-rep-etapa').value;
     const version         = document.getElementById('upd-rep-version').value.trim();
@@ -4962,7 +4965,7 @@
       const r = await fetch('/api/contratos/estatus-reporte', {
         method: 'PUT',
         headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({ clave_rep, clave_plataforma, etapa, fecha, desmarcar, version })
+        body: JSON.stringify({ clave_rep, clave_plataforma, etapa, fecha, desmarcar, version, id_estatus_rep: id_estatus_rep ? parseInt(id_estatus_rep) : null })
       }).then(x => x.json());
       const accion = desmarcar ? 'desmarcado' : 'marcado';
       msg.innerHTML = r.ok
