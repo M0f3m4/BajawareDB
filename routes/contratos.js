@@ -692,11 +692,12 @@ router.post('/inventario-reportes/upload', requireAuth, upload.single('archivo')
   if (!req.file) return res.status(400).json({ ok: false, message: 'No se recibió archivo' });
   try {
     const usuario     = req.session.user?.username || 'sistema';
-    const version     = (req.body.version     || '1.0.0').trim();
+    const versionGlobal = (req.body.version     || '1.0.0').trim();
     const regulacion  = (req.body.regulacion  || '').trim();
     const tipo_version= (req.body.tipo_version|| 'BASE').trim();
     const descripcion = (req.body.descripcion || '').trim();
     const force       = req.body.force === 'true';
+    const versionesMap = req.body.versiones ? JSON.parse(req.body.versiones) : null;
 
     const wb   = XLSX.read(req.file.buffer, { type: 'buffer' });
     const ws   = wb.Sheets[wb.SheetNames[0]];
@@ -705,6 +706,7 @@ router.post('/inventario-reportes/upload', requireAuth, upload.single('archivo')
     for (const r of rows) {
       const clave = String(r.CLAVE_REP || '').trim();
       if (!clave) continue;
+      const version = versionesMap ? (versionesMap[clave] || versionGlobal) : versionGlobal;
       try {
         const existeInv = await query(`
           SELECT CLAVE_PAIS, CLAVE_ENTIDADREGULADA, CLAVE_REG, CLAVE_SERIE, SUBSERIE,

@@ -1536,6 +1536,32 @@
             </div>
           </div>
 
+          <!-- Página 3: Versiones por reporte (solo para reportes) -->
+          <div id="inv-ver-rep-versions-section" style="display:none;">
+            <h3 style="margin:0 0 6px;font-size:15px;color:#1a3558;">📋 Versión por reporte</h3>
+            <p style="font-size:12px;color:#888;margin:0 0 12px;">Asigna una versión de carga a cada reporte del Excel.</p>
+            <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;background:#f8f9fa;padding:10px 12px;border-radius:8px;">
+              <label style="font-size:11px;font-weight:600;color:#555;white-space:nowrap;">Aplicar a todos:</label>
+              <input id="inv-ver-rep-todos" type="text" placeholder="ej. 3.10.1"
+                style="flex:1;padding:6px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;">
+              <button onclick="invVerRepAplicarTodos()"
+                style="padding:6px 12px;background:#1a3558;color:#fff;border:none;border-radius:6px;font-size:12px;cursor:pointer;">
+                Aplicar
+              </button>
+            </div>
+            <div id="inv-ver-rep-list" style="max-height:300px;overflow-y:auto;border:1px solid #e0e6ed;border-radius:8px;"></div>
+            <div style="display:flex;gap:10px;margin-top:18px;justify-content:flex-end;">
+              <button onclick="invVerVolverForm()"
+                style="padding:8px 20px;background:#f0f4f8;color:#555;border:1px solid #ddd;border-radius:6px;font-size:13px;cursor:pointer;">
+                ← Atrás
+              </button>
+              <button onclick="invVerSubirConVersiones()"
+                style="padding:8px 24px;background:#1a3558;color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;">
+                📤 Cargar
+              </button>
+            </div>
+          </div>
+
         </div>
       </div>
 
@@ -4985,6 +5011,47 @@
   function invVerVolverForm() {
     document.getElementById('inv-ver-form-section').style.display = '';
     document.getElementById('inv-ver-check-section').style.display = 'none';
+    document.getElementById('inv-ver-rep-versions-section').style.display = 'none';
+    document.getElementById('inv-ver-modal').querySelector('div').style.width = '440px';
+  }
+
+  let _invVerRepRows = []; // claves del Excel para versiones por reporte
+
+  function invVerMostrarVersionesRep() {
+    const defaultVer = document.getElementById('inv-ver-version').value.trim() || '1.0.0';
+    document.getElementById('inv-ver-form-section').style.display = 'none';
+    document.getElementById('inv-ver-check-section').style.display = 'none';
+    document.getElementById('inv-ver-rep-versions-section').style.display = '';
+    document.getElementById('inv-ver-rep-todos').value = defaultVer;
+    // Ensanchar modal para la tabla
+    document.getElementById('inv-ver-modal').querySelector('div').style.width = '580px';
+
+    const list = document.getElementById('inv-ver-rep-list');
+    list.innerHTML = _invVerRepRows.map(clave => `
+      <div style="display:flex;align-items:center;gap:12px;padding:8px 14px;border-bottom:1px solid #f0f0f0;">
+        <span style="flex:1;font-family:monospace;font-size:12px;color:#1a3558;font-weight:600;">${clave}</span>
+        <input class="inv-ver-rep-version-input" data-clave="${clave}" type="text" value="${defaultVer}"
+          placeholder="ej. 3.10.1"
+          style="width:110px;padding:5px 8px;border:1px solid #ddd;border-radius:6px;font-size:12px;">
+      </div>
+    `).join('');
+  }
+
+  function invVerRepAplicarTodos() {
+    const v = document.getElementById('inv-ver-rep-todos').value.trim();
+    if (!v) return;
+    document.querySelectorAll('.inv-ver-rep-version-input').forEach(inp => inp.value = v);
+  }
+
+  async function invVerSubirConVersiones() {
+    const versiones = {};
+    document.querySelectorAll('.inv-ver-rep-version-input').forEach(inp => {
+      versiones[inp.dataset.clave] = inp.value.trim() || '1.0.0';
+    });
+    const { regulacion, tipo_ver, descripcion } = _invVerPending || {};
+    document.getElementById('inv-ver-modal').style.display = 'none';
+    invVerVolverForm();
+    await _invVerSubirReal('', regulacion || '', tipo_ver || 'BASE', descripcion || '', false, versiones);
   }
 
   let _invVerPending = null;
@@ -5024,8 +5091,9 @@
       const cv  = colIdxMap['VERSION_CARGA'] !== undefined ? ws2[XLSX.utils.encode_cell({r, c: colIdxMap['VERSION_CARGA']})] : null;
       if (ce && ce.v) clavesSet.add(String(ce.v).trim());
       if (co && co.v) {
-        objetosSet.add(String(co.v).trim());
-        if (isRep) paresRep.push({ clave_rep: String(co.v).trim(), version });
+        const clave = String(co.v).trim();
+        objetosSet.add(clave);
+        if (isRep) paresRep.push({ clave_rep: clave, version });
       }
     }
     btn.textContent = '📤 Verificar y cargar'; btn.disabled = false;
@@ -5046,6 +5114,7 @@
         body: JSON.stringify(checkBody)
       }).then(x => x.json());
     } catch(e) {
+      if (isRep) { _invVerPending = { version, regulacion, tipo_ver, descripcion }; invVerMostrarVersionesRep(); return; }
       document.getElementById('inv-ver-modal').style.display = 'none';
       await _invVerSubirReal(version, regulacion, tipo_ver, descripcion, false);
       return;
@@ -5053,14 +5122,43 @@
 
     const advertencias = isRep ? (check.entidades_invalidas||[]) : (check.claves_rep_invalidas||[]);
 
-    // Sin advertencias — subir directo
+    // Para reportes: siempre ir a página 3 (versiones por reporte)
+    if (isRep) {
+      _invVerRepRows = [...objetosSet];
+      _invVerPending = { version, regulacion, tipo_ver, descripcion };
+      if (!check.version_existe && !advertencias.length) {
+        invVerMostrarVersionesRep();
+      } else {
+        // Mostrar advertencias primero (página 2), pero "Subir de todas formas" irá a página 3
+        _invVerNeedsForce = check.version_existe;
+        let html = '';
+        if (check.version_existe) {
+          html += `<div style="background:#fff3cd;border:1px solid #ffc107;border-radius:8px;padding:12px 16px;margin-bottom:12px;">
+            ⚠️ Algunas versiones ya existen en el historial. Si continúas se sobreescribirán.<br>
+          </div>`;
+        }
+        if (advertencias.length) {
+          html += `<div style="background:#f8d7da;border:1px solid #f5c6cb;border-radius:8px;padding:12px 16px;margin-bottom:12px;">
+            ❌ ${advertencias.length} entidades no existen en el catálogo:<br>
+            <span style="font-size:11px;font-family:monospace;color:#721c24;">${advertencias.join(', ')}</span><br>
+            <span style="font-size:12px;color:#721c24;">Los reportes con esas entidades fallarán al insertar.</span>
+          </div>`;
+        }
+        document.getElementById('inv-ver-check-body').innerHTML = html;
+        document.getElementById('inv-ver-form-section').style.display = 'none';
+        document.getElementById('inv-ver-check-section').style.display = '';
+      }
+      return;
+    }
+
+    // Sin advertencias — subir directo (validaciones)
     if (!check.version_existe && !advertencias.length) {
       document.getElementById('inv-ver-modal').style.display = 'none';
       await _invVerSubirReal(version, regulacion, tipo_ver, descripcion, false);
       return;
     }
 
-    // Guardar datos pendientes y mostrar página 2
+    // Guardar datos pendientes y mostrar página 2 (validaciones)
     _invVerPending = { version, regulacion, tipo_ver, descripcion };
     _invVerNeedsForce = check.version_existe;
 
@@ -5089,6 +5187,8 @@
 
   async function invVerSubirForzado() {
     if (!_invVerPending) return;
+    // Para reportes: ir a página 3
+    if (_invVerTipo === 'rep') { invVerMostrarVersionesRep(); return; }
     const { version, regulacion, tipo_ver, descripcion } = _invVerPending;
     _invVerPending = null;
     document.getElementById('inv-ver-modal').style.display = 'none';
@@ -5099,7 +5199,7 @@
   let _invPlatValidaciones = [];
   let _invPlatVersion = '1.0.0';
 
-  async function _invVerSubirReal(version, regulacion, tipo_ver, descripcion, force) {
+  async function _invVerSubirReal(version, regulacion, tipo_ver, descripcion, force, versiones = null) {
     const isRep = _invVerTipo === 'rep';
     const fileId   = isRep ? 'bc-inv-rep-file' : 'bc-inv-val-file';
     const msgId    = isRep ? 'bc-inv-rep-msg'  : 'bc-inv-val-msg';
@@ -5114,10 +5214,12 @@
     fd.append('tipo_version', tipo_ver);
     fd.append('descripcion', descripcion);
     if (force) fd.append('force', 'true');
+    if (versiones) fd.append('versiones', JSON.stringify(versiones));
     try {
       const r = await fetch(endpoint, { method: 'POST', body: fd }).then(x => x.json());
       if (!r.ok) { msg.innerHTML = `<span style="color:#e74c3c;">❌ ${r.message}</span>`; return; }
-      msg.innerHTML = `<span style="color:#27ae60;">✅ ${r.insertados} insertados, ${r.actualizados} actualizados, ${r.errores} errores. Versión ${version} registrada.</span>`;
+      const versionesLabel = versiones ? 'Versiones por reporte aplicadas.' : `Versión ${version} registrada.`;
+      msg.innerHTML = `<span style="color:#27ae60;">✅ ${r.insertados} insertados, ${r.actualizados} actualizados, ${r.errores} errores. ${versionesLabel}</span>`;
       document.getElementById('inv-ver-modal').style.display = 'none';
       invVerVolverForm();
       // Para validaciones: abrir modal de asignación de plataformas
