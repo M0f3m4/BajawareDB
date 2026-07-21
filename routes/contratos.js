@@ -831,7 +831,7 @@ router.post('/inventario-reportes/upload', requireAuth, upload.single('archivo')
               ${esc(r.CLAVE_SECCION_REP)}, ${esc(r.CLAVE_VERSION_REPORTE)}, ${esc(r.CLAVE_PERIODO)},
               ${esc(r.DESCRIPCION_ESP)}, ${esc(r.CLAVE_FECHA_ENT_REP)}, ${esc(r.CARACTERISTICAS)},
               ${esc(r.CLAVE_REGULACION_REP)}, ${esc(r.CLAVE_REP_GENERAL)},
-              ${r.FECHA_REGULACION ? esc(r.FECHA_REGULACION) : 'NULL'},
+              ${r.FECHA_REGULACION && !isNaN(new Date(r.FECHA_REGULACION)) ? esc(r.FECHA_REGULACION) : 'NULL'},
               GETDATE(), GETDATE(), 1, ${esc(version)}
             )
           `);
@@ -840,6 +840,11 @@ router.post('/inventario-reportes/upload', requireAuth, upload.single('archivo')
           // Comparar campos fila por fila — solo UPDATE si algo cambió
           const bd = existeInv[0];
           const str = v => (v == null ? '' : String(v).trim());
+          // Asegurar catálogos también en UPDATE (por si cambió algún campo referenciado)
+          if (r.CLAVE_VERSION_REPORTE) {
+            const existeVer2 = await query(`SELECT 1 FROM CAT_VERSION_REPORTE WHERE CLAVE_VERSION_REPORTE=${esc(r.CLAVE_VERSION_REPORTE)}`);
+            if (!existeVer2.length) await query(`INSERT INTO CAT_VERSION_REPORTE (CLAVE_VERSION_REPORTE, NOMBRE_VERSION_REP) VALUES (${esc(r.CLAVE_VERSION_REPORTE)}, ${esc(r.CLAVE_VERSION_REPORTE)})`);
+          }
           const cambio =
             str(bd.CLAVE_PAIS)              !== str(r.CLAVE_PAIS)              ||
             str(bd.CLAVE_ENTIDADREGULADA)   !== str(r.CLAVE_ENTIDADREGULADA)   ||
@@ -869,7 +874,7 @@ router.post('/inventario-reportes/upload', requireAuth, upload.single('archivo')
                 CLAVE_PERIODO=${esc(r.CLAVE_PERIODO)}, DESCRIPCION_ESP=${esc(r.DESCRIPCION_ESP)},
                 CLAVE_FECHA_ENT_REP=${esc(r.CLAVE_FECHA_ENT_REP)}, CARACTERISTICAS=${esc(r.CARACTERISTICAS)},
                 CLAVE_REGULACION_REP=${esc(r.CLAVE_REGULACION_REP)}, CLAVE_REP_GENERAL=${esc(r.CLAVE_REP_GENERAL)},
-                FECHA_REGULACION=${r.FECHA_REGULACION ? esc(r.FECHA_REGULACION) : 'NULL'},
+                FECHA_REGULACION=${r.FECHA_REGULACION && !isNaN(new Date(r.FECHA_REGULACION)) ? esc(r.FECHA_REGULACION) : 'NULL'},
                 VERSION_CARGA=${esc(version)}, FECHA_ACTUALIZADA=GETDATE()
               WHERE CLAVE_REP=${esc(clave)}
             `);
