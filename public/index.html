@@ -1357,7 +1357,7 @@
               </div>
               <div>
                 <label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px;">Versión de Carga</label>
-                <select id="upd-val-version"
+                <select id="upd-val-version" onchange="uvFiltrarVersion()"
                   style="padding:7px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;min-width:120px;">
                   <option value="">— Todas —</option>
                 </select>
@@ -5039,10 +5039,20 @@
     uvRenderTabla();
   }
 
-  function uvRenderTabla() {
+  function uvFiltrarVersion() {
+    const ver = document.getElementById('upd-val-version').value;
+    const filtrado = ver ? _uvData.filter(v => v.VERSION_CARGA === ver) : _uvData;
+    uvRenderTabla(filtrado);
+  }
+
+  function uvRenderTabla(data) {
+    if (!data) {
+      const ver = document.getElementById('upd-val-version').value;
+      data = ver ? _uvData.filter(v => v.VERSION_CARGA === ver) : _uvData;
+    }
     const b = v => v==='S'?'✅':v==='N'?'—':(v||'—');
     document.getElementById('uv-tabla').innerHTML = `
-      <p style="font-size:12px;color:#666;margin-bottom:8px;">${_uvData.length} validaciones cargadas</p>
+      <p style="font-size:12px;color:#666;margin-bottom:8px;">${data.length} validaciones</p>
       <div style="overflow:auto;max-height:60vh;">
         <table style="width:100%;border-collapse:collapse;font-size:12px;">
           <thead><tr>
@@ -5051,19 +5061,21 @@
             </th>
             <th style="position:sticky;top:0;background:#1a3558;color:#fff;padding:8px 12px;text-align:left;white-space:nowrap;">Clave Validación</th>
             <th style="position:sticky;top:0;background:#1a3558;color:#fff;padding:8px 12px;text-align:left;">Descripción</th>
+            <th style="position:sticky;top:0;background:#1a3558;color:#fff;padding:8px 12px;text-align:center;white-space:nowrap;">Versión Carga</th>
             <th style="position:sticky;top:0;background:#1a3558;color:#fff;padding:8px;text-align:center;">Doc</th>
             <th style="position:sticky;top:0;background:#1a3558;color:#fff;padding:8px;text-align:center;">Prog</th>
             <th style="position:sticky;top:0;background:#1a3558;color:#fff;padding:8px;text-align:center;">Cert</th>
             <th style="position:sticky;top:0;background:#1a3558;color:#fff;padding:8px 12px;text-align:left;">Estatus</th>
           </tr></thead>
           <tbody>
-            ${_uvData.map((v,i)=>`
+            ${data.map((v,i)=>`
               <tr style="background:${i%2?'#f8fafc':'#fff'}">
                 <td style="padding:6px;text-align:center;border-bottom:1px solid #eee;">
                   <input type="checkbox" class="uv-cb" data-clave="${v.CLAVE_VALIDACION}" data-rep="${v.CLAVE_REP}">
                 </td>
                 <td style="padding:6px 12px;border-bottom:1px solid #eee;font-weight:600;color:#1a3558;white-space:nowrap;">${v.CLAVE_VALIDACION}</td>
                 <td style="padding:6px 12px;border-bottom:1px solid #eee;color:#444;">${v.DESCRIPCION||''}</td>
+                <td style="padding:6px 12px;border-bottom:1px solid #eee;text-align:center;"><span style="font-size:11px;background:#f0f4ff;color:#1a3558;padding:2px 7px;border-radius:10px;font-family:monospace;">${v.VERSION_CARGA||'—'}</span></td>
                 <td style="padding:6px;text-align:center;border-bottom:1px solid #eee;">${b(v.DOCUMENTADO)}</td>
                 <td style="padding:6px;text-align:center;border-bottom:1px solid #eee;">${b(v.PROGRAMADO)}</td>
                 <td style="padding:6px;text-align:center;border-bottom:1px solid #eee;">${b(v.CERTIFICADO)}</td>
