@@ -809,30 +809,25 @@ router.post('/inventario-reportes/upload', requireAuth, upload.single('archivo')
 // ── POST asignar plataformas a reportes ───────────────────
 router.post('/inventario-reportes/asignar-plataformas', requireAuth, async (req, res) => {
   try {
-    const { asignaciones = [], version = '1.0.0' } = req.body;
+    const { asignaciones = [] } = req.body;
     let creados = 0, omitidos = 0;
     for (const a of asignaciones) {
-      const { clave_rep, clave_rep_general, plataforma } = a;
+      const { clave_rep, clave_rep_general, plataforma, version = '1.0.0' } = a;
+      // Checar por (CLAVE_REP, CLAVE_PLATAFORMA, VERSION_CARGA) exacto
       const existe = await query(`
         SELECT 1 FROM ESTATUS_REPORTE
         WHERE CLAVE_REP=${esc(clave_rep)} AND CLAVE_PLATAFORMA=${esc(plataforma)}
+          AND VERSION_CARGA=${esc(version)}
       `);
-      if (existe.length) {
-        // Ya existe — solo actualizar VERSION_CARGA si cambió
-        await query(`
-          UPDATE ESTATUS_REPORTE SET VERSION_CARGA=${esc(version)}
-          WHERE CLAVE_REP=${esc(clave_rep)} AND CLAVE_PLATAFORMA=${esc(plataforma)}
-        `);
-        omitidos++;
-        continue;
-      }
+      if (existe.length) { omitidos++; continue; }
       const repGeneral = clave_rep_general || clave_rep;
+      // Usar VERSION_CARGA como VERSION para que el PK sea único por versión
       await query(`
         INSERT INTO ESTATUS_REPORTE
           (CLAVE_REP, CLAVE_REP_GENERAL, CLAVE_PLATAFORMA, VERSION, VERSION_CARGA,
            DOCUMENTADO, PROGRAMADO, CERTIFICADO, ESTATUS)
         VALUES
-          (${esc(clave_rep)}, ${esc(repGeneral)}, ${esc(plataforma)}, '00', ${esc(version)},
+          (${esc(clave_rep)}, ${esc(repGeneral)}, ${esc(plataforma)}, ${esc(version)}, ${esc(version)},
            'NO', 'NO', 'NO', 'NO DOCUMENTADO')
       `);
       creados++;
