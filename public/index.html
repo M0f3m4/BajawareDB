@@ -1478,9 +1478,10 @@
 
           <!-- Página 1: Formulario -->
           <div id="inv-ver-form-section">
-            <h3 style="margin:0 0 6px;font-size:15px;color:#1a3558;">📋 Datos de versión</h3>
+            <h3 style="margin:0 0 6px;font-size:15px;color:#1a3558;">📋 Datos de carga</h3>
             <p id="inv-ver-filename" style="font-size:12px;color:#888;margin:0 0 20px;"></p>
             <div style="display:grid;gap:14px;">
+              <!-- Version y Tipo Version solo para validaciones -->
               <div id="inv-ver-version-section" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
                 <div>
                   <label style="font-size:11px;font-weight:600;color:#555;display:block;margin-bottom:4px;">Versión *</label>
@@ -1496,7 +1497,6 @@
                   </select>
                 </div>
               </div>
-              <!-- Plataforma: se asigna después del upload en tabla separada -->
               <div>
                 <label style="font-size:11px;font-weight:600;color:#555;display:block;margin-bottom:4px;">Regulación</label>
                 <input id="inv-ver-regulacion" type="text" placeholder="ej. DICIEMBRE 2025"
@@ -1540,13 +1540,23 @@
           <div id="inv-ver-rep-versions-section" style="display:none;">
             <h3 style="margin:0 0 6px;font-size:15px;color:#1a3558;">📋 Versión por reporte</h3>
             <p style="font-size:12px;color:#888;margin:0 0 12px;">Asigna una versión de carga a cada reporte del Excel.</p>
-            <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;background:#f8f9fa;padding:10px 12px;border-radius:8px;">
-              <label style="font-size:11px;font-weight:600;color:#555;white-space:nowrap;">Aplicar a todos:</label>
-              <input id="inv-ver-rep-todos" type="text" placeholder="ej. 3.10.1"
-                style="flex:1;padding:6px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;">
+            <div style="display:flex;gap:8px;align-items:flex-end;margin-bottom:12px;background:#f8f9fa;padding:10px 12px;border-radius:8px;">
+              <div style="flex:1;">
+                <label style="font-size:11px;font-weight:600;color:#555;display:block;margin-bottom:4px;">Versión (todos)</label>
+                <input id="inv-ver-rep-todos" type="text" placeholder="ej. 3.10.1"
+                  style="width:100%;padding:6px 10px;border:1px solid #ddd;border-radius:6px;font-size:12px;box-sizing:border-box;">
+              </div>
+              <div style="flex:1;">
+                <label style="font-size:11px;font-weight:600;color:#555;display:block;margin-bottom:4px;">Tipo Versión (todos)</label>
+                <select id="inv-ver-rep-tipo-todos" style="width:100%;padding:6px 10px;border:1px solid #ddd;border-radius:6px;font-size:12px;">
+                  <option value="BASE">BASE</option>
+                  <option value="CAMBIO REG">CAMBIO REG</option>
+                  <option value="FIX">FIX</option>
+                </select>
+              </div>
               <button onclick="invVerRepAplicarTodos()"
-                style="padding:6px 12px;background:#1a3558;color:#fff;border:none;border-radius:6px;font-size:12px;cursor:pointer;">
-                Aplicar
+                style="padding:7px 14px;background:#1a3558;color:#fff;border:none;border-radius:6px;font-size:12px;cursor:pointer;white-space:nowrap;">
+                Aplicar a todos
               </button>
             </div>
             <div id="inv-ver-rep-list" style="max-height:300px;overflow-y:auto;border:1px solid #e0e6ed;border-radius:8px;"></div>
@@ -5027,31 +5037,45 @@
     document.getElementById('inv-ver-modal').querySelector('div').style.width = '580px';
 
     const list = document.getElementById('inv-ver-rep-list');
-    list.innerHTML = _invVerRepRows.map(clave => `
-      <div style="display:flex;align-items:center;gap:12px;padding:8px 14px;border-bottom:1px solid #f0f0f0;">
-        <span style="flex:1;font-family:monospace;font-size:12px;color:#1a3558;font-weight:600;">${clave}</span>
+    list.innerHTML = `
+      <div style="display:grid;grid-template-columns:1fr 110px 110px;gap:0;background:#e8edf3;padding:6px 14px;font-size:11px;font-weight:600;color:#555;border-radius:8px 8px 0 0;">
+        <span>Clave Reporte</span><span>Versión</span><span>Tipo</span>
+      </div>
+      ${_invVerRepRows.map(clave => `
+      <div style="display:grid;grid-template-columns:1fr 110px 110px;gap:8px;align-items:center;padding:7px 14px;border-bottom:1px solid #f0f0f0;">
+        <span style="font-family:monospace;font-size:12px;color:#1a3558;font-weight:600;">${clave}</span>
         <input class="inv-ver-rep-version-input" data-clave="${clave}" type="text" value="${defaultVer}"
           placeholder="ej. 3.10.1"
-          style="width:110px;padding:5px 8px;border:1px solid #ddd;border-radius:6px;font-size:12px;">
-      </div>
-    `).join('');
+          style="padding:5px 8px;border:1px solid #ddd;border-radius:6px;font-size:12px;width:100%;box-sizing:border-box;">
+        <select class="inv-ver-rep-tipo-input" data-clave="${clave}"
+          style="padding:5px 6px;border:1px solid #ddd;border-radius:6px;font-size:11px;width:100%;">
+          <option value="BASE">BASE</option>
+          <option value="CAMBIO REG">CAMBIO REG</option>
+          <option value="FIX">FIX</option>
+        </select>
+      </div>`).join('')}
+    `;
   }
 
   function invVerRepAplicarTodos() {
     const v = document.getElementById('inv-ver-rep-todos').value.trim();
-    if (!v) return;
-    document.querySelectorAll('.inv-ver-rep-version-input').forEach(inp => inp.value = v);
+    const t = document.getElementById('inv-ver-rep-tipo-todos').value;
+    if (v) document.querySelectorAll('.inv-ver-rep-version-input').forEach(inp => inp.value = v);
+    if (t) document.querySelectorAll('.inv-ver-rep-tipo-input').forEach(sel => sel.value = t);
   }
 
   async function invVerSubirConVersiones() {
-    const versiones = {};
+    const versiones = {}, tipos = {};
     document.querySelectorAll('.inv-ver-rep-version-input').forEach(inp => {
       versiones[inp.dataset.clave] = inp.value.trim() || '1.0.0';
     });
-    const { regulacion, tipo_ver, descripcion } = _invVerPending || {};
+    document.querySelectorAll('.inv-ver-rep-tipo-input').forEach(sel => {
+      tipos[sel.dataset.clave] = sel.value;
+    });
+    const { regulacion, descripcion } = _invVerPending || {};
     document.getElementById('inv-ver-modal').style.display = 'none';
     invVerVolverForm();
-    await _invVerSubirReal('', regulacion || '', tipo_ver || 'BASE', descripcion || '', false, versiones);
+    await _invVerSubirReal('', regulacion || '', 'BASE', descripcion || '', false, versiones, tipos);
   }
 
   let _invVerPending = null;
@@ -5199,7 +5223,7 @@
   let _invPlatValidaciones = [];
   let _invPlatVersion = '1.0.0';
 
-  async function _invVerSubirReal(version, regulacion, tipo_ver, descripcion, force, versiones = null) {
+  async function _invVerSubirReal(version, regulacion, tipo_ver, descripcion, force, versiones = null, tiposMap = null) {
     const isRep = _invVerTipo === 'rep';
     const fileId   = isRep ? 'bc-inv-rep-file' : 'bc-inv-val-file';
     const msgId    = isRep ? 'bc-inv-rep-msg'  : 'bc-inv-val-msg';
@@ -5215,6 +5239,7 @@
     fd.append('descripcion', descripcion);
     if (force) fd.append('force', 'true');
     if (versiones) fd.append('versiones', JSON.stringify(versiones));
+    if (tiposMap) fd.append('tipos', JSON.stringify(tiposMap));
     try {
       const r = await fetch(endpoint, { method: 'POST', body: fd }).then(x => x.json());
       if (!r.ok) { msg.innerHTML = `<span style="color:#e74c3c;">❌ ${r.message}</span>`; return; }
