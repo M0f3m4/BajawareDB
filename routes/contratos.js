@@ -796,6 +796,13 @@ router.post('/inventario-reportes/upload', requireAuth, upload.single('archivo')
                  CLAVE_REGULACION_REP, CLAVE_REP_GENERAL, FECHA_REGULACION
           FROM INVENTARIO_REPORTES WHERE CLAVE_REP=${esc(clave)}`);
         if (!existeInv.length) {
+          // Asegurar que CLAVE_REP_GENERAL existe en CAT_REPORTES_GENERALES
+          if (r.CLAVE_REP_GENERAL) {
+            const existeGen = await query(`SELECT 1 FROM CAT_REPORTES_GENERALES WHERE CLAVE_REP_GENERAL=${esc(r.CLAVE_REP_GENERAL)}`);
+            if (!existeGen.length) {
+              await query(`INSERT INTO CAT_REPORTES_GENERALES (CLAVE_REP_GENERAL) VALUES (${esc(r.CLAVE_REP_GENERAL)})`);
+            }
+          }
           // Reporte nuevo — INSERT
           await query(`
             INSERT INTO INVENTARIO_REPORTES (
