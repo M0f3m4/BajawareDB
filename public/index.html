@@ -4272,7 +4272,7 @@
     const sel = document.getElementById('bcc-cliente');
     if (sel.options.length > 1) return;
     try {
-      const r = await fetch('/api/contratos/clientes').then(x => x.json());
+      const r = await fetch('/api/contratos/clientes-con-contratos').then(x => x.json());
       (r.data || []).forEach(c => {
         const o = document.createElement('option');
         o.value = c.CLAVE_CLIENTE;

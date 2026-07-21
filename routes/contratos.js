@@ -81,6 +81,19 @@ router.get('/clientes', requireAuth, async (req, res) => {
   } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
 });
 
+// ── CLIENTES que tienen contratos ─────────────────────────
+router.get('/clientes-con-contratos', requireAuth, async (req, res) => {
+  try {
+    const rows = await query(`
+      SELECT DISTINCT c.CLAVE_CLIENTE, COALESCE(cl.NOMBRE_CLIENTE, c.CLAVE_CLIENTE) AS NOMBRE_CLIENTE
+      FROM CONTRATOS c
+      LEFT JOIN CLIENTE cl ON cl.CLAVE_CLIENTE = c.CLAVE_CLIENTE
+      ORDER BY NOMBRE_CLIENTE
+    `);
+    res.json({ ok: true, data: rows });
+  } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
+});
+
 // ── GET lista de contratos con estatus ────────────────────
 router.get('/contratos/lista', requireAuth, async (req, res) => {
   try {
