@@ -81,6 +81,53 @@ router.get('/clientes', requireAuth, async (req, res) => {
   } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
 });
 
+// ── GET lista de contratos con estatus ────────────────────
+router.get('/contratos/lista', requireAuth, async (req, res) => {
+  try {
+    const { estatus, cliente } = req.query;
+    let where = 'WHERE 1=1';
+    if (estatus) where += ` AND c.ESTATUS=${esc(estatus)}`;
+    if (cliente) where += ` AND c.CLAVE_CLIENTE=${esc(cliente)}`;
+    const rows = await query(`
+      SELECT c.CLAVE_CONTRATO, c.NOMBRE_CONTRATO, c.CLAVE_CLIENTE, c.CLAVE_PLATAFORMA,
+             c.ESTATUS, c.ETAPA, cl.NOMBRE_CLIENTE
+      FROM CONTRATOS c
+      LEFT JOIN CLIENTE cl ON cl.CLAVE_CLIENTE = c.CLAVE_CLIENTE
+      ${where}
+      ORDER BY cl.NOMBRE_CLIENTE, c.NOMBRE_CONTRATO
+    `);
+    res.json({ ok: true, data: rows });
+  } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
+});
+
+// ── PUT actualizar estatus y etapa de un contrato ─────────
+router.put('/contratos/:clave/estatus', requireAuth, async (req, res) => {
+  try {
+    const { estatus, etapa } = req.body;
+    const usuario = req.session.user?.username || 'sistema';
+    await query(`
+      UPDATE CONTRATOS SET ESTATUS=${esc(estatus)}, ETAPA=${etapa != null ? parseInt(etapa) : 'NULL'}
+      WHERE CLAVE_CONTRATO=${esc(req.params.clave)}
+    `);
+    await auditLog(usuario, 'contratos', 'ESTATUS', { clave_contrato: req.params.clave, estatus, etapa });
+    res.json({ ok: true });
+  } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
+});
+
+// ── PUT actualizar estatus de reporte en contrato ─────────
+router.put('/contratos/:contrato/reporte/:rep/estatus', requireAuth, async (req, res) => {
+  try {
+    const { estatus } = req.body;
+    const usuario = req.session.user?.username || 'sistema';
+    await query(`
+      UPDATE CONTRATOS_REPORTES SET ESTATUS=${esc(estatus)}
+      WHERE CLAVE_CONTRATO=${esc(req.params.contrato)} AND CLAVE_REP=${esc(req.params.rep)}
+    `);
+    await auditLog(usuario, 'contratos', 'ESTATUS_REPORTE', { clave_contrato: req.params.contrato, clave_rep: req.params.rep, estatus });
+    res.json({ ok: true });
+  } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
+});
+
 // ── CONTRATOS por cliente ─────────────────────────────────
 router.get('/clientes/:clave/contratos', requireAuth, async (req, res) => {
   try {
@@ -99,6 +146,7 @@ router.get('/contratos/:clave/reportes', requireAuth, async (req, res) => {
       SELECT
         cr.CLAVE_REP,
         cr.ETAPA,
+        cr.ESTATUS AS ESTATUS_PROYECTO,
         cr.EN_USO,
         cr.FECHA_ESTIMADA_QA,
         cr.FECHA_INSTALADO_QA,

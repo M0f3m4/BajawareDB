@@ -618,6 +618,7 @@
         <span class="nav-arrow" id="arr-bc">▼</span>
       </div>
       <div class="sub-menu" id="sub-bc">
+        <div class="sub-item" onclick="showSection('bc-contratos')">Contratos</div>
         <div class="sub-item" onclick="showSection('bc-consulta-rep')">Estatus por Contrato</div>
         <div class="sub-item" onclick="showSection('bc-val-cliente-view')">Validaciones por Cliente</div>
         <div class="sub-item" onclick="showSection('bc-actualizar-rep')">Actualizar Estatus Reporte</div>
@@ -1101,6 +1102,66 @@
       </div>
       <div class="content-section" id="sec-con-base"><h2 class="section-title">Conocimiento — Base</h2><div class="placeholder-card"><div class="icon">🎓</div>Próximamente</div></div>
       <div class="content-section" id="sec-con-articulos"><h2 class="section-title">Conocimiento — Artículos</h2><div class="placeholder-card"><div class="icon">📖</div>Próximamente</div></div>
+
+      <!-- BC: Contratos -->
+      <div class="content-section" id="sec-bc-contratos">
+        <h2 class="section-title">📄 Contratos</h2>
+        <div class="toolbar" style="flex-wrap:wrap;gap:10px;margin-bottom:16px;align-items:flex-end;">
+          <div>
+            <label style="font-size:11px;font-weight:600;color:#555;display:block;margin-bottom:4px;">Cliente</label>
+            <select id="bcc-cliente" onchange="loadContratos()" style="padding:7px 12px;border:1px solid #ddd;border-radius:6px;font-size:13px;min-width:200px;">
+              <option value="">Todos los clientes</option>
+            </select>
+          </div>
+          <div>
+            <label style="font-size:11px;font-weight:600;color:#555;display:block;margin-bottom:4px;">Estatus</label>
+            <select id="bcc-estatus" onchange="loadContratos()" style="padding:7px 12px;border:1px solid #ddd;border-radius:6px;font-size:13px;min-width:160px;">
+              <option value="">Todos</option>
+              <option value="CONTRATADO">CONTRATADO</option>
+              <option value="IMPLEMENTACION">IMPLEMENTACION</option>
+              <option value="SOPORTE">SOPORTE</option>
+              <option value="DETENIDO">DETENIDO</option>
+            </select>
+          </div>
+        </div>
+        <div id="bcc-count" style="font-size:12px;color:#888;margin-bottom:8px;"></div>
+        <div id="bcc-content"><p style="color:#aaa;font-size:13px;">Cargando...</p></div>
+      </div>
+
+      <!-- Modal: editar estatus contrato -->
+      <div id="bcc-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;align-items:center;justify-content:center;">
+        <div style="background:#fff;border-radius:12px;padding:28px 32px;width:400px;box-shadow:0 8px 32px rgba(0,0,0,.2);">
+          <h3 style="margin:0 0 4px;font-size:15px;color:#1a3558;">✏️ Editar Contrato</h3>
+          <p id="bcc-modal-info" style="font-size:12px;color:#888;margin:0 0 20px;"></p>
+          <div style="display:grid;gap:14px;">
+            <div>
+              <label style="font-size:11px;font-weight:600;color:#555;display:block;margin-bottom:4px;">Estatus</label>
+              <select id="bcc-modal-estatus" style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;">
+                <option value="CONTRATADO">CONTRATADO</option>
+                <option value="IMPLEMENTACION">IMPLEMENTACION</option>
+                <option value="SOPORTE">SOPORTE</option>
+                <option value="DETENIDO">DETENIDO</option>
+              </select>
+            </div>
+            <div>
+              <label style="font-size:11px;font-weight:600;color:#555;display:block;margin-bottom:4px;">Etapa</label>
+              <input id="bcc-modal-etapa" type="number" min="1" max="10" placeholder="ej. 1"
+                style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;box-sizing:border-box;">
+            </div>
+          </div>
+          <div id="bcc-modal-msg" style="margin-top:12px;font-size:13px;min-height:18px;"></div>
+          <div style="display:flex;gap:10px;margin-top:20px;justify-content:flex-end;">
+            <button onclick="document.getElementById('bcc-modal').style.display='none'"
+              style="padding:7px 18px;background:#f0f4f8;color:#555;border:1px solid #ddd;border-radius:6px;font-size:13px;cursor:pointer;">
+              Cancelar
+            </button>
+            <button onclick="bccGuardar()"
+              style="padding:7px 18px;background:#1a3558;color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;">
+              💾 Guardar
+            </button>
+          </div>
+        </div>
+      </div>
 
       <!-- BC: Consulta Estatus por Contrato -->
       <div class="content-section" id="sec-bc-consulta-rep">
@@ -4183,6 +4244,114 @@
     return `<span style="background:${c.bg};color:#fff;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;">${c.label}</span>`;
   }
 
+  async function actualizarEstatusContratoRep(clave_rep, clave_contrato, estatus) {
+    if (!clave_contrato) return;
+    try {
+      await fetch(`/api/contratos/contratos/${encodeURIComponent(clave_contrato)}/reporte/${encodeURIComponent(clave_rep)}/estatus`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ estatus })
+      }).then(x => x.json());
+    } catch(e) { console.error('Error actualizando estatus contrato-reporte:', e.message); }
+  }
+
+  // ── Contratos ─────────────────────────────────────────────
+  const BCC_ESTATUS_COLORS = {
+    'CONTRATADO':    { bg: '#2980b9', label: 'CONTRATADO' },
+    'IMPLEMENTACION':{ bg: '#8e44ad', label: 'IMPLEMENTACION' },
+    'SOPORTE':       { bg: '#27ae60', label: 'SOPORTE' },
+    'DETENIDO':      { bg: '#e74c3c', label: 'DETENIDO' },
+  };
+
+  function bccEstatusPill(e) {
+    if (!e) return '<span style="color:#ccc;font-size:11px;">—</span>';
+    const c = BCC_ESTATUS_COLORS[e] || { bg: '#aaa', label: e };
+    return `<span style="background:${c.bg};color:#fff;padding:2px 10px;border-radius:10px;font-size:11px;font-weight:600;">${c.label}</span>`;
+  }
+
+  async function initBccClientes() {
+    const sel = document.getElementById('bcc-cliente');
+    if (sel.options.length > 1) return;
+    try {
+      const r = await fetch('/api/contratos/clientes').then(x => x.json());
+      (r.data || []).forEach(c => {
+        const o = document.createElement('option');
+        o.value = c.CLAVE_CLIENTE;
+        o.textContent = c.NOMBRE_CLIENTE;
+        sel.appendChild(o);
+      });
+    } catch(e) {}
+  }
+
+  let _bccCurrent = {};
+
+  async function loadContratos() {
+    const wrap    = document.getElementById('bcc-content');
+    const count   = document.getElementById('bcc-count');
+    const estatus = document.getElementById('bcc-estatus').value;
+    const cliente = document.getElementById('bcc-cliente').value;
+    wrap.innerHTML = '<div class="loading">Cargando...</div>';
+    let url = '/api/contratos/contratos/lista?x=1';
+    if (estatus) url += '&estatus=' + encodeURIComponent(estatus);
+    if (cliente) url += '&cliente=' + encodeURIComponent(cliente);
+    try {
+      const r = await fetch(url).then(x => x.json());
+      const data = r.data || [];
+      count.textContent = `${data.length} contratos`;
+      if (!data.length) { wrap.innerHTML = '<p style="color:#aaa;font-size:13px;">Sin contratos.</p>'; return; }
+      wrap.innerHTML = `<table style="width:100%;border-collapse:collapse;font-size:13px;">
+        <thead><tr style="background:#1a3558;color:#fff;">
+          <th style="padding:8px 12px;text-align:left;">Cliente</th>
+          <th style="padding:8px 12px;text-align:left;">Contrato</th>
+          <th style="padding:8px 12px;text-align:left;">Plataforma</th>
+          <th style="padding:8px 12px;text-align:center;">Estatus</th>
+          <th style="padding:8px 12px;text-align:center;">Etapa</th>
+          <th style="padding:8px 12px;text-align:center;">Acción</th>
+        </tr></thead>
+        <tbody>${data.map((c, i) => `
+          <tr style="background:${i%2===0?'#fff':'#f8f9fa'};">
+            <td style="padding:7px 12px;font-weight:600;">${c.NOMBRE_CLIENTE || c.CLAVE_CLIENTE}</td>
+            <td style="padding:7px 12px;">${c.NOMBRE_CONTRATO}</td>
+            <td style="padding:7px 12px;font-size:12px;color:#666;">${c.CLAVE_PLATAFORMA || '—'}</td>
+            <td style="padding:7px 12px;text-align:center;">${bccEstatusPill(c.ESTATUS)}</td>
+            <td style="padding:7px 12px;text-align:center;">${c.ETAPA != null ? `<span style="background:#f0f4ff;color:#1a3558;padding:2px 10px;border-radius:10px;font-size:12px;font-weight:600;">Etapa ${c.ETAPA}</span>` : '<span style="color:#ccc;font-size:11px;">—</span>'}</td>
+            <td style="padding:7px 12px;text-align:center;">
+              <button onclick="bccEditar('${c.CLAVE_CONTRATO}','${c.NOMBRE_CONTRATO}','${c.ESTATUS||''}',${c.ETAPA != null ? c.ETAPA : 'null'})"
+                style="padding:4px 12px;background:#1a3558;color:#fff;border:none;border-radius:5px;cursor:pointer;font-size:12px;">
+                ✏️ Editar
+              </button>
+            </td>
+          </tr>`).join('')}
+        </tbody></table>`;
+    } catch(e) { wrap.innerHTML = `<p style="color:#e74c3c;">Error: ${e.message}</p>`; }
+  }
+
+  function bccEditar(clave, nombre, estatus, etapa) {
+    _bccCurrent = { clave };
+    document.getElementById('bcc-modal-info').textContent = nombre;
+    document.getElementById('bcc-modal-estatus').value = estatus || 'CONTRATADO';
+    document.getElementById('bcc-modal-etapa').value = etapa != null ? etapa : '';
+    document.getElementById('bcc-modal-msg').innerHTML = '';
+    document.getElementById('bcc-modal').style.display = 'flex';
+  }
+
+  async function bccGuardar() {
+    const estatus = document.getElementById('bcc-modal-estatus').value;
+    const etapa   = document.getElementById('bcc-modal-etapa').value;
+    document.getElementById('bcc-modal-msg').innerHTML = 'Guardando...';
+    try {
+      const r = await fetch(`/api/contratos/contratos/${encodeURIComponent(_bccCurrent.clave)}/estatus`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ estatus, etapa: etapa ? parseInt(etapa) : null })
+      }).then(x => x.json());
+      if (r.ok) {
+        document.getElementById('bcc-modal-msg').innerHTML = '<span style="color:#27ae60;">✅ Guardado.</span>';
+        setTimeout(() => { document.getElementById('bcc-modal').style.display = 'none'; loadContratos(); }, 700);
+      } else {
+        document.getElementById('bcc-modal-msg').innerHTML = `<span style="color:#e74c3c;">❌ ${r.message}</span>`;
+      }
+    } catch(e) { document.getElementById('bcc-modal-msg').innerHTML = `<span style="color:#e74c3c;">Error: ${e.message}</span>`; }
+  }
+
   async function initBC() {
     // Cargar clientes en ambos selects
     try {
@@ -4248,6 +4417,7 @@
         <th style="padding:7px 10px;text-align:left;">Plataforma</th>
         <th style="padding:7px 10px;text-align:center;">Versión</th>
         <th style="padding:7px 10px;text-align:center;">Etapa Contrato</th>
+        <th style="padding:7px 10px;text-align:center;">Estatus Contrato</th>
         <th style="padding:7px 10px;text-align:center;">Doc</th>
         <th style="padding:7px 10px;text-align:center;">Prog</th>
         <th style="padding:7px 10px;text-align:center;">Cert</th>
@@ -4262,6 +4432,21 @@
           <td style="padding:6px 10px;">${r.CLAVE_PLATAFORMA||''}</td>
           <td style="padding:6px 10px;text-align:center;"><span style="font-size:11px;background:#f0f4ff;color:#1a3558;padding:2px 7px;border-radius:10px;font-family:monospace;">${r.VERSION_CARGA||'—'}</span></td>
           <td style="padding:6px 10px;text-align:center;">${etapaPill(r.ETAPA)}</td>
+          <td style="padding:6px 10px;text-align:center;">
+            <select onchange="actualizarEstatusContratoRep('${r.CLAVE_REP}','${document.getElementById('bc-rep-contrato').value}',this.value)"
+              style="font-size:11px;padding:3px 6px;border:1px solid #ddd;border-radius:5px;max-width:120px;">
+              <option value="">—</option>
+              <option value="NO INICIADO" ${r.ESTATUS_PROYECTO==='NO INICIADO'?'selected':''}>NO INICIADO</option>
+              <option value="LAYOUT" ${r.ESTATUS_PROYECTO==='LAYOUT'?'selected':''}>LAYOUT</option>
+              <option value="EXTRACCIONES" ${r.ESTATUS_PROYECTO==='EXTRACCIONES'?'selected':''}>EXTRACCIONES</option>
+              <option value="PRUEBAS BW" ${r.ESTATUS_PROYECTO==='PRUEBAS BW'?'selected':''}>PRUEBAS BW</option>
+              <option value="INSTALADO EN QA" ${r.ESTATUS_PROYECTO==='INSTALADO EN QA'?'selected':''}>INSTALADO EN QA</option>
+              <option value="PRUEBAS QA" ${r.ESTATUS_PROYECTO==='PRUEBAS QA'?'selected':''}>PRUEBAS QA</option>
+              <option value="CERTIFICADO QA" ${r.ESTATUS_PROYECTO==='CERTIFICADO QA'?'selected':''}>CERTIFICADO QA</option>
+              <option value="EN PRODUCCION" ${r.ESTATUS_PROYECTO==='EN PRODUCCION'?'selected':''}>EN PRODUCCION</option>
+              <option value="EN SOPORTE" ${r.ESTATUS_PROYECTO==='EN SOPORTE'?'selected':''}>EN SOPORTE</option>
+            </select>
+          </td>
           <td style="padding:6px 10px;text-align:center;">${etapaBadge(r.DOCUMENTADO)}</td>
           <td style="padding:6px 10px;text-align:center;">${etapaBadge(r.PROGRAMADO)}</td>
           <td style="padding:6px 10px;text-align:center;">${etapaBadge(r.CERTIFICADO)}</td>
@@ -4364,11 +4549,12 @@
       'Descripción':     r.DESCRIPCION_ESP  || '',
       'Plataforma':      r.CLAVE_PLATAFORMA || '',
       'Versión':         r.VERSION_CARGA    || '',
-      'Etapa Contrato':  r.ETAPA            || '',
-      'Documentado':     r.DOCUMENTADO      || '',
-      'Programado':      r.PROGRAMADO       || '',
-      'Certificado':     r.CERTIFICADO      || '',
-      'Estatus':         r.ESTATUS          || ''
+      'Etapa Contrato':    r.ETAPA              || '',
+      'Estatus Contrato':  r.ESTATUS_PROYECTO   || '',
+      'Documentado':       r.DOCUMENTADO        || '',
+      'Programado':        r.PROGRAMADO         || '',
+      'Certificado':       r.CERTIFICADO        || '',
+      'Estatus':           r.ESTATUS            || ''
     }));
     const wb = XLSX.utils.book_new();
     const ws = XLSX.utils.json_to_sheet(rows);
@@ -5779,6 +5965,7 @@
     'chi-clientes':   loadChiClientes,
     'chi-proyectos':  loadChiProyectos,
     'qa-alertas':       loadQaAlertas,
+    'bc-contratos':       () => { initBccClientes(); loadContratos(); },
     'bc-consulta-rep':    () => { initBC(); },
     'bc-actualizar-rep':  () => { updRepCargarCatEstatus(); },
     'bc-actualizar-val':  () => { uvCargarCatEstatus(); },
