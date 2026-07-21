@@ -815,9 +815,17 @@ router.post('/inventario-reportes/asignar-plataformas', requireAuth, async (req,
       const { clave_rep, clave_rep_general, plataforma } = a;
       const existe = await query(`
         SELECT 1 FROM ESTATUS_REPORTE
-        WHERE CLAVE_REP=${esc(clave_rep)} AND CLAVE_PLATAFORMA=${esc(plataforma)} AND VERSION_CARGA=${esc(version)}
+        WHERE CLAVE_REP=${esc(clave_rep)} AND CLAVE_PLATAFORMA=${esc(plataforma)}
       `);
-      if (existe.length) { omitidos++; continue; }
+      if (existe.length) {
+        // Ya existe — solo actualizar VERSION_CARGA si cambió
+        await query(`
+          UPDATE ESTATUS_REPORTE SET VERSION_CARGA=${esc(version)}
+          WHERE CLAVE_REP=${esc(clave_rep)} AND CLAVE_PLATAFORMA=${esc(plataforma)}
+        `);
+        omitidos++;
+        continue;
+      }
       const repGeneral = clave_rep_general || clave_rep;
       await query(`
         INSERT INTO ESTATUS_REPORTE
