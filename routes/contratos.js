@@ -786,14 +786,14 @@ router.post('/inventario-reportes/upload', requireAuth, upload.single('archivo')
     for (const r of rows) {
       const clave = String(r.CLAVE_REP || '').trim();
       if (!clave) continue;
-      const version   = versionesMap ? (versionesMap[clave] || versionGlobal) : versionGlobal;
+      const version      = versionesMap ? (versionesMap[clave] || versionGlobal) : versionGlobal;
       const tipo_ver_row = tiposMap ? (tiposMap[clave] || tipo_version) : tipo_version;
       try {
         const existeInv = await query(`
           SELECT CLAVE_PAIS, CLAVE_ENTIDADREGULADA, CLAVE_REG, CLAVE_SERIE, SUBSERIE,
                  CLAVE_GRUPO, REPORTE, CLAVE_SECCION_REP, CLAVE_VERSION_REPORTE, CLAVE_PERIODO,
                  DESCRIPCION_ESP, CLAVE_FECHA_ENT_REP, CARACTERISTICAS,
-                 CLAVE_REGULACION_REP, CLAVE_REP_GENERAL, FECHA_REGULACION
+                 CLAVE_REGULACION_REP, CLAVE_REP_GENERAL, FECHA_REGULACION, VERSION_CARGA
           FROM INVENTARIO_REPORTES WHERE CLAVE_REP=${esc(clave)}`);
         if (!existeInv.length) {
           // Auto-insertar en catálogos si la clave no existe
@@ -858,6 +858,7 @@ router.post('/inventario-reportes/upload', requireAuth, upload.single('archivo')
             str(bd.CLAVE_REP_GENERAL)       !== str(r.CLAVE_REP_GENERAL)       ||
             str(bd.FECHA_REGULACION)        !== str(r.FECHA_REGULACION);
 
+          const versionCambio = str(bd.VERSION_CARGA) !== str(version);
           if (cambio) {
             await query(`
               UPDATE INVENTARIO_REPORTES SET
@@ -870,6 +871,13 @@ router.post('/inventario-reportes/upload', requireAuth, upload.single('archivo')
                 CLAVE_REGULACION_REP=${esc(r.CLAVE_REGULACION_REP)}, CLAVE_REP_GENERAL=${esc(r.CLAVE_REP_GENERAL)},
                 FECHA_REGULACION=${r.FECHA_REGULACION ? esc(r.FECHA_REGULACION) : 'NULL'},
                 VERSION_CARGA=${esc(version)}, FECHA_ACTUALIZADA=GETDATE()
+              WHERE CLAVE_REP=${esc(clave)}
+            `);
+            actualizados++;
+          } else if (versionCambio) {
+            // Solo cambió la versión — actualizar únicamente VERSION_CARGA
+            await query(`
+              UPDATE INVENTARIO_REPORTES SET VERSION_CARGA=${esc(version)}, FECHA_ACTUALIZADA=GETDATE()
               WHERE CLAVE_REP=${esc(clave)}
             `);
             actualizados++;

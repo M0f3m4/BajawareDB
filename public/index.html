@@ -5277,12 +5277,12 @@
       <div style="display:grid;grid-template-columns:1fr 110px 110px;gap:0;background:#e8edf3;padding:6px 14px;font-size:11px;font-weight:600;color:#555;border-radius:8px 8px 0 0;">
         <span>Clave Reporte</span><span>Versión</span><span>Tipo</span>
       </div>
-      ${_invVerRepRows.map(clave => `
+      ${_invVerRepRows.map(({clave, versionExcel}) => `
       <div style="display:grid;grid-template-columns:1fr 110px 110px;gap:8px;align-items:center;padding:7px 14px;border-bottom:1px solid #f0f0f0;">
         <span style="font-family:monospace;font-size:12px;color:#1a3558;font-weight:600;">${clave}</span>
-        <input class="inv-ver-rep-version-input" data-clave="${clave}" type="text" value=""
+        <input class="inv-ver-rep-version-input" data-clave="${clave}" type="text" value="${versionExcel}"
           placeholder="ej. 3.10.1"
-          style="padding:5px 8px;border:1px solid #ddd;border-radius:6px;font-size:12px;width:100%;box-sizing:border-box;">
+          style="padding:5px 8px;border:1px solid #ddd;border-radius:6px;font-size:12px;width:100%;box-sizing:border-box;${versionExcel ? 'background:#f0fff0;' : ''}">
         <select class="inv-ver-rep-tipo-input" data-clave="${clave}"
           style="padding:5px 6px;border:1px solid #ddd;border-radius:6px;font-size:11px;width:100%;">
           <option value="BASE">BASE</option>
@@ -5349,6 +5349,7 @@
     const clavesSet = new Set();
     const objetosSet = new Set();
     const paresRep = []; // pares {clave_rep, version} para reportes
+    const versionExcelMap = {}; // VERSION_CARGA del Excel por CLAVE_REP
     for (let r = ref.s.r + 1; r <= ref.e.r; r++) {
       const ce  = colIdxMap[colEntidad]     !== undefined ? ws2[XLSX.utils.encode_cell({r, c: colIdxMap[colEntidad]})]     : null;
       const co  = colIdxMap[colObjeto]      !== undefined ? ws2[XLSX.utils.encode_cell({r, c: colIdxMap[colObjeto]})]      : null;
@@ -5357,7 +5358,11 @@
       if (co && co.v) {
         const clave = String(co.v).trim();
         objetosSet.add(clave);
-        if (isRep) paresRep.push({ clave_rep: clave, version });
+        if (isRep) {
+          const vExcel = cv ? String(cv.v).trim() : '';
+          if (vExcel) versionExcelMap[clave] = vExcel;
+          paresRep.push({ clave_rep: clave, version: vExcel || version });
+        }
       }
     }
     btn.textContent = '📤 Verificar y cargar'; btn.disabled = false;
@@ -5388,7 +5393,7 @@
 
     // Para reportes: siempre ir a página 3 (versiones por reporte)
     if (isRep) {
-      _invVerRepRows = [...objetosSet];
+      _invVerRepRows = [...objetosSet].map(c => ({ clave: c, versionExcel: versionExcelMap[c] || '' }));
       _invVerPending = { version, regulacion, tipo_ver, descripcion };
       if (!check.version_existe && !advertencias.length) {
         invVerMostrarVersionesRep();
