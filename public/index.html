@@ -1009,6 +1009,19 @@
               <option value="">— Selecciona reporte —</option>
             </select>
           </div>
+          <div>
+            <label style="font-size:11px;font-weight:600;color:#555;display:block;margin-bottom:4px;">Versión</label>
+            <select id="invv-version" onchange="invvFiltrar()"
+              style="padding:7px 12px;border:1px solid #ddd;border-radius:6px;font-size:13px;min-width:140px;">
+              <option value="">— Todas —</option>
+            </select>
+          </div>
+          <div>
+            <label style="font-size:11px;font-weight:600;color:#555;display:block;margin-bottom:4px;">Buscar validación</label>
+            <input id="invv-buscar" type="text" placeholder="Clave o descripción..."
+              oninput="invvFiltrar()"
+              style="padding:7px 12px;border:1px solid #ddd;border-radius:6px;font-size:13px;min-width:220px;">
+          </div>
           <span id="invv-badge" style="font-size:11px;background:#e8f0fe;color:#1a3558;padding:3px 10px;border-radius:10px;font-weight:600;display:none;"></span>
         </div>
         <div id="invv-scroll-top" style="overflow-x:auto;overflow-y:hidden;height:16px;"><div id="invv-scroll-ghost" style="height:1px;"></div></div>
@@ -4419,43 +4432,64 @@
         }
         if (row.CLAVE_PLATAFORMA) mapaVal[row.CLAVE_VALIDACION].plataformas.push(row.CLAVE_PLATAFORMA);
       }
-      const vals = Object.values(mapaVal);
-      badge.textContent = `${vals.length} validaciones`;
-      badge.style.display = 'inline-block';
-      if (!vals.length) { wrap.innerHTML = '<div style=""><p style="color:#aaa;font-size:13px;">Sin validaciones.</p></div>'; return; }
-      wrap.innerHTML = `
-        <div style="">
-          <div class="data-table-wrap">
-            <table class="data-table">
-              <thead><tr>
-                <th>Clave validación</th>
-                <th>Descripción</th>
-                <th>Tipo</th>
-                <th>Versión</th>
-                <th>Plataformas</th>
-              </tr></thead>
-              <tbody>
-                ${vals.map(v => `<tr>
-                  <td style="font-family:monospace;font-size:12px;font-weight:600;color:#1a3558;">${v.CLAVE_VALIDACION}</td>
-                  <td style="font-size:12px;">${v.DESCRIPCION_VALIDACION || '<span style="color:#bbb;font-style:italic;">—</span>'}</td>
-                  <td style="font-size:12px;">${v.TIPO_VALIDACION || '—'}</td>
-                  <td style="text-align:center;"><span style="font-size:11px;background:#f0f4ff;color:#1a3558;padding:2px 7px;border-radius:10px;font-family:monospace;">${v.VERSION_CARGA || '—'}</span></td>
-                  <td style="font-size:11px;">${v.plataformas.length ? v.plataformas.map(p => `<span style="background:#e8f0fe;color:#1a3558;padding:2px 6px;border-radius:4px;margin-right:3px;">${p}</span>`).join('') : '<span style="color:#bbb;">Sin asignar</span>'}</td>
-                </tr>`).join('')}
-              </tbody>
-            </table>
-          </div>
-        </div>`;
-      // Sincronizar scroll horizontal arriba ↔ abajo
-      const scrollTop  = document.getElementById('invv-scroll-top');
-      const scrollGhost = document.getElementById('invv-scroll-ghost');
-      const tableWrap  = wrap.querySelector('.data-table-wrap');
-      if (tableWrap) {
-        scrollGhost.style.width = tableWrap.scrollWidth + 'px';
-        scrollTop.onscroll  = () => { tableWrap.scrollLeft = scrollTop.scrollLeft; };
-        tableWrap.onscroll  = () => { scrollTop.scrollLeft = tableWrap.scrollLeft; };
-      }
+      _invvAllVals = Object.values(mapaVal);
+
+      // Poblar dropdown de versiones
+      const selVer = document.getElementById('invv-version');
+      const versiones = [...new Set(_invvAllVals.map(v => v.VERSION_CARGA).filter(Boolean))].sort();
+      selVer.innerHTML = '<option value="">— Todas —</option>' + versiones.map(v => `<option value="${v}">${v}</option>`).join('');
+      document.getElementById('invv-buscar').value = '';
+
     } catch(e) { wrap.innerHTML = `<div style=""><p style="color:#e74c3c;">Error: ${e.message}</p></div>`; }
+  }
+
+  let _invvAllVals = [];
+
+  function invvFiltrar() {
+    const q    = (document.getElementById('invv-buscar').value || '').toLowerCase();
+    const ver  = document.getElementById('invv-version').value;
+    const filtrado = _invvAllVals.filter(v =>
+      (!ver || v.VERSION_CARGA === ver) &&
+      (!q   || (v.CLAVE_VALIDACION||'').toLowerCase().includes(q) || (v.DESCRIPCION_VALIDACION||'').toLowerCase().includes(q))
+    );
+    invvRenderVals(filtrado);
+  }
+
+  function invvRenderVals(vals) {
+    const wrap  = document.getElementById('invv-content');
+    const badge = document.getElementById('invv-badge');
+    badge.textContent = `${vals.length} validaciones`;
+    badge.style.display = 'inline-block';
+    if (!vals.length) { wrap.innerHTML = '<p style="color:#aaa;font-size:13px;">Sin validaciones.</p>'; return; }
+    wrap.innerHTML = `
+      <div class="data-table-wrap">
+        <table class="data-table">
+          <thead><tr>
+            <th>Clave validación</th>
+            <th>Descripción</th>
+            <th>Tipo</th>
+            <th>Versión</th>
+            <th>Plataformas</th>
+          </tr></thead>
+          <tbody>
+            ${vals.map(v => `<tr>
+              <td style="font-family:monospace;font-size:12px;font-weight:600;color:#1a3558;">${v.CLAVE_VALIDACION}</td>
+              <td style="font-size:12px;">${v.DESCRIPCION_VALIDACION || '<span style="color:#bbb;font-style:italic;">—</span>'}</td>
+              <td style="font-size:12px;">${v.TIPO_VALIDACION || '—'}</td>
+              <td style="text-align:center;"><span style="font-size:11px;background:#f0f4ff;color:#1a3558;padding:2px 7px;border-radius:10px;font-family:monospace;">${v.VERSION_CARGA || '—'}</span></td>
+              <td style="font-size:11px;">${v.plataformas.length ? v.plataformas.map(p => `<span style="background:#e8f0fe;color:#1a3558;padding:2px 6px;border-radius:4px;margin-right:3px;">${p}</span>`).join('') : '<span style="color:#bbb;">Sin asignar</span>'}</td>
+            </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>`;
+    const scrollTop   = document.getElementById('invv-scroll-top');
+    const scrollGhost = document.getElementById('invv-scroll-ghost');
+    const tableWrap   = wrap.querySelector('.data-table-wrap');
+    if (tableWrap) {
+      scrollGhost.style.width = tableWrap.scrollWidth + 'px';
+      scrollTop.onscroll  = () => { tableWrap.scrollLeft = scrollTop.scrollLeft; };
+      tableWrap.onscroll  = () => { scrollTop.scrollLeft = tableWrap.scrollLeft; };
+    }
   }
 
   // ── Validaciones por Cliente ──────────────────────────────
