@@ -155,21 +155,20 @@ router.get('/clientes/:clave/contratos', requireAuth, async (req, res) => {
 // ── REPORTES por contrato + estatus ──────────────────────
 router.get('/contratos/:clave/reportes', requireAuth, async (req, res) => {
   try {
+    const { version_cliente } = req.query;
+    let vkFilter = '';
+    if (version_cliente === '1') vkFilter = ' AND er.VERSION_CLIENTE = 1';
+    if (version_cliente === '0') vkFilter = ' AND (er.VERSION_CLIENTE = 0 OR er.VERSION_CLIENTE IS NULL)';
+
     const rows = await query(`
       SELECT
-        cr.CLAVE_REP,
+        cr.CLAVE_REP AS CLAVE_REP_BASE,
+        er.CLAVE_REP,
         cr.ETAPA,
         cr.ESTATUS AS ESTATUS_PROYECTO,
-        cr.EN_USO,
-        cr.FECHA_ESTIMADA_QA,
-        cr.FECHA_INSTALADO_QA,
-        cr.FECHA_ESTIMADA_CERT,
-        cr.FECHA_CERTIFICADO,
-        cr.FECHA_ESTIMADA_PROD,
-        cr.FECHA_INSTALADO_PROD,
         ir.DESCRIPCION_ESP,
         ir.CLAVE_ENTIDADREGULADA,
-        COALESCE(ir.REPORTE, cr.CLAVE_REP) AS REPORTE,
+        COALESCE(ir.REPORTE, er.CLAVE_REP) AS REPORTE,
         er.ID_ESTATUS_REP,
         er.DOCUMENTADO,
         er.DOC_FECHA_REAL,
@@ -180,20 +179,17 @@ router.get('/contratos/:clave/reportes', requireAuth, async (req, res) => {
         er.ESTATUS,
         er.USER_DOC, er.USER_PROG, er.USER_CERT,
         er.USER_ESTATUS, er.FECHA_ESTATUS,
-        COALESCE(er.CLAVE_PLATAFORMA, c.CLAVE_PLATAFORMA) AS CLAVE_PLATAFORMA,
+        er.CLAVE_PLATAFORMA,
         er.VERSION,
-        COALESCE(er.VERSION_CARGA, ir.VERSION_CARGA) AS VERSION_CARGA
+        COALESCE(er.VERSION_CARGA, ir.VERSION_CARGA) AS VERSION_CARGA,
+        er.VERSION_CLIENTE
       FROM CONTRATOS_REPORTES cr
-      LEFT JOIN CONTRATOS c            ON c.CLAVE_CONTRATO = cr.CLAVE_CONTRATO
-      LEFT JOIN INVENTARIO_REPORTES ir ON ir.CLAVE_REP_GENERAL = cr.CLAVE_REP
-      LEFT JOIN ESTATUS_REPORTE er     ON er.ID_ESTATUS_REP = (
-        SELECT TOP 1 ID_ESTATUS_REP FROM ESTATUS_REPORTE
-        WHERE CLAVE_REP_GENERAL = cr.CLAVE_REP
-          AND CLAVE_PLATAFORMA = c.CLAVE_PLATAFORMA
-        ORDER BY ID_ESTATUS_REP DESC
-      )
-      WHERE cr.CLAVE_CONTRATO=${esc(req.params.clave)}
-      ORDER BY cr.CLAVE_REP
+      INNER JOIN CONTRATOS c ON c.CLAVE_CONTRATO = cr.CLAVE_CONTRATO
+      INNER JOIN ESTATUS_REPORTE er ON er.CLAVE_REP_GENERAL = cr.CLAVE_REP
+                                   AND er.CLAVE_PLATAFORMA = c.CLAVE_PLATAFORMA
+      LEFT JOIN INVENTARIO_REPORTES ir ON ir.CLAVE_REP = er.CLAVE_REP
+      WHERE cr.CLAVE_CONTRATO=${esc(req.params.clave)}${vkFilter}
+      ORDER BY er.CLAVE_REP, er.CLAVE_PLATAFORMA
     `);
     res.json({ ok: true, data: rows });
   } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
@@ -364,17 +360,18 @@ router.get('/estatus-reporte/versiones', requireAuth, async (req, res) => {
     if (!clave) return res.json({ ok: true, data: [] });
     // Con plataforma: versiones de ESTATUS_REPORTE para ese (rep, plataforma)
     // Sin plataforma: versiones de INVENTARIO_REPORTES_HIST para el reporte
-    // Combinar versiones de hist + estatus_reporte como fallback
+    // Combinar versiones de hist + estatus_reporte + inventario (con LIKE para cubrir sufijos de año)
+    const clavePattern = `${clave.replace(/'/g, "''")}%`;
     const rows = await query(`
       SELECT DISTINCT VERSION_CARGA FROM (
         SELECT VERSION_CARGA FROM INVENTARIO_REPORTES_HIST
-        WHERE CLAVE_REP=${esc(clave)} AND VERSION_CARGA IS NOT NULL
+        WHERE CLAVE_REP LIKE '${clavePattern}' AND VERSION_CARGA IS NOT NULL
         UNION
         SELECT VERSION_CARGA FROM ESTATUS_REPORTE
-        WHERE CLAVE_REP=${esc(clave)} AND VERSION_CARGA IS NOT NULL
+        WHERE CLAVE_REP LIKE '${clavePattern}' AND VERSION_CARGA IS NOT NULL
         UNION
         SELECT VERSION_CARGA FROM INVENTARIO_REPORTES
-        WHERE CLAVE_REP=${esc(clave)} AND VERSION_CARGA IS NOT NULL
+        WHERE CLAVE_REP LIKE '${clavePattern}' AND VERSION_CARGA IS NOT NULL
       ) t
       ORDER BY VERSION_CARGA DESC
     `);
@@ -1091,6 +1088,15 @@ router.get('/cat-estatus', requireAuth, async (req, res) => {
       ORDER BY cv.ID_ESTATUS
     `);
     res.json({ ok: true, data: rows.map(r => r.CLAVE_ESTATUS) });
+  } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
+});
+
+// ── PUT actualizar VERSION_CLIENTE en ESTATUS_REPORTE ────
+router.put('/estatus-reporte/:id/version-cliente', requireAuth, async (req, res) => {
+  try {
+    const { version_cliente } = req.body;
+    await query(`UPDATE ESTATUS_REPORTE SET VERSION_CLIENTE=${version_cliente ? 1 : 0} WHERE ID_ESTATUS_REP=${parseInt(req.params.id)}`);
+    res.json({ ok: true });
   } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
 });
 

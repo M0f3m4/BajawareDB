@@ -1225,6 +1225,14 @@
               <option value="">— Selecciona contrato —</option>
             </select>
           </div>
+          <div>
+            <label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px;">Versión Cliente</label>
+            <select id="bc-rep-version-cliente" onchange="loadReportesContrato()" style="padding:7px 12px;border:1px solid #ddd;border-radius:6px;font-size:13px;min-width:140px;">
+              <option value="">Todos</option>
+              <option value="1">Sí</option>
+              <option value="0">No</option>
+            </select>
+          </div>
           <input id="bc-rep-search" type="text" placeholder="Buscar reporte..." oninput="filtrarReportesContrato()"
             style="padding:7px 12px;border:1px solid #ddd;border-radius:6px;font-size:13px;width:220px;">
         </div>
@@ -4413,6 +4421,15 @@
     return `<span style="background:${c.bg};color:#fff;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;">${c.label}</span>`;
   }
 
+  async function toggleVersionCliente(id_estatus_rep, valor) {
+    try {
+      await fetch(`/api/contratos/estatus-reporte/${id_estatus_rep}/version-cliente`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ version_cliente: valor ? 1 : 0 })
+      });
+    } catch(e) { console.error('Error al actualizar version_cliente:', e.message); }
+  }
+
   async function actualizarEstatusContratoRep(clave_rep, clave_contrato, estatus) {
     if (!clave_contrato) return;
     try {
@@ -4552,8 +4569,11 @@
     if (!clave) { wrap.innerHTML = '<p style="color:#aaa;font-size:13px;">Selecciona un contrato.</p>'; return; }
     wrap.innerHTML = '<div class="loading">Cargando...</div>';
     try {
+      const versionCliente = document.getElementById('bc-rep-version-cliente').value;
+      let repUrl = `/api/contratos/contratos/${encodeURIComponent(clave)}/reportes`;
+      if (versionCliente) repUrl += `?version_cliente=${encodeURIComponent(versionCliente)}`;
       const [rRep, rRes] = await Promise.all([
-        fetch(`/api/contratos/contratos/${encodeURIComponent(clave)}/reportes`).then(x => x.json()),
+        fetch(repUrl).then(x => x.json()),
         fetch(`/api/contratos/contratos/${encodeURIComponent(clave)}/resumen`).then(x => x.json()),
       ]);
       bcRepData = rRep.data || [];
@@ -4592,6 +4612,7 @@
         <th style="padding:7px 10px;text-align:center;">Cert</th>
         <th style="padding:7px 10px;text-align:center;">Estatus Proyecto</th>
         <th style="padding:7px 10px;text-align:center;">Último Cambio</th>
+        <th style="padding:7px 10px;text-align:center;">Ver. Cliente</th>
       </tr></thead>
       <tbody>${data.map((r,i) => `
         <tr style="background:${i%2===0?'#fff':'#f8f9fa'};">
@@ -4634,7 +4655,11 @@
               return `<span style="font-weight:600;">${c.user}</span>${fecha ? `<br><span style="color:#aaa;font-size:10px;">${fecha}</span>` : ''}`;
             })()}
           </td>
-          <!-- Acción removida — solo visual -->
+          <td style="padding:6px 10px;text-align:center;">
+            <input type="checkbox" ${r.VERSION_CLIENTE ? 'checked' : ''}
+              onchange="toggleVersionCliente(${r.ID_ESTATUS_REP}, this.checked)"
+              style="width:16px;height:16px;accent-color:#1a3558;cursor:pointer;">
+          </td>
         </tr>`).join('')}
       </tbody></table>`;
   }
