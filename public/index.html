@@ -5227,6 +5227,7 @@
             </th>
             <th style="position:sticky;top:0;background:#1a3558;color:#fff;padding:8px 12px;text-align:left;white-space:nowrap;">Clave Validación</th>
             <th style="position:sticky;top:0;background:#1a3558;color:#fff;padding:8px 12px;text-align:left;">Descripción</th>
+            <th style="position:sticky;top:0;background:#1a3558;color:#fff;padding:8px 12px;text-align:center;white-space:nowrap;">Plataforma</th>
             <th style="position:sticky;top:0;background:#1a3558;color:#fff;padding:8px 12px;text-align:center;white-space:nowrap;">Versión Carga</th>
             <th style="position:sticky;top:0;background:#1a3558;color:#fff;padding:8px;text-align:center;">Doc</th>
             <th style="position:sticky;top:0;background:#1a3558;color:#fff;padding:8px;text-align:center;">Prog</th>
@@ -5241,6 +5242,7 @@
                 </td>
                 <td style="padding:6px 12px;border-bottom:1px solid #eee;font-weight:600;color:#1a3558;white-space:nowrap;">${v.CLAVE_VALIDACION}</td>
                 <td style="padding:6px 12px;border-bottom:1px solid #eee;color:#444;">${v.DESCRIPCION||''}</td>
+                <td style="padding:6px 12px;border-bottom:1px solid #eee;text-align:center;font-size:12px;">${v.CLAVE_PLATAFORMA||'—'}</td>
                 <td style="padding:6px 12px;border-bottom:1px solid #eee;text-align:center;"><span style="font-size:11px;background:#f0f4ff;color:#1a3558;padding:2px 7px;border-radius:10px;font-family:monospace;">${v.VERSION_CARGA||'—'}</span></td>
                 <td style="padding:6px;text-align:center;border-bottom:1px solid #eee;">${b(v.DOCUMENTADO)}</td>
                 <td style="padding:6px;text-align:center;border-bottom:1px solid #eee;">${b(v.PROGRAMADO)}</td>
