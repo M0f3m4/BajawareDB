@@ -515,6 +515,7 @@
         <div class="sub-item" onclick="showSection('inv-reportes')">Inventario</div>
         <div class="sub-item" onclick="showSection('inv-validaciones')">Validaciones</div>
         <div class="sub-item" onclick="showSection('inv-estatus')">Estatus Reportes</div>
+        <div class="sub-item" onclick="showSection('inv-estatus-val')">Estatus Validaciones</div>
         <div class="sub-item" onclick="showSection('inv-catalogos')">Catálogos</div>
       </div>
 
@@ -1027,6 +1028,51 @@
         </div>
         <div id="invv-scroll-top" style="overflow-x:auto;overflow-y:hidden;height:16px;"><div id="invv-scroll-ghost" style="height:1px;"></div></div>
         <div id="invv-content" style="max-height:60vh;overflow:auto;"><p style="color:#aaa;font-size:13px;">Selecciona una entidad y un reporte.</p></div>
+      </div>
+
+      <!-- Estatus de Validaciones -->
+      <div class="content-section" id="sec-inv-estatus-val">
+        <h2 class="section-title">Estatus de Validaciones</h2>
+        <div class="toolbar" style="flex-wrap:wrap;gap:8px;margin-bottom:14px;align-items:flex-end;">
+          <div>
+            <label style="font-size:11px;font-weight:600;color:#555;display:block;margin-bottom:3px;">País</label>
+            <select id="estval-pais" onchange="estValOnPaisChange()" style="padding:7px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;min-width:120px;">
+              <option value="">— País —</option>
+            </select>
+          </div>
+          <div>
+            <label style="font-size:11px;font-weight:600;color:#555;display:block;margin-bottom:3px;">Entidad Regulada</label>
+            <select id="estval-entidad" onchange="estValOnEntidadChange()" disabled style="padding:7px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;min-width:200px;">
+              <option value="">— Entidad —</option>
+            </select>
+          </div>
+          <div>
+            <label style="font-size:11px;font-weight:600;color:#555;display:block;margin-bottom:3px;">Reporte</label>
+            <select id="estval-rep" onchange="estValOnRepChange()" disabled style="padding:7px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;min-width:220px;">
+              <option value="">— Reporte —</option>
+            </select>
+          </div>
+          <div>
+            <label style="font-size:11px;font-weight:600;color:#555;display:block;margin-bottom:3px;">Plataforma</label>
+            <select id="estval-plat" onchange="loadEstatusVal()" disabled style="padding:7px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;min-width:140px;">
+              <option value="">Todas</option>
+            </select>
+          </div>
+          <div>
+            <label style="font-size:11px;font-weight:600;color:#555;display:block;margin-bottom:3px;">Estatus</label>
+            <select id="estval-est" onchange="loadEstatusVal()" disabled style="padding:7px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;min-width:160px;">
+              <option value="">Todos</option>
+              <option value="NO DOCUMENTADO">NO DOCUMENTADO</option>
+              <option value="DOCUMENTADO">DOCUMENTADO</option>
+              <option value="PROGRAMADO">PROGRAMADO</option>
+              <option value="CERTIFICADO">CERTIFICADO</option>
+            </select>
+          </div>
+          <input type="text" id="estval-texto" placeholder="Buscar validación..." oninput="estValFiltrarDebounced()"
+            disabled style="padding:7px 12px;border:1px solid #ddd;border-radius:6px;font-size:13px;min-width:200px;" />
+        </div>
+        <div id="estval-count" style="font-size:12px;color:#888;margin-bottom:8px;"></div>
+        <div id="estval-content"><p style="color:#aaa;font-size:13px;">Selecciona país, entidad y reporte.</p></div>
       </div>
 
       <!-- Estatus de Reportes -->
@@ -3618,6 +3664,113 @@
     _estTimer = setTimeout(loadEstatus, 400);
   }
 
+  // ── Estatus Validaciones ──────────────────────────────────
+  let _estValTimer = null;
+  function estValFiltrarDebounced() { clearTimeout(_estValTimer); _estValTimer = setTimeout(loadEstatusVal, 400); }
+
+  async function initEstatusVal() {
+    const selPais = document.getElementById('estval-pais');
+    if (selPais.options.length > 1) return;
+    try {
+      const r = await fetch('/api/estatus-validaciones/filtros').then(x => x.json());
+      (r.paises || []).forEach(p => { const o = document.createElement('option'); o.value = o.textContent = p; selPais.appendChild(o); });
+    } catch(e) {}
+  }
+
+  async function estValOnPaisChange() {
+    const pais = document.getElementById('estval-pais').value;
+    const selEnt = document.getElementById('estval-entidad');
+    const selRep = document.getElementById('estval-rep');
+    const selPlat = document.getElementById('estval-plat');
+    const selEst = document.getElementById('estval-est');
+    const txt = document.getElementById('estval-texto');
+    selEnt.innerHTML = '<option value="">— Entidad —</option>';
+    selRep.innerHTML = '<option value="">— Reporte —</option>';
+    selEnt.disabled = !pais; selRep.disabled = true; selPlat.disabled = true; selEst.disabled = true; txt.disabled = true;
+    document.getElementById('estval-content').innerHTML = '<p style="color:#aaa;font-size:13px;">Selecciona entidad y reporte.</p>';
+    if (!pais) return;
+    try {
+      const r = await fetch(`/api/estatus-validaciones/filtros?pais=${encodeURIComponent(pais)}`).then(x => x.json());
+      (r.entidades || []).forEach(e => { const o = document.createElement('option'); o.value = o.textContent = e; selEnt.appendChild(o); });
+    } catch(e) {}
+  }
+
+  async function estValOnEntidadChange() {
+    const pais = document.getElementById('estval-pais').value;
+    const entidad = document.getElementById('estval-entidad').value;
+    const selRep = document.getElementById('estval-rep');
+    const selPlat = document.getElementById('estval-plat');
+    const selEst = document.getElementById('estval-est');
+    const txt = document.getElementById('estval-texto');
+    selRep.innerHTML = '<option value="">— Reporte —</option>';
+    selRep.disabled = !entidad; selPlat.disabled = true; selEst.disabled = true; txt.disabled = true;
+    document.getElementById('estval-content').innerHTML = '<p style="color:#aaa;font-size:13px;">Selecciona un reporte.</p>';
+    if (!entidad) return;
+    try {
+      const r = await fetch(`/api/estatus-validaciones/filtros?pais=${encodeURIComponent(pais)}&entidad=${encodeURIComponent(entidad)}`).then(x => x.json());
+      (r.reportes || []).forEach(rep => { const o = document.createElement('option'); o.value = o.textContent = rep; selRep.appendChild(o); });
+      // poblar plataformas
+      const selPlat2 = document.getElementById('estval-plat');
+      selPlat2.innerHTML = '<option value="">Todas</option>';
+      (r.plataformas || []).forEach(p => { const o = document.createElement('option'); o.value = o.textContent = p; selPlat2.appendChild(o); });
+    } catch(e) {}
+  }
+
+  async function estValOnRepChange() {
+    const rep = document.getElementById('estval-rep').value;
+    const selPlat = document.getElementById('estval-plat');
+    const selEst = document.getElementById('estval-est');
+    const txt = document.getElementById('estval-texto');
+    selPlat.disabled = !rep; selEst.disabled = !rep; txt.disabled = !rep;
+    if (rep) loadEstatusVal();
+    else document.getElementById('estval-content').innerHTML = '<p style="color:#aaa;font-size:13px;">Selecciona un reporte.</p>';
+  }
+
+  async function loadEstatusVal() {
+    const rep     = document.getElementById('estval-rep').value;
+    const pais    = document.getElementById('estval-pais').value;
+    const entidad = document.getElementById('estval-entidad').value;
+    const plat    = document.getElementById('estval-plat').value;
+    const est     = document.getElementById('estval-est').value;
+    const texto   = document.getElementById('estval-texto').value.trim();
+    const wrap    = document.getElementById('estval-content');
+    const count   = document.getElementById('estval-count');
+    if (!rep) return;
+    wrap.innerHTML = '<div class="loading">Cargando...</div>';
+    let url = `/api/estatus-validaciones?rep=${encodeURIComponent(rep)}`;
+    if (pais)    url += `&pais=${encodeURIComponent(pais)}`;
+    if (entidad) url += `&entidad=${encodeURIComponent(entidad)}`;
+    if (plat)    url += `&plataforma=${encodeURIComponent(plat)}`;
+    if (est)     url += `&estatus=${encodeURIComponent(est)}`;
+    if (texto)   url += `&texto=${encodeURIComponent(texto)}`;
+    try {
+      const r = await fetch(url).then(x => x.json());
+      if (!r.ok) throw new Error(r.message);
+      const data = r.data || [];
+      count.textContent = `${data.length} validaciones`;
+      if (!data.length) { wrap.innerHTML = '<p style="color:#aaa;font-size:13px;">Sin resultados.</p>'; return; }
+      const b = v => (v==='S'||v==='SI') ? '<span style="color:#27ae60;font-weight:700;">✓</span>' : '<span style="color:#e74c3c;">✗</span>';
+      wrap.innerHTML = `<div class="data-table-wrap"><table class="data-table">
+        <thead><tr>
+          <th>Clave Validación</th><th>Descripción</th><th>Plataforma</th>
+          <th>Versión</th><th>Estatus</th>
+          <th style="text-align:center;">Doc</th><th style="text-align:center;">Prog</th><th style="text-align:center;">Cert</th>
+        </tr></thead>
+        <tbody>${data.map((v,i) => `
+          <tr style="background:${i%2===0?'#fff':'#f8f9fa'};">
+            <td style="font-family:monospace;font-size:11px;font-weight:600;color:#1a3558;">${v.CLAVE_VALIDACION}</td>
+            <td style="font-size:11px;">${v.DESCRIPCION||'—'}</td>
+            <td style="font-size:12px;">${v.CLAVE_PLATAFORMA||'—'}</td>
+            <td style="text-align:center;"><span style="font-size:11px;background:#f0f4ff;color:#1a3558;padding:2px 6px;border-radius:8px;font-family:monospace;">${v.VERSION_CARGA||'—'}</span></td>
+            <td style="text-align:center;">${estatusPill(v.ESTATUS)}</td>
+            <td style="text-align:center;">${b(v.DOCUMENTADO)}</td>
+            <td style="text-align:center;">${b(v.PROGRAMADO)}</td>
+            <td style="text-align:center;">${b(v.CERTIFICADO)}</td>
+          </tr>`).join('')}
+        </tbody></table></div>`;
+    } catch(e) { wrap.innerHTML = `<p style="color:#e74c3c;">Error: ${e.message}</p>`; }
+  }
+
   async function initEstatus() {
     try {
       const [platRes, estRes] = await Promise.all([
@@ -6033,6 +6186,7 @@
     'inv-layouts':    loadLayouts,
     'inv-reportes':   initInvReportes,
     'inv-estatus':    initEstatus,
+    'inv-estatus-val': initEstatusVal,
     'spr-activo':     loadSprintActivo,
     'spr-historial':  loadSprHistorial,
     'spr-tickets':    loadJiraTickets,

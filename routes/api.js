@@ -437,6 +437,47 @@ router.get('/inventario/filtros', requireAuth, async (req, res) => {
   }
 });
 
+// ── GET /api/estatus-validaciones ────────────────────────
+router.get('/estatus-validaciones', requireAuth, async (req, res) => {
+  const { pais, entidad, rep, plataforma, estatus, texto } = req.query;
+  if (!rep) return res.json({ ok: true, data: [] });
+  let where = `WHERE rv.CLAVE_REP LIKE ${`'${rep.replace(/'/g,"''")}%'`}`;
+  if (plataforma) where += ` AND rv.CLAVE_PLATAFORMA='${plataforma.replace(/'/g,"''")}'`;
+  if (estatus)    where += ` AND rv.ESTATUS='${estatus.replace(/'/g,"''")}'`;
+  if (texto)      where += ` AND (rv.CLAVE_VALIDACION LIKE '%${texto.replace(/'/g,"''")}%' OR rv.DESCRIPCION LIKE '%${texto.replace(/'/g,"''")}%')`;
+  try {
+    const rows = await query(`
+      SELECT TOP 500
+        rv.CLAVE_VALIDACION, rv.CLAVE_REP, rv.CLAVE_PLATAFORMA,
+        rv.DOCUMENTADO, rv.DOC_FECHA_REAL, rv.USER_DOC,
+        rv.PROGRAMADO,  rv.PROG_FECHA_REAL, rv.USER_PROG,
+        rv.CERTIFICADO, rv.CERT_FECHA_REAL, rv.USER_CERT,
+        rv.ESTATUS, rv.VERSION_CARGA, rv.DESCRIPCION
+      FROM REPORTE_VALIDACION rv
+      ${where}
+      ORDER BY rv.CLAVE_VALIDACION
+    `);
+    res.json({ ok: true, data: rows });
+  } catch(err) { res.status(500).json({ ok: false, message: err.message }); }
+});
+
+// ── GET /api/estatus-validaciones/filtros ─────────────────
+router.get('/estatus-validaciones/filtros', requireAuth, async (req, res) => {
+  const { pais, entidad } = req.query;
+  try {
+    let paises = [], entidades = [], reportes = [];
+    paises = await query(`SELECT DISTINCT iv.CLAVE_PAIS FROM INVENTARIO_VALIDACIONES iv WHERE iv.CLAVE_PAIS IS NOT NULL ORDER BY iv.CLAVE_PAIS`);
+    if (pais) {
+      entidades = await query(`SELECT DISTINCT iv.CLAVE_ENTIDADREGULADA FROM INVENTARIO_VALIDACIONES iv WHERE iv.CLAVE_PAIS='${pais.replace(/'/g,"''")}' AND iv.CLAVE_ENTIDADREGULADA IS NOT NULL ORDER BY iv.CLAVE_ENTIDADREGULADA`);
+    }
+    if (entidad) {
+      reportes = await query(`SELECT DISTINCT iv.CLAVE_REP FROM INVENTARIO_VALIDACIONES iv WHERE iv.CLAVE_ENTIDADREGULADA='${entidad.replace(/'/g,"''")}' AND iv.CLAVE_REP IS NOT NULL ORDER BY iv.CLAVE_REP`);
+    }
+    const plataformas = await query(`SELECT CLAVE_PLATAFORMA FROM CAT_PLATAFORMA ORDER BY CLAVE_PLATAFORMA`);
+    res.json({ ok: true, paises: paises.map(r=>r.CLAVE_PAIS), entidades: entidades.map(r=>r.CLAVE_ENTIDADREGULADA), reportes: reportes.map(r=>r.CLAVE_REP), plataformas: plataformas.map(r=>r.CLAVE_PLATAFORMA) });
+  } catch(err) { res.status(500).json({ ok: false, message: err.message }); }
+});
+
 // ── GET /api/estatus-reportes ─────────────────────────────
 router.get('/estatus-reportes', requireAuth, async (req, res) => {
   const { plataforma, estatus, texto } = req.query;
