@@ -1353,11 +1353,28 @@
             <div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;">
               <div>
                 <label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px;">Etapa</label>
-                <select id="upd-val-etapa" style="padding:7px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;">
-                  <option value="IDENTIFICADO">IDENTIFICADO</option>
-                  <option value="DOCUMENTADO">DOCUMENTADO</option>
-                  <option value="PROGRAMADO">PROGRAMADO</option>
-                  <option value="CERTIFICADO">CERTIFICADO</option>
+                <select id="upd-val-etapa" onchange="updValEtapaChange()" style="padding:7px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;">
+                  <optgroup label="── Intermedios ──">
+                    <option value="IDENTIFICADO">IDENTIFICADO</option>
+                    <option value="EN DOCUMENTACION">EN DOCUMENTACION</option>
+                  </optgroup>
+                  <optgroup label="── Hito ──">
+                    <option value="DOCUMENTADO">DOCUMENTADO</option>
+                  </optgroup>
+                  <optgroup label="── Intermedios ──">
+                    <option value="EN ANALISIS PROG">EN ANALISIS PROG</option>
+                    <option value="ANALIZADO">ANALIZADO</option>
+                    <option value="EN PROGRAMACION">EN PROGRAMACION</option>
+                  </optgroup>
+                  <optgroup label="── Hito ──">
+                    <option value="PROGRAMADO">PROGRAMADO</option>
+                  </optgroup>
+                  <optgroup label="── Intermedios ──">
+                    <option value="EN CERTIFICACION">EN CERTIFICACION</option>
+                  </optgroup>
+                  <optgroup label="── Hito ──">
+                    <option value="CERTIFICADO">CERTIFICADO</option>
+                  </optgroup>
                 </select>
               </div>
               <div>
@@ -1376,7 +1393,7 @@
                 style="padding:8px 20px;background:#1a3558;color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;">
                 ✓ Marcar seleccionadas
               </button>
-              <button onclick="uvAplicar(true)"
+              <button id="upd-val-desmarcar-btn" onclick="uvAplicar(true)"
                 style="padding:8px 20px;background:#e74c3c;color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;">
                 ✗ Desmarcar seleccionadas
               </button>
@@ -5127,6 +5144,15 @@
     }
   }
 
+  const HITOS_VAL = new Set(['DOCUMENTADO', 'PROGRAMADO', 'CERTIFICADO']);
+
+  function updValEtapaChange() {
+    const etapa = document.getElementById('upd-val-etapa').value;
+    const esHito = HITOS_VAL.has(etapa);
+    document.getElementById('upd-val-desmarcar-btn').style.display = esHito ? '' : 'none';
+    document.getElementById('upd-val-fecha').closest('div').style.display = esHito ? '' : 'none';
+  }
+
   async function uvAplicar(desmarcar) {
     const cbs  = [...document.querySelectorAll('.uv-cb:checked')];
     const msg  = document.getElementById('upd-val-msg');
@@ -5138,18 +5164,39 @@
     const etapa     = document.getElementById('upd-val-etapa').value;
     const version   = document.getElementById('upd-val-version').value.trim();
     const fecha     = document.getElementById('upd-val-fecha').value;
+    const esHito    = HITOS_VAL.has(etapa);
     msg.innerHTML   = `Actualizando ${claves.length} validaciones...`;
     try {
-      const r = await fetch('/api/contratos/estatus-validacion-bulk', {
-        method: 'PUT', headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({ claves, clave_rep, clave_plataforma, etapa, fecha, desmarcar, version })
-      }).then(x=>x.json());
-      if (r.ok) {
-        msg.innerHTML = `<span style="color:#27ae60;">✅ ${r.updated} validaciones ${desmarcar?'desmarcadas':'marcadas'} como ${etapa}.</span>`;
+      if (esHito) {
+        // Hito: marcar/desmarcar flags via bulk
+        const r = await fetch('/api/contratos/estatus-validacion-bulk', {
+          method: 'PUT', headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({ claves, clave_rep, clave_plataforma, etapa, fecha, desmarcar, version })
+        }).then(x=>x.json());
+        if (r.ok) {
+          msg.innerHTML = `<span style="color:#27ae60;">✅ ${r.updated} validaciones ${desmarcar?'desmarcadas':'marcadas'} como ${etapa}.</span>`;
+          document.getElementById('uv-sel-all').checked = false;
+          await uvCargar();
+        } else {
+          msg.innerHTML = `<span style="color:#e74c3c;">❌ ${r.message}</span>`;
+        }
+      } else {
+        // Intermedio: solo actualizar ESTATUS por cada validación
+        let ok = 0, fail = 0;
+        for (const cb of cbs) {
+          try {
+            const r = await fetch('/api/contratos/estatus-validacion/estatus', {
+              method: 'PUT', headers: {'Content-Type':'application/json'},
+              body: JSON.stringify({ clave_validacion: cb.dataset.clave, clave_plataforma, estatus: etapa, version: version || null })
+            }).then(x => x.json());
+            r.ok ? ok++ : fail++;
+          } catch(e) { fail++; }
+        }
+        msg.innerHTML = fail === 0
+          ? `<span style="color:#27ae60;">✅ ${etapa} aplicado a ${ok} validaciones.</span>`
+          : `<span style="color:#e74c3c;">❌ ${fail} con error, ${ok} exitosas.</span>`;
         document.getElementById('uv-sel-all').checked = false;
         await uvCargar();
-      } else {
-        msg.innerHTML = `<span style="color:#e74c3c;">❌ ${r.message}</span>`;
       }
     } catch(e) { msg.innerHTML = '<span style="color:#e74c3c;">Error: ' + e.message + '</span>'; }
   }
