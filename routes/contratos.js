@@ -659,11 +659,13 @@ router.get('/validaciones-por-reporte', requireAuth, async (req, res) => {
     const inList = matched.map(c => `'${c.replace(/'/g, "''")}'`).join(',');
     const wherePlat = plataforma ? ` AND CLAVE_PLATAFORMA = ${esc(plataforma)}` : '';
     const rows = await query(`
-      SELECT CLAVE_VALIDACION, CLAVE_REP, TIPO_VALIDACION, DESCRIPCION,
-             DOCUMENTADO, PROGRAMADO, CERTIFICADO, ESTATUS, CLAVE_PLATAFORMA
-      FROM REPORTE_VALIDACION
-      WHERE CLAVE_REP IN (${inList}) ${wherePlat}
-      ORDER BY CLAVE_REP, CLAVE_VALIDACION
+      SELECT rv.CLAVE_VALIDACION, rv.CLAVE_REP, rv.TIPO_VALIDACION, rv.DESCRIPCION,
+             rv.DOCUMENTADO, rv.PROGRAMADO, rv.CERTIFICADO, rv.ESTATUS, rv.CLAVE_PLATAFORMA,
+             COALESCE(rv.VERSION_CARGA, iv.VERSION_CARGA) AS VERSION_CARGA
+      FROM REPORTE_VALIDACION rv
+      LEFT JOIN INVENTARIO_VALIDACIONES iv ON iv.CLAVE_VALIDACION = rv.CLAVE_VALIDACION
+      WHERE rv.CLAVE_REP IN (${inList}) ${wherePlat}
+      ORDER BY rv.CLAVE_REP, rv.CLAVE_VALIDACION
     `);
     res.json({ ok: true, data: rows });
   } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
