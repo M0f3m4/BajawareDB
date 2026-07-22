@@ -4430,7 +4430,6 @@
         <th style="padding:7px 10px;text-align:center;">Cert</th>
         <th style="padding:7px 10px;text-align:center;">Estatus Proyecto</th>
         <th style="padding:7px 10px;text-align:center;">Último Cambio</th>
-        <th style="padding:7px 10px;text-align:center;">Acción</th>
       </tr></thead>
       <tbody>${data.map((r,i) => `
         <tr style="background:${i%2===0?'#fff':'#f8f9fa'};">
@@ -4467,23 +4466,13 @@
                 { user: r.USER_DOC,     fecha: r.DOC_FECHA_REAL },
               ].filter(c => c.user);
               if (!candidatos.length) return '<span style="color:#ccc;">—</span>';
-              // Ordenar por fecha más reciente
               candidatos.sort((a,b) => (b.fecha||'') > (a.fecha||'') ? 1 : -1);
               const c = candidatos[0];
               const fecha = c.fecha ? new Date(c.fecha).toLocaleDateString('es-MX') : '';
               return `<span style="font-weight:600;">${c.user}</span>${fecha ? `<br><span style="color:#aaa;font-size:10px;">${fecha}</span>` : ''}`;
             })()}
           </td>
-          <td style="padding:6px 10px;text-align:center;white-space:nowrap;">
-            <button onclick="precargarActualizarRep('${r.CLAVE_REP}','${r.CLAVE_PLATAFORMA||''}',${r.ID_ESTATUS_REP||'null'})"
-              style="padding:3px 8px;background:#1a3558;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:11px;margin-right:4px;">
-              Etapas
-            </button>
-            <button onclick="repEstatusAbrir('${r.CLAVE_REP}','${r.CLAVE_PLATAFORMA||''}','${r.VERSION_CARGA||''}','${r.ESTATUS||''}',${r.ID_ESTATUS_REP||'null'})"
-              style="padding:3px 8px;background:#8e44ad;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:11px;">
-              Estatus
-            </button>
-          </td>
+          <!-- Acción removida — solo visual -->
         </tr>`).join('')}
       </tbody></table>`;
   }
@@ -4822,7 +4811,7 @@
                 <th style="padding:6px 12px;text-align:center;white-space:nowrap;border-bottom:2px solid #c5d0dc;">Último Cambio</th>
                 <th style="padding:6px 12px;text-align:center;white-space:nowrap;border-bottom:2px solid #c5d0dc;">Plataforma</th>
                 <th style="padding:6px 12px;text-align:center;white-space:nowrap;border-bottom:2px solid #c5d0dc;">Versión</th>
-                <th style="padding:6px 12px;text-align:center;white-space:nowrap;border-bottom:2px solid #c5d0dc;">Acción</th>
+                <!-- Acción removida — solo visual -->
               </tr>
             </thead>
             <tbody>${vals.map((v,i) => `
@@ -4852,17 +4841,7 @@
                 </td>
                 <td style="padding:5px 12px;text-align:center;white-space:nowrap;">${v.CLAVE_PLATAFORMA||''}</td>
                 <td style="padding:5px 12px;text-align:center;"><span style="font-size:11px;background:#f0f4ff;color:#1a3558;padding:2px 7px;border-radius:10px;font-family:monospace;">${v.VERSION_CARGA||'—'}</span></td>
-                <td style="padding:5px 12px;text-align:center;white-space:nowrap;">
-                  <button onclick="precargarActualizarVal('${v.CLAVE_VALIDACION}','${v.CLAVE_REP}','${v.CLAVE_PLATAFORMA||''}')"
-                    style="padding:3px 8px;background:#1a3558;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:11px;margin-right:4px;"
-                    title="Actualiza para todos los clientes que compartan esta validación">
-                    Etapas
-                  </button>
-                  <button onclick="valEstatusAbrir('${v.CLAVE_VALIDACION}','${v.CLAVE_PLATAFORMA||''}','${v.VERSION_CARGA||''}','${v.ESTATUS||''}')"
-                    style="padding:3px 8px;background:#8e44ad;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:11px;">
-                    Estatus
-                  </button>
-                </td>
+                <!-- Acción removida — solo visual -->
               </tr>`).join('')}
             </tbody>
           </table>
