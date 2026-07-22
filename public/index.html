@@ -1254,10 +1254,28 @@
           <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin-bottom:14px;">
             <div>
               <label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px;">Nueva Etapa</label>
-              <select id="upd-rep-etapa" style="width:100%;padding:7px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;">
-                <option value="DOCUMENTADO">DOCUMENTADO</option>
-                <option value="PROGRAMADO">PROGRAMADO</option>
-                <option value="CERTIFICADO">CERTIFICADO</option>
+              <select id="upd-rep-etapa" onchange="updRepEtapaChange()" style="width:100%;padding:7px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;">
+                <optgroup label="── Intermedios ──">
+                  <option value="IDENTIFICADO">IDENTIFICADO</option>
+                  <option value="EN DOCUMENTACION">EN DOCUMENTACION</option>
+                </optgroup>
+                <optgroup label="── Hito ──">
+                  <option value="DOCUMENTADO">DOCUMENTADO</option>
+                </optgroup>
+                <optgroup label="── Intermedios ──">
+                  <option value="EN ANALISIS PROG">EN ANALISIS PROG</option>
+                  <option value="ANALIZADO">ANALIZADO</option>
+                  <option value="EN PROGRAMACION">EN PROGRAMACION</option>
+                </optgroup>
+                <optgroup label="── Hito ──">
+                  <option value="PROGRAMADO">PROGRAMADO</option>
+                </optgroup>
+                <optgroup label="── Intermedios ──">
+                  <option value="EN CERTIFICACION">EN CERTIFICACION</option>
+                </optgroup>
+                <optgroup label="── Hito ──">
+                  <option value="CERTIFICADO">CERTIFICADO</option>
+                </optgroup>
               </select>
             </div>
             <div>
@@ -1278,7 +1296,7 @@
               style="padding:8px 24px;background:#1a3558;color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;">
               ✓ Marcar Etapa
             </button>
-            <button onclick="actualizarEstatusReporte(true)"
+            <button id="upd-rep-desmarcar-btn" onclick="actualizarEstatusReporte(true)"
               style="padding:8px 24px;background:#e74c3c;color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;">
               ✗ Desmarcar Etapa
             </button>
@@ -4910,6 +4928,15 @@
     } catch(e) { msg.innerHTML = `<span style="color:#e74c3c;">Error: ${e.message}</span>`; }
   }
 
+  const HITOS_REP = new Set(['DOCUMENTADO', 'PROGRAMADO', 'CERTIFICADO']);
+
+  function updRepEtapaChange() {
+    const etapa = document.getElementById('upd-rep-etapa').value;
+    const esHito = HITOS_REP.has(etapa);
+    document.getElementById('upd-rep-desmarcar-btn').style.display = esHito ? '' : 'none';
+    document.getElementById('upd-rep-fecha').closest('div').style.display = esHito ? '' : 'none';
+  }
+
   async function actualizarEstatusReporte(desmarcar = false) {
     const claveEl         = document.getElementById('upd-rep-clave');
     const clave_rep       = claveEl.value.trim();
@@ -4919,17 +4946,23 @@
     const version         = document.getElementById('upd-rep-version').value.trim();
     const fecha           = document.getElementById('upd-rep-fecha').value;
     const msg             = document.getElementById('upd-rep-msg');
+    const esHito          = HITOS_REP.has(etapa);
     if (!clave_rep || !clave_plataforma) { msg.innerHTML = '<span style="color:#e74c3c;">Completa clave y plataforma.</span>'; return; }
     msg.innerHTML = 'Guardando...';
     try {
-      const r = await fetch('/api/contratos/estatus-reporte', {
+      // Intermedios: solo actualizar ESTATUS via endpoint estatus, no tocar flags
+      const endpoint = esHito ? '/api/contratos/estatus-reporte' : '/api/contratos/estatus-reporte/estatus';
+      const body = esHito
+        ? { clave_rep, clave_plataforma, etapa, fecha, desmarcar, version, id_estatus_rep: id_estatus_rep ? parseInt(id_estatus_rep) : null }
+        : { clave_rep, clave_plataforma, estatus: etapa, version, id_estatus_rep: id_estatus_rep ? parseInt(id_estatus_rep) : null };
+      const r = await fetch(endpoint, {
         method: 'PUT',
         headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({ clave_rep, clave_plataforma, etapa, fecha, desmarcar, version, id_estatus_rep: id_estatus_rep ? parseInt(id_estatus_rep) : null })
+        body: JSON.stringify(body)
       }).then(x => x.json());
-      const accion = desmarcar ? 'desmarcado' : 'marcado';
+      const accion = desmarcar ? 'desmarcado' : 'actualizado';
       msg.innerHTML = r.ok
-        ? `<span style="color:#27ae60;">✅ Etapa ${etapa} ${accion} correctamente.</span>`
+        ? `<span style="color:#27ae60;">✅ ${etapa} ${accion} correctamente.</span>`
         : `<span style="color:#e74c3c;">❌ ${r.message}</span>`;
       if (r.ok) {
         // Recargar tabla de estatus por contrato si hay uno seleccionado
