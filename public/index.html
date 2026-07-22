@@ -1441,7 +1441,7 @@
         <!-- Tab: Reportes -->
         <div id="panel-inv-rep">
           <p style="font-size:13px;color:#666;margin-bottom:4px;">Columnas del Excel:</p>
-          <p style="font-size:11px;color:#aaa;font-family:monospace;margin-bottom:16px;">CLAVE_REP | CLAVE_PAIS | CLAVE_ENTIDADREGULADA | CLAVE_REG | CLAVE_SERIE | SUBSERIE | CLAVE_GRUPO | REPORTE | CLAVE_SECCION_REP | CLAVE_VERSION_REPORTE | CLAVE_PERIODO | DESCRIPCION_ESP | CLAVE_FECHA_ENT_REP | CARACTERISTICAS | CLAVE_REGULACION_REP | CLAVE_REP_GENERAL | FECHA_REGULACION | VIGENTE | <strong>VERSION_CARGA</strong> | <strong>TIPO</strong> | <strong>DESC_VERSION</strong></p>
+          <p style="font-size:11px;color:#aaa;font-family:monospace;margin-bottom:16px;">CLAVE_REP | CLAVE_PAIS | CLAVE_ENTIDADREGULADA | CLAVE_REG | CLAVE_SERIE | SUBSERIE | CLAVE_GRUPO | REPORTE | CLAVE_SECCION_REP | CLAVE_VERSION_REPORTE | CLAVE_PERIODO | DESCRIPCION_ESP | CLAVE_FECHA_ENT_REP | CARACTERISTICAS | CLAVE_REGULACION_REP | CLAVE_REP_GENERAL | FECHA_REGULACION | VIGENTE | <strong>VERSION_CARGA</strong> | <strong>DESC_VERSION</strong></p>
           <div style="display:flex;gap:10px;align-items:center;margin-bottom:12px;">
             <input id="bc-inv-rep-file" type="file" accept=".xlsx,.xls" style="font-size:13px;">
             <button onclick="descargarTemplate('reportes')"
@@ -5742,8 +5742,8 @@
     const templates = {
       reportes: {
         nombre: 'template_inventario_reportes.xlsx',
-        cols: ['CLAVE_REP','CLAVE_PAIS','CLAVE_ENTIDADREGULADA','CLAVE_REG','CLAVE_SERIE','SUBSERIE','CLAVE_GRUPO','REPORTE','CLAVE_SECCION_REP','CLAVE_VERSION_REPORTE','CLAVE_PERIODO','DESCRIPCION_ESP','CLAVE_FECHA_ENT_REP','CARACTERISTICAS','CLAVE_REGULACION_REP','CLAVE_REP_GENERAL','FECHA_REGULACION','VIGENTE','VERSION_CARGA','TIPO','DESC_VERSION'],
-        ejemplo: ['MX_BM_XX_XX_00_24','MX','BM','SUPER','XX',null,'OPERATIVOS','XX','00','24','03-TRIMESTRAL','Descripción del reporte',null,null,'REG_001','MX_BM_XX_XX_00',null,1,'1.0.0','BASE','Descripción de la versión']
+        cols: ['CLAVE_REP','CLAVE_PAIS','CLAVE_ENTIDADREGULADA','CLAVE_REG','CLAVE_SERIE','SUBSERIE','CLAVE_GRUPO','REPORTE','CLAVE_SECCION_REP','CLAVE_VERSION_REPORTE','CLAVE_PERIODO','DESCRIPCION_ESP','CLAVE_FECHA_ENT_REP','CARACTERISTICAS','CLAVE_REGULACION_REP','CLAVE_REP_GENERAL','FECHA_REGULACION','VIGENTE','VERSION_CARGA','DESC_VERSION'],
+        ejemplo: ['MX_BM_XX_XX_00_24','MX','BM','SUPER','XX',null,'OPERATIVOS','XX','00','24','03-TRIMESTRAL','Descripción del reporte',null,null,'REG_001','MX_BM_XX_XX_00',null,1,'1.0.0','Descripción de la versión']
       },
       validaciones: {
         nombre: 'template_inventario_validaciones.xlsx',
