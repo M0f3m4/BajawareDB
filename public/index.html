@@ -1441,7 +1441,7 @@
         <!-- Tab: Reportes -->
         <div id="panel-inv-rep">
           <p style="font-size:13px;color:#666;margin-bottom:4px;">Columnas del Excel:</p>
-          <p style="font-size:11px;color:#aaa;font-family:monospace;margin-bottom:16px;">CLAVE_REP | CLAVE_PAIS | CLAVE_ENTIDADREGULADA | CLAVE_REG | CLAVE_SERIE | SUBSERIE | CLAVE_GRUPO | REPORTE | CLAVE_SECCION_REP | CLAVE_VERSION_REPORTE | CLAVE_PERIODO | DESCRIPCION_ESP | CLAVE_FECHA_ENT_REP | CARACTERISTICAS | CLAVE_REGULACION_REP | CLAVE_REP_GENERAL | FECHA_REGULACION | VIGENTE</p>
+          <p style="font-size:11px;color:#aaa;font-family:monospace;margin-bottom:16px;">CLAVE_REP | CLAVE_PAIS | CLAVE_ENTIDADREGULADA | CLAVE_REG | CLAVE_SERIE | SUBSERIE | CLAVE_GRUPO | REPORTE | CLAVE_SECCION_REP | CLAVE_VERSION_REPORTE | CLAVE_PERIODO | DESCRIPCION_ESP | CLAVE_FECHA_ENT_REP | CARACTERISTICAS | CLAVE_REGULACION_REP | CLAVE_REP_GENERAL | FECHA_REGULACION | VIGENTE | <strong>VERSION_CARGA</strong> | <strong>TIPO</strong> | <strong>DESC_VERSION</strong></p>
           <div style="display:flex;gap:10px;align-items:center;margin-bottom:12px;">
             <input id="bc-inv-rep-file" type="file" accept=".xlsx,.xls" style="font-size:13px;">
             <button onclick="descargarTemplate('reportes')"
@@ -5286,17 +5286,18 @@
       <div style="display:grid;grid-template-columns:1fr 100px 90px 1fr;gap:0;background:#e8edf3;padding:6px 14px;font-size:11px;font-weight:600;color:#555;border-radius:8px 8px 0 0;">
         <span>Clave Reporte</span><span>Versión</span><span>Tipo</span><span>Desc. Versión</span>
       </div>
-      ${_invVerRepRows.map(({clave, versionExcel, descExcel}) => `
+      ${_invVerRepRows.map(({clave, versionExcel, descExcel, tipoExcel}) => `
       <div style="display:grid;grid-template-columns:1fr 100px 90px 1fr;gap:8px;align-items:center;padding:7px 14px;border-bottom:1px solid #f0f0f0;">
         <span style="font-family:monospace;font-size:11px;color:#1a3558;font-weight:600;">${clave}</span>
         <input class="inv-ver-rep-version-input" data-clave="${clave}" type="text" value="${versionExcel}"
           placeholder="ej. 3.10.1"
           style="padding:5px 8px;border:1px solid #ddd;border-radius:6px;font-size:12px;width:100%;box-sizing:border-box;${versionExcel ? 'background:#f0fff0;' : ''}">
         <select class="inv-ver-rep-tipo-input" data-clave="${clave}"
-          style="padding:5px 6px;border:1px solid #ddd;border-radius:6px;font-size:11px;width:100%;">
-          <option value="BASE">BASE</option>
-          <option value="CAMBIO REG">CAMBIO REG</option>
-          <option value="FIX">FIX</option>
+          style="padding:5px 6px;border:1px solid #ddd;border-radius:6px;font-size:11px;width:100%;${tipoExcel ? 'background:#f0fff0;' : ''}">
+          <option value="BASE" ${tipoExcel==='BASE'||!tipoExcel?'selected':''}>BASE</option>
+          <option value="CAMBIO REG" ${tipoExcel==='CAMBIO REG'?'selected':''}>CAMBIO REG</option>
+          <option value="FIX" ${tipoExcel==='FIX'?'selected':''}>FIX</option>
+          <option value="CR" ${tipoExcel==='CR'?'selected':''}>CR</option>
         </select>
         <input class="inv-ver-rep-desc-input" data-clave="${clave}" type="text" value="${descExcel}"
           placeholder="ej. Enero 2027"
@@ -5361,18 +5362,20 @@
     const colIdxMap = {};
     for (let c = ref.s.c; c <= ref.e.c; c++) {
       const hCell = ws2[XLSX.utils.encode_cell({r: ref.s.r, c})];
-      if (hCell && (hCell.v === colEntidad || hCell.v === colObjeto || hCell.v === 'VERSION_CARGA' || hCell.v === 'DESC_VERSION')) colIdxMap[hCell.v] = c;
+      if (hCell && (hCell.v === colEntidad || hCell.v === colObjeto || hCell.v === 'VERSION_CARGA' || hCell.v === 'DESC_VERSION' || hCell.v === 'TIPO')) colIdxMap[hCell.v] = c;
     }
     const clavesSet = new Set();
     const objetosSet = new Set();
     const paresRep = []; // pares {clave_rep, version} para reportes
     const versionExcelMap = {}; // VERSION_CARGA del Excel por CLAVE_REP
     const descExcelMap = {};    // DESC_VERSION del Excel por CLAVE_REP
+    const tipoExcelMap = {};    // TIPO del Excel por CLAVE_REP
     for (let r = ref.s.r + 1; r <= ref.e.r; r++) {
       const ce  = colIdxMap[colEntidad]      !== undefined ? ws2[XLSX.utils.encode_cell({r, c: colIdxMap[colEntidad]})]      : null;
       const co  = colIdxMap[colObjeto]       !== undefined ? ws2[XLSX.utils.encode_cell({r, c: colIdxMap[colObjeto]})]       : null;
       const cv  = colIdxMap['VERSION_CARGA'] !== undefined ? ws2[XLSX.utils.encode_cell({r, c: colIdxMap['VERSION_CARGA']})] : null;
       const cd  = colIdxMap['DESC_VERSION']  !== undefined ? ws2[XLSX.utils.encode_cell({r, c: colIdxMap['DESC_VERSION']})]  : null;
+      const ct  = colIdxMap['TIPO']          !== undefined ? ws2[XLSX.utils.encode_cell({r, c: colIdxMap['TIPO']})]          : null;
       if (ce && ce.v) clavesSet.add(String(ce.v).trim());
       if (co && co.v) {
         const clave = String(co.v).trim();
@@ -5380,8 +5383,10 @@
         if (isRep) {
           const vExcel = cv ? String(cv.v).trim() : '';
           const dExcel = cd ? String(cd.v).trim() : '';
+          const tExcel = ct ? String(ct.v).trim() : '';
           if (vExcel) versionExcelMap[clave] = vExcel;
           if (dExcel) descExcelMap[clave] = dExcel;
+          if (tExcel) tipoExcelMap[clave] = tExcel;
           paresRep.push({ clave_rep: clave, version: vExcel || version });
         }
       }
@@ -5414,7 +5419,7 @@
 
     // Para reportes: siempre ir a página 3 (versiones por reporte)
     if (isRep) {
-      _invVerRepRows = [...objetosSet].map(c => ({ clave: c, versionExcel: versionExcelMap[c] || '', descExcel: descExcelMap[c] || '' }));
+      _invVerRepRows = [...objetosSet].map(c => ({ clave: c, versionExcel: versionExcelMap[c] || '', descExcel: descExcelMap[c] || '', tipoExcel: tipoExcelMap[c] || '' }));
       _invVerPending = { version, regulacion, tipo_ver, descripcion };
       if (!check.version_existe && !advertencias.length) {
         invVerMostrarVersionesRep();
@@ -5737,8 +5742,8 @@
     const templates = {
       reportes: {
         nombre: 'template_inventario_reportes.xlsx',
-        cols: ['CLAVE_REP','CLAVE_PAIS','CLAVE_ENTIDADREGULADA','CLAVE_REG','CLAVE_SERIE','SUBSERIE','CLAVE_GRUPO','REPORTE','CLAVE_SECCION_REP','CLAVE_VERSION_REPORTE','CLAVE_PERIODO','DESCRIPCION_ESP','CLAVE_FECHA_ENT_REP','CARACTERISTICAS','CLAVE_REGULACION_REP','CLAVE_REP_GENERAL','FECHA_REGULACION','VIGENTE'],
-        ejemplo: ['MX_BM_XX_XX_00_24','MX','BM','SUPER','XX',null,'OPERATIVOS','XX','00','24','03-TRIMESTRAL','Descripción del reporte',null,null,'REG_001','MX_BM_XX_XX_00',null,1]
+        cols: ['CLAVE_REP','CLAVE_PAIS','CLAVE_ENTIDADREGULADA','CLAVE_REG','CLAVE_SERIE','SUBSERIE','CLAVE_GRUPO','REPORTE','CLAVE_SECCION_REP','CLAVE_VERSION_REPORTE','CLAVE_PERIODO','DESCRIPCION_ESP','CLAVE_FECHA_ENT_REP','CARACTERISTICAS','CLAVE_REGULACION_REP','CLAVE_REP_GENERAL','FECHA_REGULACION','VIGENTE','VERSION_CARGA','TIPO','DESC_VERSION'],
+        ejemplo: ['MX_BM_XX_XX_00_24','MX','BM','SUPER','XX',null,'OPERATIVOS','XX','00','24','03-TRIMESTRAL','Descripción del reporte',null,null,'REG_001','MX_BM_XX_XX_00',null,1,'1.0.0','BASE','Descripción de la versión']
       },
       validaciones: {
         nombre: 'template_inventario_validaciones.xlsx',
