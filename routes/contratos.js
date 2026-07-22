@@ -364,10 +364,18 @@ router.get('/estatus-reporte/versiones', requireAuth, async (req, res) => {
     if (!clave) return res.json({ ok: true, data: [] });
     // Con plataforma: versiones de ESTATUS_REPORTE para ese (rep, plataforma)
     // Sin plataforma: versiones de INVENTARIO_REPORTES_HIST para el reporte
-    let rows;
-    rows = await query(`
-      SELECT DISTINCT VERSION_CARGA FROM INVENTARIO_REPORTES_HIST
-      WHERE CLAVE_REP=${esc(clave)} AND VERSION_CARGA IS NOT NULL
+    // Combinar versiones de hist + estatus_reporte como fallback
+    const rows = await query(`
+      SELECT DISTINCT VERSION_CARGA FROM (
+        SELECT VERSION_CARGA FROM INVENTARIO_REPORTES_HIST
+        WHERE CLAVE_REP=${esc(clave)} AND VERSION_CARGA IS NOT NULL
+        UNION
+        SELECT VERSION_CARGA FROM ESTATUS_REPORTE
+        WHERE CLAVE_REP=${esc(clave)} AND VERSION_CARGA IS NOT NULL
+        UNION
+        SELECT VERSION_CARGA FROM INVENTARIO_REPORTES
+        WHERE CLAVE_REP=${esc(clave)} AND VERSION_CARGA IS NOT NULL
+      ) t
       ORDER BY VERSION_CARGA DESC
     `);
     res.json({ ok: true, data: rows.map(r => r.VERSION_CARGA) });
