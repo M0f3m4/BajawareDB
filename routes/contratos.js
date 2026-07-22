@@ -797,27 +797,28 @@ router.post('/inventario-reportes/upload', requireAuth, upload.single('archivo')
                  DESCRIPCION_ESP, CLAVE_FECHA_ENT_REP, CARACTERISTICAS,
                  CLAVE_REGULACION_REP, CLAVE_REP_GENERAL, FECHA_REGULACION, VERSION_CARGA
           FROM INVENTARIO_REPORTES WHERE CLAVE_REP=${esc(clave)}`);
-        if (!existeInv.length) {
-          // Auto-insertar en catálogos si la clave no existe
-          const autoInsert = async (tabla, campoClave, campoNombre, valor) => {
-            if (!valor) return;
-            const existe = await query(`SELECT 1 FROM ${tabla} WHERE ${campoClave}=${esc(valor)}`);
-            if (!existe.length) {
-              if (campoNombre) {
-                await query(`INSERT INTO ${tabla} (${campoClave}, ${campoNombre}) VALUES (${esc(valor)}, ${esc(valor)})`);
-              } else {
-                await query(`INSERT INTO ${tabla} (${campoClave}) VALUES (${esc(valor)})`);
-              }
+        // Auto-insertar en catálogos si la clave no existe (aplica a INSERT y UPDATE)
+        const autoInsert = async (tabla, campoClave, campoNombre, valor) => {
+          if (!valor) return;
+          const existe = await query(`SELECT 1 FROM ${tabla} WHERE ${campoClave}=${esc(valor)}`);
+          if (!existe.length) {
+            if (campoNombre) {
+              await query(`INSERT INTO ${tabla} (${campoClave}, ${campoNombre}) VALUES (${esc(valor)}, ${esc(valor)})`);
+            } else {
+              await query(`INSERT INTO ${tabla} (${campoClave}) VALUES (${esc(valor)})`);
             }
-          };
-          await autoInsert('CAT_REPORTES_GENERALES', 'CLAVE_REP_GENERAL',    null,                    r.CLAVE_REP_GENERAL);
-          await autoInsert('CAT_VERSION_REPORTE',    'CLAVE_VERSION_REPORTE', 'NOMBRE_VERSION_REP',    r.CLAVE_VERSION_REPORTE);
-          await autoInsert('CAT_PAISES',             'CLAVE_PAIS',            'PAIS',                  r.CLAVE_PAIS);
-          await autoInsert('CAT_ENTIDAD_REGULADA',   'CLAVE_ENTIDADREGULADA', null,                    r.CLAVE_ENTIDADREGULADA);
-          await autoInsert('CAT_REGULADORES',        'CLAVE_REG',             'REGULADOR',             r.CLAVE_REG);
-          await autoInsert('CAT_GRUPO',              'CLAVE_GRUPO',           'NOMBRE_GRUPO',          r.CLAVE_GRUPO);
-          await autoInsert('CAT_PERIODICIDAD',       'CLAVE_PERIODO',         'PERIODO',               r.CLAVE_PERIODO);
-          await autoInsert('CAT_REGULACION',         'CLAVE_REGULACION_REP',  'NOMBRE_REGULACION_REP', r.CLAVE_REGULACION_REP);
+          }
+        };
+        await autoInsert('CAT_REPORTES_GENERALES', 'CLAVE_REP_GENERAL',    null,                    r.CLAVE_REP_GENERAL);
+        await autoInsert('CAT_VERSION_REPORTE',    'CLAVE_VERSION_REPORTE', 'NOMBRE_VERSION_REP',    r.CLAVE_VERSION_REPORTE);
+        await autoInsert('CAT_PAISES',             'CLAVE_PAIS',            'PAIS',                  r.CLAVE_PAIS);
+        await autoInsert('CAT_ENTIDAD_REGULADA',   'CLAVE_ENTIDADREGULADA', null,                    r.CLAVE_ENTIDADREGULADA);
+        await autoInsert('CAT_REGULADORES',        'CLAVE_REG',             'REGULADOR',             r.CLAVE_REG);
+        await autoInsert('CAT_GRUPO',              'CLAVE_GRUPO',           'NOMBRE_GRUPO',          r.CLAVE_GRUPO);
+        await autoInsert('CAT_PERIODICIDAD',       'CLAVE_PERIODO',         'PERIODO',               r.CLAVE_PERIODO);
+        await autoInsert('CAT_REGULACION',         'CLAVE_REGULACION_REP',  'NOMBRE_REGULACION_REP', r.CLAVE_REGULACION_REP);
+
+        if (!existeInv.length) {
           // Reporte nuevo — INSERT
           await query(`
             INSERT INTO INVENTARIO_REPORTES (
@@ -842,11 +843,6 @@ router.post('/inventario-reportes/upload', requireAuth, upload.single('archivo')
           // Comparar campos fila por fila — solo UPDATE si algo cambió
           const bd = existeInv[0];
           const str = v => (v == null ? '' : String(v).trim());
-          // Asegurar catálogos también en UPDATE (por si cambió algún campo referenciado)
-          if (r.CLAVE_VERSION_REPORTE) {
-            const existeVer2 = await query(`SELECT 1 FROM CAT_VERSION_REPORTE WHERE CLAVE_VERSION_REPORTE=${esc(r.CLAVE_VERSION_REPORTE)}`);
-            if (!existeVer2.length) await query(`INSERT INTO CAT_VERSION_REPORTE (CLAVE_VERSION_REPORTE, NOMBRE_VERSION_REP) VALUES (${esc(r.CLAVE_VERSION_REPORTE)}, ${esc(r.CLAVE_VERSION_REPORTE)})`);
-          }
           const cambio =
             str(bd.CLAVE_PAIS)              !== str(r.CLAVE_PAIS)              ||
             str(bd.CLAVE_ENTIDADREGULADA)   !== str(r.CLAVE_ENTIDADREGULADA)   ||
