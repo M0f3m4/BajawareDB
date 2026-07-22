@@ -776,8 +776,9 @@ router.post('/inventario-reportes/upload', requireAuth, upload.single('archivo')
     const tipo_version= (req.body.tipo_version|| 'BASE').trim();
     const descripcion = (req.body.descripcion || '').trim();
     const force       = req.body.force === 'true';
-    const versionesMap = req.body.versiones ? JSON.parse(req.body.versiones) : null;
-    const tiposMap     = req.body.tipos     ? JSON.parse(req.body.tipos)     : null;
+    const versionesMap    = req.body.versiones    ? JSON.parse(req.body.versiones)    : null;
+    const tiposMap        = req.body.tipos        ? JSON.parse(req.body.tipos)        : null;
+    const descripcionesMap = req.body.descripciones ? JSON.parse(req.body.descripciones) : null;
 
     const wb   = XLSX.read(req.file.buffer, { type: 'buffer' });
     const ws   = wb.Sheets[wb.SheetNames[0]];
@@ -786,8 +787,9 @@ router.post('/inventario-reportes/upload', requireAuth, upload.single('archivo')
     for (const r of rows) {
       const clave = String(r.CLAVE_REP || '').trim();
       if (!clave) continue;
-      const version      = versionesMap ? (versionesMap[clave] || versionGlobal) : versionGlobal;
-      const tipo_ver_row = tiposMap ? (tiposMap[clave] || tipo_version) : tipo_version;
+      const version        = versionesMap    ? (versionesMap[clave]    || versionGlobal) : versionGlobal;
+      const tipo_ver_row   = tiposMap        ? (tiposMap[clave]        || tipo_version)  : tipo_version;
+      const descripcion_row = descripcionesMap ? (descripcionesMap[clave] || descripcion) : descripcion;
       try {
         const existeInv = await query(`
           SELECT CLAVE_PAIS, CLAVE_ENTIDADREGULADA, CLAVE_REG, CLAVE_SERIE, SUBSERIE,
@@ -908,7 +910,7 @@ router.post('/inventario-reportes/upload', requireAuth, upload.single('archivo')
             `);
             await query(`
               INSERT INTO INVENTARIO_VERSIONES (TIPO_OBJETO, CLAVE_OBJ, VERSION, REGULACION, TIPO_VERSION, DESCRIPCION, ESTATUS, USUARIO)
-              VALUES ('REPORTE', ${esc(clave)}, ${esc(version)}, ${esc(regulacion)}, ${esc(tipo_ver_row)}, ${esc(descripcion)}, 'IDENTIFICADO', ${esc(usuario)})
+              VALUES ('REPORTE', ${esc(clave)}, ${esc(version)}, ${esc(regulacion)}, ${esc(tipo_ver_row)}, ${esc(descripcion_row)}, 'IDENTIFICADO', ${esc(usuario)})
             `);
           }
         } catch(e3) { console.warn('[inv-rep-hist] error:', e3.message); }
