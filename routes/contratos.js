@@ -935,6 +935,11 @@ router.post('/inventario-reportes/asignar-plataformas', requireAuth, async (req,
       `);
       if (existe.length) { omitidos++; continue; }
       const repGeneral = clave_rep_general || clave_rep;
+      // Asegurar que CLAVE_REP_GENERAL existe en CAT_REPORTES_GENERALES
+      if (repGeneral) {
+        const existeGen = await query(`SELECT 1 FROM CAT_REPORTES_GENERALES WHERE CLAVE_REP_GENERAL=${esc(repGeneral)}`);
+        if (!existeGen.length) await query(`INSERT INTO CAT_REPORTES_GENERALES (CLAVE_REP_GENERAL) VALUES (${esc(repGeneral)})`);
+      }
       // Usar VERSION_CARGA como VERSION para que el PK sea único por versión
       await query(`
         INSERT INTO ESTATUS_REPORTE
