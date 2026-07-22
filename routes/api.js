@@ -493,7 +493,7 @@ router.get('/estatus-reportes', requireAuth, async (req, res) => {
         er.PROGRAMADO,  er.PROG_FECHA_ESTIMADA, er.PROG_FECHA_REAL, er.USER_PROG,
         er.CERTIFICADO, er.CERT_FECHA_ESTIMADA, er.CERT_FECHA_REAL, er.USER_CERT,
         er.QA_ALPHA, er.QA_BETA,
-        er.VERSION_CARGA
+        COALESCE(er.VERSION_CARGA, ir.VERSION_CARGA) AS VERSION_CARGA
       FROM ESTATUS_REPORTE er
       LEFT JOIN INVENTARIO_REPORTES ir ON ir.CLAVE_REP = er.CLAVE_REP
       ${where}
