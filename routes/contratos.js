@@ -157,8 +157,8 @@ router.get('/contratos/:clave/reportes', requireAuth, async (req, res) => {
   try {
     const { version_cliente } = req.query;
     let vkFilter = '';
-    if (version_cliente === '1') vkFilter = ' AND er.VERSION_CLIENTE = 1';
-    if (version_cliente === '0') vkFilter = ' AND (er.VERSION_CLIENTE = 0 OR er.VERSION_CLIENTE IS NULL)';
+    if (version_cliente === '1') vkFilter = ` AND EXISTS (SELECT 1 FROM CONTRATOS_VERSION_CLIENTE WHERE CLAVE_CONTRATO=${esc(req.params.clave)} AND ID_ESTATUS_REP=er.ID_ESTATUS_REP)`;
+    if (version_cliente === '0') vkFilter = ` AND NOT EXISTS (SELECT 1 FROM CONTRATOS_VERSION_CLIENTE WHERE CLAVE_CONTRATO=${esc(req.params.clave)} AND ID_ESTATUS_REP=er.ID_ESTATUS_REP)`;
 
     const rows = await query(`
       SELECT
@@ -182,12 +182,14 @@ router.get('/contratos/:clave/reportes', requireAuth, async (req, res) => {
         er.CLAVE_PLATAFORMA,
         er.VERSION,
         COALESCE(er.VERSION_CARGA, ir.VERSION_CARGA) AS VERSION_CARGA,
-        er.VERSION_CLIENTE
+        CASE WHEN cvc.ID_ESTATUS_REP IS NOT NULL THEN 1 ELSE 0 END AS VERSION_CLIENTE
       FROM CONTRATOS_REPORTES cr
       INNER JOIN CONTRATOS c ON c.CLAVE_CONTRATO = cr.CLAVE_CONTRATO
       INNER JOIN ESTATUS_REPORTE er ON er.CLAVE_REP_GENERAL = cr.CLAVE_REP
                                    AND er.CLAVE_PLATAFORMA = c.CLAVE_PLATAFORMA
       LEFT JOIN INVENTARIO_REPORTES ir ON ir.CLAVE_REP = er.CLAVE_REP
+      LEFT JOIN CONTRATOS_VERSION_CLIENTE cvc ON cvc.ID_ESTATUS_REP = er.ID_ESTATUS_REP
+                                              AND cvc.CLAVE_CONTRATO = cr.CLAVE_CONTRATO
       WHERE cr.CLAVE_CONTRATO=${esc(req.params.clave)}${vkFilter}
       ORDER BY er.CLAVE_REP, er.CLAVE_PLATAFORMA
     `);
@@ -1095,21 +1097,31 @@ router.get('/cat-estatus', requireAuth, async (req, res) => {
 router.put('/estatus-reporte/:id/version-cliente', requireAuth, async (req, res) => {
   try {
     const { version_cliente, clave_rep_base, clave_plataforma, clave_contrato } = req.body;
-    // Desmarcar solo los demás del mismo grupo (CLAVE_REP_GENERAL + PLATAFORMA) dentro del mismo contrato
-    if (version_cliente && clave_rep_base && clave_plataforma && clave_contrato) {
+    if (!clave_contrato) return res.status(400).json({ ok: false, message: 'Falta clave_contrato' });
+    const id = parseInt(req.params.id);
+
+    if (version_cliente) {
+      // Desmarcar todos los demás del mismo grupo para este contrato
+      if (clave_rep_base && clave_plataforma) {
+        await query(`
+          DELETE FROM CONTRATOS_VERSION_CLIENTE
+          WHERE CLAVE_CONTRATO = ${esc(clave_contrato)}
+            AND ID_ESTATUS_REP IN (
+              SELECT er.ID_ESTATUS_REP FROM ESTATUS_REPORTE er
+              WHERE er.CLAVE_REP_GENERAL = ${esc(clave_rep_base)}
+                AND er.CLAVE_PLATAFORMA = ${esc(clave_plataforma)}
+                AND er.ID_ESTATUS_REP != ${id}
+            )
+        `);
+      }
+      // Insertar el nuevo marcado
       await query(`
-        UPDATE ESTATUS_REPORTE SET VERSION_CLIENTE = 0
-        WHERE CLAVE_REP_GENERAL = ${esc(clave_rep_base)}
-          AND CLAVE_PLATAFORMA = ${esc(clave_plataforma)}
-          AND ID_ESTATUS_REP != ${parseInt(req.params.id)}
-          AND CLAVE_REP IN (
-            SELECT er2.CLAVE_REP FROM ESTATUS_REPORTE er2
-            INNER JOIN CONTRATOS_REPORTES cr ON cr.CLAVE_REP = er2.CLAVE_REP_GENERAL
-            WHERE cr.CLAVE_CONTRATO = ${esc(clave_contrato)}
-          )
+        IF NOT EXISTS (SELECT 1 FROM CONTRATOS_VERSION_CLIENTE WHERE CLAVE_CONTRATO=${esc(clave_contrato)} AND ID_ESTATUS_REP=${id})
+          INSERT INTO CONTRATOS_VERSION_CLIENTE (CLAVE_CONTRATO, ID_ESTATUS_REP) VALUES (${esc(clave_contrato)}, ${id})
       `);
+    } else {
+      await query(`DELETE FROM CONTRATOS_VERSION_CLIENTE WHERE CLAVE_CONTRATO=${esc(clave_contrato)} AND ID_ESTATUS_REP=${id}`);
     }
-    await query(`UPDATE ESTATUS_REPORTE SET VERSION_CLIENTE=${version_cliente ? 1 : 0} WHERE ID_ESTATUS_REP=${parseInt(req.params.id)}`);
     res.json({ ok: true });
   } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
 });
