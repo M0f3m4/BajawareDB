@@ -1094,14 +1094,19 @@ router.get('/cat-estatus', requireAuth, async (req, res) => {
 // ── PUT actualizar VERSION_CLIENTE en ESTATUS_REPORTE ────
 router.put('/estatus-reporte/:id/version-cliente', requireAuth, async (req, res) => {
   try {
-    const { version_cliente, clave_rep_base, clave_plataforma } = req.body;
-    // Si se está marcando como versión cliente, desmarcar todas las demás del mismo grupo
-    if (version_cliente && clave_rep_base && clave_plataforma) {
+    const { version_cliente, clave_rep_base, clave_plataforma, clave_contrato } = req.body;
+    // Desmarcar solo los demás del mismo grupo (CLAVE_REP_GENERAL + PLATAFORMA) dentro del mismo contrato
+    if (version_cliente && clave_rep_base && clave_plataforma && clave_contrato) {
       await query(`
         UPDATE ESTATUS_REPORTE SET VERSION_CLIENTE = 0
         WHERE CLAVE_REP_GENERAL = ${esc(clave_rep_base)}
           AND CLAVE_PLATAFORMA = ${esc(clave_plataforma)}
           AND ID_ESTATUS_REP != ${parseInt(req.params.id)}
+          AND CLAVE_REP IN (
+            SELECT er2.CLAVE_REP FROM ESTATUS_REPORTE er2
+            INNER JOIN CONTRATOS_REPORTES cr ON cr.CLAVE_REP = er2.CLAVE_REP_GENERAL
+            WHERE cr.CLAVE_CONTRATO = ${esc(clave_contrato)}
+          )
       `);
     }
     await query(`UPDATE ESTATUS_REPORTE SET VERSION_CLIENTE=${version_cliente ? 1 : 0} WHERE ID_ESTATUS_REP=${parseInt(req.params.id)}`);
