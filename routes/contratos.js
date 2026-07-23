@@ -162,8 +162,8 @@ router.get('/contratos/:clave/reportes', requireAuth, async (req, res) => {
   try {
     const { version_cliente } = req.query;
     let vkFilter = '';
-    if (version_cliente === '1') vkFilter = ` AND EXISTS (SELECT 1 FROM CONTRATOS_VERSION_CLIENTE WHERE CLAVE_CONTRATO=${esc(req.params.clave)} AND ID_ESTATUS_REP=er.ID_ESTATUS_REP)`;
-    if (version_cliente === '0') vkFilter = ` AND NOT EXISTS (SELECT 1 FROM CONTRATOS_VERSION_CLIENTE WHERE CLAVE_CONTRATO=${esc(req.params.clave)} AND ID_ESTATUS_REP=er.ID_ESTATUS_REP)`;
+    if (version_cliente === '1') vkFilter = ` AND EXISTS (SELECT 1 FROM CONTRATOS_VERSION_CLIENTE WHERE CLAVE_CONTRATO=${esc(req.params.clave)} AND ID_ESTATUS_REP=er.ID_ESTATUS_REP AND VERSION_CLIENTE=1)`;
+    if (version_cliente === '0') vkFilter = ` AND NOT EXISTS (SELECT 1 FROM CONTRATOS_VERSION_CLIENTE WHERE CLAVE_CONTRATO=${esc(req.params.clave)} AND ID_ESTATUS_REP=er.ID_ESTATUS_REP AND VERSION_CLIENTE=1)`;
 
     const rows = await query(`
       SELECT
@@ -187,7 +187,7 @@ router.get('/contratos/:clave/reportes', requireAuth, async (req, res) => {
         er.CLAVE_PLATAFORMA,
         er.VERSION,
         COALESCE(er.VERSION_CARGA, ir.VERSION_CARGA) AS VERSION_CARGA,
-        CASE WHEN cvc.ID_ESTATUS_REP IS NOT NULL THEN 1 ELSE 0 END AS VERSION_CLIENTE
+        ISNULL(cvc.VERSION_CLIENTE, 0) AS VERSION_CLIENTE
       FROM CONTRATOS_REPORTES cr
       INNER JOIN CONTRATOS c ON c.CLAVE_CONTRATO = cr.CLAVE_CONTRATO
       INNER JOIN ESTATUS_REPORTE er ON er.CLAVE_REP_GENERAL = cr.CLAVE_REP
@@ -1109,8 +1109,9 @@ router.put('/estatus-reporte/:id/version-cliente', requireAuth, async (req, res)
       // Desmarcar todos los demás del mismo grupo para este contrato
       if (clave_rep_base && clave_plataforma) {
         await query(`
-          DELETE FROM CONTRATOS_VERSION_CLIENTE
+          UPDATE CONTRATOS_VERSION_CLIENTE SET VERSION_CLIENTE=0
           WHERE CLAVE_CONTRATO = ${esc(clave_contrato)}
+            AND VERSION_CLIENTE = 1
             AND ID_ESTATUS_REP IN (
               SELECT er.ID_ESTATUS_REP FROM ESTATUS_REPORTE er
               WHERE er.CLAVE_REP_GENERAL = ${esc(clave_rep_base)}
@@ -1119,13 +1120,16 @@ router.put('/estatus-reporte/:id/version-cliente', requireAuth, async (req, res)
             )
         `);
       }
-      // Insertar el nuevo marcado
-      await query(`
-        IF NOT EXISTS (SELECT 1 FROM CONTRATOS_VERSION_CLIENTE WHERE CLAVE_CONTRATO=${esc(clave_contrato)} AND ID_ESTATUS_REP=${id})
-          INSERT INTO CONTRATOS_VERSION_CLIENTE (CLAVE_CONTRATO, ID_ESTATUS_REP) VALUES (${esc(clave_contrato)}, ${id})
-      `);
+      // UPSERT el nuevo marcado
+      const existe = await query(`SELECT 1 FROM CONTRATOS_VERSION_CLIENTE WHERE CLAVE_CONTRATO=${esc(clave_contrato)} AND ID_ESTATUS_REP=${id}`);
+      if (existe.length) {
+        await query(`UPDATE CONTRATOS_VERSION_CLIENTE SET VERSION_CLIENTE=1 WHERE CLAVE_CONTRATO=${esc(clave_contrato)} AND ID_ESTATUS_REP=${id}`);
+      } else {
+        await query(`INSERT INTO CONTRATOS_VERSION_CLIENTE (CLAVE_CONTRATO, ID_ESTATUS_REP, VERSION_CLIENTE) VALUES (${esc(clave_contrato)}, ${id}, 1)`);
+      }
     } else {
-      await query(`DELETE FROM CONTRATOS_VERSION_CLIENTE WHERE CLAVE_CONTRATO=${esc(clave_contrato)} AND ID_ESTATUS_REP=${id}`);
+      // Desmarcar — solo poner VERSION_CLIENTE=0, mantener fila por si tiene ESTATUS_PROYECTO
+      await query(`UPDATE CONTRATOS_VERSION_CLIENTE SET VERSION_CLIENTE=0 WHERE CLAVE_CONTRATO=${esc(clave_contrato)} AND ID_ESTATUS_REP=${id}`);
     }
     res.json({ ok: true });
   } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
