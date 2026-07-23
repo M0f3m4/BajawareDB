@@ -130,13 +130,16 @@ router.put('/contratos/:clave/estatus', requireAuth, async (req, res) => {
 // ── PUT actualizar estatus de reporte en contrato ─────────
 router.put('/contratos/:contrato/reporte/:rep/estatus', requireAuth, async (req, res) => {
   try {
-    const { estatus } = req.body;
+    const { estatus, id_estatus_rep } = req.body;
     const usuario = req.session.user?.username || 'sistema';
-    await query(`
-      UPDATE CONTRATOS_REPORTES SET ESTATUS=${esc(estatus)}
-      WHERE CLAVE_CONTRATO=${esc(req.params.contrato)} AND CLAVE_REP=${esc(req.params.rep)}
-    `);
-    await auditLog(usuario, 'contratos', 'ESTATUS_REPORTE', { clave_contrato: req.params.contrato, clave_rep: req.params.rep, estatus });
+    if (id_estatus_rep) {
+      // Guardar en CONTRATOS_VERSION_CLIENTE por ID específico
+      await query(`
+        UPDATE CONTRATOS_VERSION_CLIENTE SET ESTATUS_PROYECTO=${esc(estatus)}
+        WHERE CLAVE_CONTRATO=${esc(req.params.contrato)} AND ID_ESTATUS_REP=${parseInt(id_estatus_rep)}
+      `);
+    }
+    await auditLog(usuario, 'contratos', 'ESTATUS_PROYECTO', { clave_contrato: req.params.contrato, id_estatus_rep, estatus });
     res.json({ ok: true });
   } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
 });
@@ -165,7 +168,7 @@ router.get('/contratos/:clave/reportes', requireAuth, async (req, res) => {
         cr.CLAVE_REP AS CLAVE_REP_BASE,
         er.CLAVE_REP,
         cr.ETAPA,
-        cr.ESTATUS AS ESTATUS_PROYECTO,
+        cvc.ESTATUS_PROYECTO,
         ir.DESCRIPCION_ESP,
         ir.CLAVE_ENTIDADREGULADA,
         COALESCE(ir.REPORTE, er.CLAVE_REP) AS REPORTE,

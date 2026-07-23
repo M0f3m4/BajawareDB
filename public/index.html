@@ -4430,12 +4430,12 @@
     } catch(e) { console.error('Error al actualizar version_cliente:', e.message); }
   }
 
-  async function actualizarEstatusContratoRep(clave_rep, clave_contrato, estatus) {
+  async function actualizarEstatusContratoRep(clave_rep, clave_contrato, estatus, id_estatus_rep) {
     if (!clave_contrato) return;
     try {
       await fetch(`/api/contratos/contratos/${encodeURIComponent(clave_contrato)}/reporte/${encodeURIComponent(clave_rep)}/estatus`, {
         method: 'PUT', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ estatus })
+        body: JSON.stringify({ estatus, id_estatus_rep: id_estatus_rep || null })
       }).then(x => x.json());
     } catch(e) { console.error('Error actualizando estatus contrato-reporte:', e.message); }
   }
@@ -4622,7 +4622,7 @@
           <td style="padding:6px 10px;text-align:center;"><span style="font-size:11px;background:#f0f4ff;color:#1a3558;padding:2px 7px;border-radius:10px;font-family:monospace;">${r.VERSION_CARGA||'—'}</span></td>
           <td style="padding:6px 10px;text-align:center;">${etapaPill(r.ETAPA)}</td>
           <td style="padding:6px 10px;text-align:center;">
-            <select onchange="actualizarEstatusContratoRep('${r.CLAVE_REP}','${document.getElementById('bc-rep-contrato').value}',this.value)"
+            <select onchange="actualizarEstatusContratoRep('${r.CLAVE_REP}','${document.getElementById('bc-rep-contrato').value}',this.value,${r.ID_ESTATUS_REP||'null'})"
               style="font-size:11px;padding:3px 6px;border:1px solid #ddd;border-radius:5px;max-width:120px;">
               <option value="">—</option>
               <option value="NO INICIADO" ${r.ESTATUS_PROYECTO==='NO INICIADO'?'selected':''}>NO INICIADO</option>
