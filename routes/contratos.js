@@ -133,11 +133,13 @@ router.put('/contratos/:contrato/reporte/:rep/estatus', requireAuth, async (req,
     const { estatus, id_estatus_rep } = req.body;
     const usuario = req.session.user?.username || 'sistema';
     if (id_estatus_rep) {
-      // Guardar en CONTRATOS_VERSION_CLIENTE por ID específico
-      await query(`
-        UPDATE CONTRATOS_VERSION_CLIENTE SET ESTATUS_PROYECTO=${esc(estatus)}
-        WHERE CLAVE_CONTRATO=${esc(req.params.contrato)} AND ID_ESTATUS_REP=${parseInt(id_estatus_rep)}
-      `);
+      const id = parseInt(id_estatus_rep);
+      const existe = await query(`SELECT 1 FROM CONTRATOS_VERSION_CLIENTE WHERE CLAVE_CONTRATO=${esc(req.params.contrato)} AND ID_ESTATUS_REP=${id}`);
+      if (existe.length) {
+        await query(`UPDATE CONTRATOS_VERSION_CLIENTE SET ESTATUS_PROYECTO=${esc(estatus)} WHERE CLAVE_CONTRATO=${esc(req.params.contrato)} AND ID_ESTATUS_REP=${id}`);
+      } else {
+        await query(`INSERT INTO CONTRATOS_VERSION_CLIENTE (CLAVE_CONTRATO, ID_ESTATUS_REP, ESTATUS_PROYECTO) VALUES (${esc(req.params.contrato)}, ${id}, ${esc(estatus)})`);
+      }
     }
     await auditLog(usuario, 'contratos', 'ESTATUS_PROYECTO', { clave_contrato: req.params.contrato, id_estatus_rep, estatus });
     res.json({ ok: true });
