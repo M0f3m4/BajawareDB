@@ -1062,10 +1062,16 @@
             <label style="font-size:11px;font-weight:600;color:#555;display:block;margin-bottom:3px;">Estatus</label>
             <select id="estval-est" onchange="loadEstatusVal()" disabled style="padding:7px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;min-width:160px;">
               <option value="">Todos</option>
-              <option value="NO DOCUMENTADO">NO DOCUMENTADO</option>
+              <option value="IDENTIFICADO">IDENTIFICADO</option>
+              <option value="EN DOCUMENTACION">EN DOCUMENTACION</option>
               <option value="DOCUMENTADO">DOCUMENTADO</option>
+              <option value="EN ANALISIS PROG">EN ANALISIS PROG</option>
+              <option value="ANALIZADO">ANALIZADO</option>
+              <option value="EN PROGRAMACION">EN PROGRAMACION</option>
               <option value="PROGRAMADO">PROGRAMADO</option>
+              <option value="EN CERTIFICACION">EN CERTIFICACION</option>
               <option value="CERTIFICADO">CERTIFICADO</option>
+              <option value="NO DOCUMENTADO">NO DOCUMENTADO</option>
             </select>
           </div>
           <input type="text" id="estval-texto" placeholder="Buscar validación..." oninput="estValFiltrarDebounced()"
