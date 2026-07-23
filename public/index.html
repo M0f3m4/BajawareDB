@@ -462,11 +462,53 @@
     <label for="username">Usuario</label>
     <input type="text" id="username" placeholder="Ingresa tu usuario" autocomplete="off" onkeydown="if(event.key==='Enter')document.getElementById('password').focus()" />
 
-    <!-- HIDDEN: password field (auth desactivada temporalmente) -->
-    <input type="hidden" id="password" value="" />
+    <label for="password" style="margin-top:12px;">Contraseña</label>
+    <input type="password" id="password" placeholder="Ingresa tu contraseña" onkeydown="if(event.key==='Enter')doLogin()" />
 
     <button class="login-btn" id="login-btn" onclick="doLogin()">Entrar</button>
-    <p class="login-error" id="login-error">Por favor ingresa un usuario.</p>
+    <p class="login-error" id="login-error"></p>
+    <p style="text-align:center;margin-top:12px;">
+      <a href="#" onclick="abrirCambioPassword();return false;" style="font-size:12px;color:#1a3558;text-decoration:underline;">
+        Restablecer / Cambiar contraseña
+      </a>
+    </p>
+  </div>
+</div>
+
+<!-- Modal: cambiar contraseña -->
+<div id="cambio-pwd-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:99999;align-items:center;justify-content:center;">
+  <div style="background:#fff;border-radius:12px;padding:32px;width:380px;box-shadow:0 8px 32px rgba(0,0,0,.2);">
+    <h3 style="margin:0 0 6px;font-size:16px;color:#1a3558;">🔑 Cambiar contraseña</h3>
+    <p style="font-size:12px;color:#888;margin:0 0 20px;">La contraseña inicial es <strong>123456789</strong></p>
+    <div style="display:grid;gap:12px;">
+      <div>
+        <label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px;">Usuario</label>
+        <input id="cpwd-user" type="text" placeholder="Tu usuario" style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;box-sizing:border-box;">
+      </div>
+      <div>
+        <label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px;">Contraseña actual</label>
+        <input id="cpwd-actual" type="password" placeholder="Contraseña actual" style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;box-sizing:border-box;">
+      </div>
+      <div>
+        <label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px;">Nueva contraseña</label>
+        <input id="cpwd-nueva" type="password" placeholder="Nueva contraseña (mín. 6 caracteres)" style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;box-sizing:border-box;">
+      </div>
+      <div>
+        <label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px;">Confirmar nueva contraseña</label>
+        <input id="cpwd-confirmar" type="password" placeholder="Repite la nueva contraseña" style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;box-sizing:border-box;">
+      </div>
+    </div>
+    <p id="cpwd-msg" style="font-size:12px;margin:12px 0 0;min-height:18px;"></p>
+    <div style="display:flex;gap:10px;margin-top:16px;justify-content:flex-end;">
+      <button onclick="document.getElementById('cambio-pwd-modal').style.display='none'"
+        style="padding:8px 18px;background:#f0f4f8;color:#555;border:1px solid #ddd;border-radius:6px;font-size:13px;cursor:pointer;">
+        Cancelar
+      </button>
+      <button onclick="cambiarPassword()"
+        style="padding:8px 20px;background:#1a3558;color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;">
+        Cambiar
+      </button>
+    </div>
   </div>
 </div>
 
@@ -2021,6 +2063,11 @@
       errEl.style.display = 'block';
       return;
     }
+    if (!password) {
+      errEl.textContent = 'Ingresa tu contraseña.';
+      errEl.style.display = 'block';
+      return;
+    }
     errEl.style.display = 'none';
     btn.disabled = true;
     btn.textContent = 'Entrando...';
@@ -2046,6 +2093,47 @@
 
     btn.disabled = false;
     btn.textContent = 'Entrar';
+  }
+
+  function abrirCambioPassword() {
+    const user = document.getElementById('username').value.trim();
+    document.getElementById('cpwd-user').value = user;
+    document.getElementById('cpwd-actual').value = '';
+    document.getElementById('cpwd-nueva').value = '';
+    document.getElementById('cpwd-confirmar').value = '';
+    document.getElementById('cpwd-msg').innerHTML = '';
+    document.getElementById('cambio-pwd-modal').style.display = 'flex';
+  }
+
+  async function cambiarPassword() {
+    const username     = document.getElementById('cpwd-user').value.trim();
+    const actual       = document.getElementById('cpwd-actual').value;
+    const nueva        = document.getElementById('cpwd-nueva').value;
+    const confirmar    = document.getElementById('cpwd-confirmar').value;
+    const msg          = document.getElementById('cpwd-msg');
+
+    if (!username || !actual || !nueva || !confirmar) {
+      msg.innerHTML = '<span style="color:#e74c3c;">Completa todos los campos.</span>'; return;
+    }
+    if (nueva !== confirmar) {
+      msg.innerHTML = '<span style="color:#e74c3c;">Las contraseñas no coinciden.</span>'; return;
+    }
+    if (nueva.length < 6) {
+      msg.innerHTML = '<span style="color:#e74c3c;">La nueva contraseña debe tener al menos 6 caracteres.</span>'; return;
+    }
+    msg.innerHTML = 'Guardando...';
+    try {
+      const r = await fetch('/auth/cambiar-password', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, passwordActual: actual, passwordNueva: nueva })
+      }).then(x => x.json());
+      if (r.ok) {
+        msg.innerHTML = '<span style="color:#27ae60;">✅ Contraseña cambiada. Ya puedes iniciar sesión.</span>';
+        setTimeout(() => { document.getElementById('cambio-pwd-modal').style.display = 'none'; }, 2000);
+      } else {
+        msg.innerHTML = `<span style="color:#e74c3c;">❌ ${r.message}</span>`;
+      }
+    } catch(e) { msg.innerHTML = '<span style="color:#e74c3c;">Error de conexión.</span>'; }
   }
 
   document.getElementById('username').addEventListener('keydown', e => {
