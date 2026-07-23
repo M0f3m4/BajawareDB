@@ -4421,11 +4421,11 @@
     return `<span style="background:${c.bg};color:#fff;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;">${c.label}</span>`;
   }
 
-  async function toggleVersionCliente(id_estatus_rep, valor) {
+  async function toggleVersionCliente(id_estatus_rep, clave_rep_base, clave_plataforma) {
     try {
       await fetch(`/api/contratos/estatus-reporte/${id_estatus_rep}/version-cliente`, {
         method: 'PUT', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ version_cliente: valor ? 1 : 0 })
+        body: JSON.stringify({ version_cliente: 1, clave_rep_base, clave_plataforma })
       });
     } catch(e) { console.error('Error al actualizar version_cliente:', e.message); }
   }
@@ -4656,8 +4656,10 @@
             })()}
           </td>
           <td style="padding:6px 10px;text-align:center;">
-            <input type="checkbox" ${r.VERSION_CLIENTE ? 'checked' : ''}
-              onchange="toggleVersionCliente(${r.ID_ESTATUS_REP}, this.checked)"
+            <input type="radio"
+              name="vc_${(r.CLAVE_REP_BASE||r.CLAVE_REP).replace(/[^a-zA-Z0-9]/g,'_')}_${r.CLAVE_PLATAFORMA||'X'}"
+              ${r.VERSION_CLIENTE ? 'checked' : ''}
+              onchange="toggleVersionCliente(${r.ID_ESTATUS_REP}, '${r.CLAVE_REP_BASE||r.CLAVE_REP}', '${r.CLAVE_PLATAFORMA||''}')"
               style="width:16px;height:16px;accent-color:#1a3558;cursor:pointer;">
           </td>
         </tr>`).join('')}

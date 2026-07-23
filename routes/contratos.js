@@ -1094,7 +1094,16 @@ router.get('/cat-estatus', requireAuth, async (req, res) => {
 // ── PUT actualizar VERSION_CLIENTE en ESTATUS_REPORTE ────
 router.put('/estatus-reporte/:id/version-cliente', requireAuth, async (req, res) => {
   try {
-    const { version_cliente } = req.body;
+    const { version_cliente, clave_rep_base, clave_plataforma } = req.body;
+    // Si se está marcando como versión cliente, desmarcar todas las demás del mismo grupo
+    if (version_cliente && clave_rep_base && clave_plataforma) {
+      await query(`
+        UPDATE ESTATUS_REPORTE SET VERSION_CLIENTE = 0
+        WHERE CLAVE_REP_GENERAL = ${esc(clave_rep_base)}
+          AND CLAVE_PLATAFORMA = ${esc(clave_plataforma)}
+          AND ID_ESTATUS_REP != ${parseInt(req.params.id)}
+      `);
+    }
     await query(`UPDATE ESTATUS_REPORTE SET VERSION_CLIENTE=${version_cliente ? 1 : 0} WHERE ID_ESTATUS_REP=${parseInt(req.params.id)}`);
     res.json({ ok: true });
   } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
