@@ -1131,6 +1131,9 @@ router.put('/estatus-reporte/:id/version-cliente', requireAuth, async (req, res)
       // Desmarcar — solo poner VERSION_CLIENTE=0, mantener fila por si tiene ESTATUS_PROYECTO
       await query(`UPDATE CONTRATOS_VERSION_CLIENTE SET VERSION_CLIENTE=0 WHERE CLAVE_CONTRATO=${esc(clave_contrato)} AND ID_ESTATUS_REP=${id}`);
     }
+    const usuario = req.session.user?.username || 'sistema';
+    await auditLog(usuario, 'contratos', version_cliente ? 'VERSION_CLIENTE_MARCAR' : 'VERSION_CLIENTE_DESMARCAR',
+      { id_estatus_rep: id, clave_contrato, clave_rep_base, clave_plataforma });
     res.json({ ok: true });
   } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
 });
