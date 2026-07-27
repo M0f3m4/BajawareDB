@@ -127,6 +127,56 @@ router.put('/contratos/:clave/estatus', requireAuth, async (req, res) => {
   } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
 });
 
+// ── GET personalizaciones por estatus_reporte + contrato ──
+router.get('/personalizaciones', requireAuth, async (req, res) => {
+  try {
+    const { estatus_reporte_id, contrato_id } = req.query;
+    if (!estatus_reporte_id || !contrato_id) return res.json({ ok: true, data: [] });
+    const rows = await query(`
+      SELECT ID, ESTATUS_REPORTE_ID, CONTRATO_ID, SUBVERSION, ESTATUS
+      FROM PERSONALIZACIONES
+      WHERE ESTATUS_REPORTE_ID=${parseInt(estatus_reporte_id)} AND CONTRATO_ID=${esc(contrato_id)}
+      ORDER BY ID
+    `);
+    res.json({ ok: true, data: rows });
+  } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
+});
+
+// ── POST crear personalización ─────────────────────────────
+router.post('/personalizaciones', requireAuth, async (req, res) => {
+  try {
+    const { estatus_reporte_id, contrato_id, subversion, estatus } = req.body;
+    const usuario = req.session.user?.username || 'sistema';
+    await query(`
+      INSERT INTO PERSONALIZACIONES (ESTATUS_REPORTE_ID, CONTRATO_ID, SUBVERSION, ESTATUS)
+      VALUES (${parseInt(estatus_reporte_id)}, ${esc(contrato_id)}, ${esc(subversion)}, ${esc(estatus)})
+    `);
+    await auditLog(usuario, 'contratos', 'PERSONALIZACION_CREAR', { estatus_reporte_id, contrato_id, subversion, estatus });
+    res.json({ ok: true });
+  } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
+});
+
+// ── PUT editar personalización ─────────────────────────────
+router.put('/personalizaciones/:id', requireAuth, async (req, res) => {
+  try {
+    const { subversion, estatus } = req.body;
+    const usuario = req.session.user?.username || 'sistema';
+    await query(`UPDATE PERSONALIZACIONES SET SUBVERSION=${esc(subversion)}, ESTATUS=${esc(estatus)} WHERE ID=${parseInt(req.params.id)}`);
+    await auditLog(usuario, 'contratos', 'PERSONALIZACION_EDITAR', { id: req.params.id, subversion, estatus });
+    res.json({ ok: true });
+  } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
+});
+
+// ── DELETE personalización ─────────────────────────────────
+router.delete('/personalizaciones/:id', requireAuth, async (req, res) => {
+  try {
+    const usuario = req.session.user?.username || 'sistema';
+    await query(`DELETE FROM PERSONALIZACIONES WHERE ID=${parseInt(req.params.id)}`);
+    await auditLog(usuario, 'contratos', 'PERSONALIZACION_BORRAR', { id: req.params.id });
+    res.json({ ok: true });
+  } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
+});
+
 // ── PUT actualizar estatus de reporte en contrato ─────────
 router.put('/contratos/:contrato/reporte/:rep/estatus', requireAuth, async (req, res) => {
   try {

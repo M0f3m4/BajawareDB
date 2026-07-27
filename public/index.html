@@ -1841,6 +1841,47 @@
         </div>
       </div>
 
+      <!-- Modal: personalización de versión cliente -->
+      <div id="pers-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;align-items:center;justify-content:center;">
+        <div style="background:#fff;border-radius:12px;padding:28px 32px;width:420px;box-shadow:0 8px 32px rgba(0,0,0,.2);">
+          <h3 id="pers-modal-title" style="margin:0 0 6px;font-size:15px;color:#1a3558;">+ Versión Personalizada</h3>
+          <p id="pers-modal-info" style="font-size:12px;color:#888;margin:0 0 20px;font-family:monospace;"></p>
+          <div style="display:grid;gap:14px;">
+            <div>
+              <label style="font-size:11px;font-weight:600;color:#555;display:block;margin-bottom:4px;">Subversión</label>
+              <input id="pers-subversion" type="text" placeholder="ej. v1.2.1-ACME"
+                style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;box-sizing:border-box;">
+            </div>
+            <div>
+              <label style="font-size:11px;font-weight:600;color:#555;display:block;margin-bottom:4px;">Estatus</label>
+              <select id="pers-estatus" style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;">
+                <option value="">— Selecciona —</option>
+                <option value="IDENTIFICADO">IDENTIFICADO</option>
+                <option value="EN DOCUMENTACION">EN DOCUMENTACION</option>
+                <option value="DOCUMENTADO">DOCUMENTADO</option>
+                <option value="EN ANALISIS PROG">EN ANALISIS PROG</option>
+                <option value="ANALIZADO">ANALIZADO</option>
+                <option value="EN PROGRAMACION">EN PROGRAMACION</option>
+                <option value="PROGRAMADO">PROGRAMADO</option>
+                <option value="EN CERTIFICACION">EN CERTIFICACION</option>
+                <option value="CERTIFICADO">CERTIFICADO</option>
+              </select>
+            </div>
+          </div>
+          <div id="pers-msg" style="margin-top:12px;font-size:13px;min-height:18px;"></div>
+          <div style="display:flex;gap:10px;margin-top:20px;justify-content:flex-end;">
+            <button onclick="document.getElementById('pers-modal').style.display='none'"
+              style="padding:7px 18px;background:#f0f4f8;color:#555;border:1px solid #ddd;border-radius:6px;font-size:13px;cursor:pointer;">
+              Cancelar
+            </button>
+            <button onclick="guardarPersonalizacion()"
+              style="padding:7px 18px;background:#e67e22;color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;">
+              💾 Guardar
+            </button>
+          </div>
+        </div>
+      </div>
+
       <!-- Modal: actualizar estatus secuencial reporte -->
       <div id="rep-estatus-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;align-items:center;justify-content:center;">
         <div style="background:#fff;border-radius:12px;padding:28px 32px;width:420px;max-width:95vw;box-shadow:0 8px 32px rgba(0,0,0,.2);">
@@ -4722,6 +4763,7 @@
         <th style="padding:7px 10px;text-align:center;">Estatus Producto</th>
         <th style="padding:7px 10px;text-align:center;">Último Cambio</th>
         <th style="padding:7px 10px;text-align:center;">Ver. Cliente</th>
+        <th style="padding:7px 10px;text-align:center;">Personalización</th>
       </tr></thead>
       <tbody>${data.map((r,i) => `
         <tr style="background:${i%2===0?'#fff':'#f8f9fa'};">
@@ -4764,6 +4806,17 @@
               return `<span style="font-weight:600;">${c.user}</span>${fecha ? `<br><span style="color:#aaa;font-size:10px;">${fecha}</span>` : ''}`;
             })()}
           </td>
+          <td style="padding:6px 10px;text-align:center;white-space:nowrap;">
+            <button onclick="abrirPersonalizacion(${r.ID_ESTATUS_REP},'${document.getElementById('bc-rep-contrato').value}')"
+              style="padding:3px 10px;background:#e67e22;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:11px;margin-right:3px;"
+              title="Crear versión personalizada para este cliente">
+              + Ver.
+            </button>
+            <button onclick="togglePersonalizaciones(${r.ID_ESTATUS_REP},'${document.getElementById('bc-rep-contrato').value}', this)"
+              style="padding:3px 8px;background:#f0f4f8;color:#1a3558;border:1px solid #ddd;border-radius:4px;cursor:pointer;font-size:11px;">
+              ▶
+            </button>
+          </td>
           <td style="padding:6px 10px;text-align:center;">
             <input type="radio"
               name="vc_${(r.CLAVE_REP_BASE||r.CLAVE_REP).replace(/[^a-zA-Z0-9]/g,'_')}_${r.CLAVE_PLATAFORMA||'X'}"
@@ -4776,6 +4829,79 @@
       </tbody></table>`;
   }
 
+
+  // ── Personalizaciones ─────────────────────────────────────
+  let _persCurrent = {};
+
+  function abrirPersonalizacion(id_estatus_rep, contrato_id, id_pers, subversion_actual, estatus_actual) {
+    _persCurrent = { id_estatus_rep, contrato_id, id_pers: id_pers || null };
+    document.getElementById('pers-modal-title').textContent = id_pers ? 'Editar Versión' : '+ Versión Personalizada';
+    document.getElementById('pers-modal-info').textContent = `ID Estatus: ${id_estatus_rep} | Contrato: ${contrato_id}`;
+    document.getElementById('pers-subversion').value = subversion_actual || '';
+    document.getElementById('pers-estatus').value = estatus_actual || '';
+    document.getElementById('pers-msg').innerHTML = '';
+    document.getElementById('pers-modal').style.display = 'flex';
+  }
+
+  async function guardarPersonalizacion() {
+    const subversion = document.getElementById('pers-subversion').value.trim();
+    const estatus    = document.getElementById('pers-estatus').value;
+    const msg        = document.getElementById('pers-msg');
+    if (!subversion) { msg.innerHTML = '<span style="color:#e74c3c;">Ingresa la subversión.</span>'; return; }
+    msg.innerHTML = 'Guardando...';
+    try {
+      const { id_estatus_rep, contrato_id, id_pers } = _persCurrent;
+      const url    = id_pers ? `/api/contratos/personalizaciones/${id_pers}` : '/api/contratos/personalizaciones';
+      const method = id_pers ? 'PUT' : 'POST';
+      const body   = id_pers
+        ? { subversion, estatus }
+        : { estatus_reporte_id: id_estatus_rep, contrato_id, subversion, estatus };
+      const r = await fetch(url, { method, headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) }).then(x => x.json());
+      if (r.ok) {
+        msg.innerHTML = '<span style="color:#27ae60;">✅ Guardado.</span>';
+        setTimeout(() => { document.getElementById('pers-modal').style.display = 'none'; loadReportesContrato(); }, 700);
+      } else {
+        msg.innerHTML = `<span style="color:#e74c3c;">❌ ${r.message}</span>`;
+      }
+    } catch(e) { msg.innerHTML = `<span style="color:#e74c3c;">Error: ${e.message}</span>`; }
+  }
+
+  async function togglePersonalizaciones(id_estatus_rep, contrato_id, btn) {
+    const rowId = `pers-row-${id_estatus_rep}`;
+    const existing = document.getElementById(rowId);
+    if (existing) { existing.remove(); btn.textContent = '▶'; return; }
+    btn.textContent = '▼';
+    try {
+      const r = await fetch(`/api/contratos/personalizaciones?estatus_reporte_id=${id_estatus_rep}&contrato_id=${encodeURIComponent(contrato_id)}`).then(x => x.json());
+      const data = r.data || [];
+      const tr = document.createElement('tr');
+      tr.id = rowId;
+      tr.style.background = '#fffbf0';
+      tr.innerHTML = `<td colspan="20" style="padding:0 10px 10px 40px;">
+        <div style="font-size:12px;color:#888;margin:8px 0 4px;">Versiones personalizadas:</div>
+        ${data.length ? data.map(p => `
+          <div style="display:flex;align-items:center;gap:10px;padding:4px 8px;background:#fff;border:1px solid #e0e6ed;border-radius:6px;margin-bottom:4px;">
+            <span style="font-family:monospace;font-size:12px;color:#e67e22;font-weight:600;">${p.SUBVERSION||'—'}</span>
+            <span>${estatusPill(p.ESTATUS)}</span>
+            <button onclick="abrirPersonalizacion(${id_estatus_rep},'${contrato_id}',${p.ID},'${p.SUBVERSION||''}','${p.ESTATUS||''}')"
+              style="padding:2px 8px;background:#1a3558;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:11px;">Editar</button>
+            <button onclick="borrarPersonalizacion(${p.ID})"
+              style="padding:2px 8px;background:#e74c3c;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:11px;">✕</button>
+          </div>`).join('') : '<span style="color:#aaa;font-size:12px;">Sin versiones personalizadas.</span>'}
+        <button onclick="abrirPersonalizacion(${id_estatus_rep},'${contrato_id}')"
+          style="margin-top:6px;padding:4px 12px;background:#e67e22;color:#fff;border:none;border-radius:5px;cursor:pointer;font-size:12px;">
+          + Agregar versión
+        </button>
+      </td>`;
+      btn.closest('tr').insertAdjacentElement('afterend', tr);
+    } catch(e) { console.error(e); }
+  }
+
+  async function borrarPersonalizacion(id) {
+    if (!confirm('¿Borrar esta versión personalizada?')) return;
+    await fetch(`/api/contratos/personalizaciones/${id}`, { method: 'DELETE' });
+    loadReportesContrato();
+  }
 
   let _repEstatusCurrent = {};
   let _catEstatus = [];
