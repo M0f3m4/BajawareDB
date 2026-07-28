@@ -317,7 +317,6 @@ router.get('/contratos/:clave/validaciones', requireAuth, async (req, res) => {
         rv.CERTIFICADO, rv.CERT_FECHA_REAL, rv.ESTATUS, rv.CLAVE_PLATAFORMA, rv.VERSION, rv.VERSION_CARGA
       FROM REPORTE_VALIDACION rv
       WHERE rv.CLAVE_REP IN (${inList})
-        ${versionCargaFiltro ? `AND rv.VERSION_CARGA=${esc(versionCargaFiltro)}` : ''}
       ORDER BY rv.CLAVE_REP, rv.CLAVE_VALIDACION
     `);
     res.json({ ok: true, data: rows });
