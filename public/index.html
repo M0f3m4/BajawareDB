@@ -4894,11 +4894,8 @@
     try {
       const r = await fetch(`/api/contratos/personalizaciones?estatus_reporte_id=${id_estatus_rep}&contrato_id=${encodeURIComponent(contrato_id)}`).then(x => x.json());
       const data = r.data || [];
-      const tr = document.createElement('tr');
-      tr.id = rowId;
-      tr.style.background = '#fffbf0';
-      tr.innerHTML = `<td colspan="20" style="padding:0 10px 10px 40px;">
-        <div style="font-size:12px;color:#888;margin:8px 0 4px;">Versiones personalizadas:</div>
+      const contenido = `<div style="padding:8px 14px 12px;background:#fffbf0;border-top:1px solid #f0e8d0;">
+        <div style="font-size:12px;color:#888;margin-bottom:6px;">Versiones personalizadas:</div>
         ${data.length ? data.map(p => `
           <div style="display:flex;align-items:center;gap:10px;padding:4px 8px;background:#fff;border:1px solid #e0e6ed;border-radius:6px;margin-bottom:4px;">
             <span style="font-family:monospace;font-size:12px;color:#e67e22;font-weight:600;">${p.SUBVERSION||'—'}</span>
@@ -4912,8 +4909,23 @@
           style="margin-top:6px;padding:4px 12px;background:#e67e22;color:#fff;border:none;border-radius:5px;cursor:pointer;font-size:12px;">
           + Agregar versión
         </button>
-      </td>`;
-      btn.closest('tr').insertAdjacentElement('afterend', tr);
+      </div>`;
+
+      // Funciona tanto en tabla (tr) como en div (validaciones por cliente)
+      const parentTr = btn.closest('tr');
+      if (parentTr) {
+        const tr = document.createElement('tr');
+        tr.id = rowId;
+        tr.innerHTML = `<td colspan="20" style="padding:0;">${contenido}</td>`;
+        parentTr.insertAdjacentElement('afterend', tr);
+      } else {
+        const div = document.createElement('div');
+        div.id = rowId;
+        div.innerHTML = contenido;
+        // Insertar después del div header (parent del botón)
+        const headerDiv = btn.parentElement?.parentElement;
+        if (headerDiv) headerDiv.insertAdjacentElement('afterend', div);
+      }
     } catch(e) { console.error(e); }
   }
 
@@ -6247,8 +6259,8 @@
     if (!clave_validacion || !clave_plataforma || !estatus) return;
     const contrato = document.getElementById('vcli-contrato').value;
     if (!contrato) return;
-    // Usar la versión seleccionada de validaciones, o la de carga de la validación misma
-    const valVer = (document.getElementById('vcli-val-version') ? document.getElementById('vcli-val-version').value : '') || version_carga || 'GLOBAL';
+    // Siempre usar la versión seleccionada en el dropdown de validaciones (o GLOBAL si no hay)
+    const valVer = (document.getElementById('vcli-val-version')?.value) || 'GLOBAL';
     try {
       await fetch(`/api/contratos/contratos/${encodeURIComponent(contrato)}/validacion-estatus`, {
         method: 'PUT', headers: { 'Content-Type': 'application/json' },
