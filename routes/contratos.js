@@ -196,6 +196,36 @@ router.put('/contratos/:contrato/reporte/:rep/estatus', requireAuth, async (req,
   } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
 });
 
+// ── GET/PUT estatus proyecto de validaciones por contrato ──
+router.get('/contratos/:clave/validacion-estatus', requireAuth, async (req, res) => {
+  try {
+    const { clave_validacion, clave_plataforma, version_carga } = req.query;
+    if (!clave_validacion || !clave_plataforma) return res.json({ ok: true, data: [] });
+    let where = `WHERE CLAVE_CONTRATO=${esc(req.params.clave)} AND CLAVE_VALIDACION=${esc(clave_validacion)} AND CLAVE_PLATAFORMA=${esc(clave_plataforma)}`;
+    if (version_carga) where += ` AND VERSION_CARGA=${esc(version_carga)}`;
+    const rows = await query(`SELECT CLAVE_VALIDACION, CLAVE_PLATAFORMA, VERSION_CARGA, ESTATUS_PROYECTO FROM CONTRATOS_VALIDACION_ESTATUS ${where}`);
+    // Devolver mapa clave_validacion → estatus
+    const mapa = {};
+    rows.forEach(r => { mapa[`${r.CLAVE_VALIDACION}|${r.CLAVE_PLATAFORMA}`] = r.ESTATUS_PROYECTO; });
+    res.json({ ok: true, data: mapa });
+  } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
+});
+
+router.put('/contratos/:clave/validacion-estatus', requireAuth, async (req, res) => {
+  try {
+    const { clave_validacion, clave_plataforma, version_carga, estatus_proyecto } = req.body;
+    const usuario = req.session.user?.username || 'sistema';
+    const existe = await query(`SELECT 1 FROM CONTRATOS_VALIDACION_ESTATUS WHERE CLAVE_CONTRATO=${esc(req.params.clave)} AND CLAVE_VALIDACION=${esc(clave_validacion)} AND CLAVE_PLATAFORMA=${esc(clave_plataforma)} AND VERSION_CARGA=${esc(version_carga)}`);
+    if (existe.length) {
+      await query(`UPDATE CONTRATOS_VALIDACION_ESTATUS SET ESTATUS_PROYECTO=${esc(estatus_proyecto)} WHERE CLAVE_CONTRATO=${esc(req.params.clave)} AND CLAVE_VALIDACION=${esc(clave_validacion)} AND CLAVE_PLATAFORMA=${esc(clave_plataforma)} AND VERSION_CARGA=${esc(version_carga)}`);
+    } else {
+      await query(`INSERT INTO CONTRATOS_VALIDACION_ESTATUS (CLAVE_CONTRATO,CLAVE_VALIDACION,CLAVE_PLATAFORMA,VERSION_CARGA,ESTATUS_PROYECTO) VALUES (${esc(req.params.clave)},${esc(clave_validacion)},${esc(clave_plataforma)},${esc(version_carga)},${esc(estatus_proyecto)})`);
+    }
+    await auditLog(usuario, 'contratos', 'ESTATUS_PROYECTO_VAL', { clave_contrato: req.params.clave, clave_validacion, clave_plataforma, version_carga, estatus_proyecto });
+    res.json({ ok: true });
+  } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
+});
+
 // ── GET versión de validaciones del cliente por contrato+rep
 router.get('/contratos/:clave/validacion-cliente', requireAuth, async (req, res) => {
   try {

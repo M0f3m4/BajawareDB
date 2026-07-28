@@ -5304,13 +5304,24 @@
       const valVersion = document.getElementById('vcli-val-version') ? document.getElementById('vcli-val-version').value : '';
       let url = `/api/contratos/clientes/${encodeURIComponent(clave)}/validaciones?rep=${encodeURIComponent(rep)}`;
       if (valVersion) url += `&version_carga=${encodeURIComponent(valVersion)}`;
+      const contrato = document.getElementById('vcli-contrato').value;
       const r = await fetch(url).then(x => x.json());
       if (!r.ok) { wrap.innerHTML = `<div class="loading" style="color:#e74c3c;">Error: ${r.message}</div>`; return; }
       vcliData = r.data || [];
       badge.textContent = `${vcliData.length} validaciones`;
-      renderValCliente(vcliData, r.cliente);
+      // Cargar estatus proyecto por contrato
+      let _vcliEstatusProyecto = {};
+      if (contrato && valVersion) {
+        try {
+          const re = await fetch(`/api/contratos/contratos/${encodeURIComponent(contrato)}/validacion-estatus?version_carga=${encodeURIComponent(valVersion)}`).then(x => x.json());
+          _vcliEstatusProyecto = re.data || {};
+        } catch(e) {}
+      }
+      renderValCliente(vcliData, r.cliente, _vcliEstatusProyecto);
     } catch(e) { wrap.innerHTML = '<div class="loading">Error: ' + e.message + '</div>'; }
   }
+
+  let _vcliEstatusProyectoGlobal = {};
 
   function filtrarValCliente() {
     const q = document.getElementById('vcli-search').value.toLowerCase();
@@ -5318,10 +5329,11 @@
       (v.CLAVE_UNICA||'').toLowerCase().includes(q) ||
       (v.CLAVE_REP||'').toLowerCase().includes(q) ||
       (v.DESCRIPCION||'').toLowerCase().includes(q)
-    ), document.getElementById('vcli-select').options[document.getElementById('vcli-select').selectedIndex]?.text || null);
+    ), document.getElementById('vcli-select').options[document.getElementById('vcli-select').selectedIndex]?.text || null, _vcliEstatusProyectoGlobal);
   }
 
-  function renderValCliente(data, cliente) {
+  function renderValCliente(data, cliente, estatusProyectoMapa) {
+    if (estatusProyectoMapa) _vcliEstatusProyectoGlobal = estatusProyectoMapa;
     const wrap = document.getElementById('vcli-content');
     if (!data.length) { wrap.innerHTML = '<p style="color:#aaa;font-size:13px;">Sin validaciones.</p>'; return; }
 
@@ -5382,7 +5394,13 @@
                 <td style="padding:5px 12px;text-align:center;">${etapaBadge(v.DOCUMENTADO)}</td>
                 <td style="padding:5px 12px;text-align:center;">${etapaBadge(v.PROGRAMADO)}</td>
                 <td style="padding:5px 12px;text-align:center;">${etapaBadge(v.CERTIFICADO)}</td>
-                <td style="padding:5px 12px;text-align:center;">${estatusPill(v.ESTATUS)}</td>
+                <td style="padding:5px 12px;text-align:center;">${(() => {
+                  const cert = v.CERTIFICADO==='S'||v.CERTIFICADO==='SI';
+                  const prog = v.PROGRAMADO==='S'||v.PROGRAMADO==='SI';
+                  const doc  = v.DOCUMENTADO==='S'||v.DOCUMENTADO==='SI';
+                  const ep = cert?'CERTIFICADO':prog?'PROGRAMADO':doc?'DOCUMENTADO':'NO DOCUMENTADO';
+                  return estatusPill(ep);
+                })()}</td>
                 <td style="padding:5px 12px;text-align:center;font-size:11px;color:#555;">
                   ${(() => {
                     const candidatos = [
@@ -5401,19 +5419,15 @@
                 <td style="padding:5px 12px;text-align:center;white-space:nowrap;">${v.CLAVE_PLATAFORMA||''}</td>
                 <td style="padding:5px 12px;text-align:center;"><span style="font-size:11px;background:#f0f4ff;color:#1a3558;padding:2px 7px;border-radius:10px;font-family:monospace;">${v.VERSION_CARGA||'—'}</span></td>
                 <td style="padding:5px 12px;text-align:center;">
-                  <select onchange="actualizarEstatusProyectoVal('${v.CLAVE_VALIDACION}','${v.CLAVE_PLATAFORMA||''}',this.value,'${v.VERSION_CARGA||''}')"
-                    style="font-size:11px;padding:2px 4px;border:1px solid #ddd;border-radius:4px;max-width:130px;">
-                    <option value="">—</option>
-                    <option value="IDENTIFICADO" ${v.ESTATUS==='IDENTIFICADO'?'selected':''}>IDENTIFICADO</option>
-                    <option value="EN DOCUMENTACION" ${v.ESTATUS==='EN DOCUMENTACION'?'selected':''}>EN DOCUMENTACION</option>
-                    <option value="DOCUMENTADO" ${v.ESTATUS==='DOCUMENTADO'?'selected':''}>DOCUMENTADO</option>
-                    <option value="EN ANALISIS PROG" ${v.ESTATUS==='EN ANALISIS PROG'?'selected':''}>EN ANALISIS PROG</option>
-                    <option value="ANALIZADO" ${v.ESTATUS==='ANALIZADO'?'selected':''}>ANALIZADO</option>
-                    <option value="EN PROGRAMACION" ${v.ESTATUS==='EN PROGRAMACION'?'selected':''}>EN PROGRAMACION</option>
-                    <option value="PROGRAMADO" ${v.ESTATUS==='PROGRAMADO'?'selected':''}>PROGRAMADO</option>
-                    <option value="EN CERTIFICACION" ${v.ESTATUS==='EN CERTIFICACION'?'selected':''}>EN CERTIFICACION</option>
-                    <option value="CERTIFICADO" ${v.ESTATUS==='CERTIFICADO'?'selected':''}>CERTIFICADO</option>
-                  </select>
+                  ${(()=>{
+                    const ep = (_vcliEstatusProyectoGlobal||{})[v.CLAVE_VALIDACION+'|'+(v.CLAVE_PLATAFORMA||'')] || '';
+                    const opts = ['IDENTIFICADO','EN DOCUMENTACION','DOCUMENTADO','EN ANALISIS PROG','ANALIZADO','EN PROGRAMACION','PROGRAMADO','EN CERTIFICACION','CERTIFICADO'];
+                    return `<select onchange="actualizarEstatusProyectoVal('${v.CLAVE_VALIDACION}','${v.CLAVE_PLATAFORMA||''}',this.value,'${v.VERSION_CARGA||''}')"
+                      style="font-size:11px;padding:2px 4px;border:1px solid #ddd;border-radius:4px;max-width:130px;">
+                      <option value="">—</option>
+                      ${opts.map(o=>`<option value="${o}" ${ep===o?'selected':''}>${o}</option>`).join('')}
+                    </select>`;
+                  })()}
                 </td>
                 <!-- Acción removida — solo visual -->
               </tr>`).join('')}
@@ -6205,10 +6219,12 @@
 
   async function actualizarEstatusProyectoVal(clave_validacion, clave_plataforma, estatus, version_carga) {
     if (!clave_validacion || !clave_plataforma || !estatus) return;
+    const contrato = document.getElementById('vcli-contrato').value;
+    if (!contrato) return;
     try {
-      await fetch('/api/contratos/estatus-validacion/estatus', {
+      await fetch(`/api/contratos/contratos/${encodeURIComponent(contrato)}/validacion-estatus`, {
         method: 'PUT', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ clave_validacion, clave_plataforma, estatus, version: version_carga || null })
+        body: JSON.stringify({ clave_validacion, clave_plataforma, version_carga: version_carga || '', estatus_proyecto: estatus })
       });
     } catch(e) { console.error('Error actualizando estatus proyecto validacion:', e.message); }
   }
