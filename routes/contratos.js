@@ -196,6 +196,39 @@ router.put('/contratos/:contrato/reporte/:rep/estatus', requireAuth, async (req,
   } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
 });
 
+// ── GET versión de validaciones del cliente por contrato+rep
+router.get('/contratos/:clave/validacion-cliente', requireAuth, async (req, res) => {
+  try {
+    const { clave_rep } = req.query;
+    if (!clave_rep) return res.json({ ok: true, data: null });
+    const rows = await query(`
+      SELECT VERSION_CARGA FROM CONTRATOS_VALIDACION_CLIENTE
+      WHERE CLAVE_CONTRATO=${esc(req.params.clave)} AND CLAVE_REP=${esc(clave_rep)}
+    `);
+    res.json({ ok: true, data: rows.length ? rows[0].VERSION_CARGA : null });
+  } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
+});
+
+// ── PUT marcar versión de validaciones del cliente ─────────
+router.put('/contratos/:clave/validacion-cliente', requireAuth, async (req, res) => {
+  try {
+    const { clave_rep, version_carga } = req.body;
+    const usuario = req.session.user?.username || 'sistema';
+    if (version_carga) {
+      const existe = await query(`SELECT 1 FROM CONTRATOS_VALIDACION_CLIENTE WHERE CLAVE_CONTRATO=${esc(req.params.clave)} AND CLAVE_REP=${esc(clave_rep)}`);
+      if (existe.length) {
+        await query(`UPDATE CONTRATOS_VALIDACION_CLIENTE SET VERSION_CARGA=${esc(version_carga)} WHERE CLAVE_CONTRATO=${esc(req.params.clave)} AND CLAVE_REP=${esc(clave_rep)}`);
+      } else {
+        await query(`INSERT INTO CONTRATOS_VALIDACION_CLIENTE (CLAVE_CONTRATO, CLAVE_REP, VERSION_CARGA) VALUES (${esc(req.params.clave)}, ${esc(clave_rep)}, ${esc(version_carga)})`);
+      }
+    } else {
+      await query(`DELETE FROM CONTRATOS_VALIDACION_CLIENTE WHERE CLAVE_CONTRATO=${esc(req.params.clave)} AND CLAVE_REP=${esc(clave_rep)}`);
+    }
+    await auditLog(usuario, 'contratos', 'VERSION_VALIDACION_CLIENTE', { clave_contrato: req.params.clave, clave_rep, version_carga });
+    res.json({ ok: true });
+  } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
+});
+
 // ── CONTRATOS por cliente ─────────────────────────────────
 router.get('/clientes/:clave/contratos', requireAuth, async (req, res) => {
   try {
@@ -284,6 +317,7 @@ router.get('/contratos/:clave/validaciones', requireAuth, async (req, res) => {
         rv.CERTIFICADO, rv.CERT_FECHA_REAL, rv.ESTATUS, rv.CLAVE_PLATAFORMA, rv.VERSION, rv.VERSION_CARGA
       FROM REPORTE_VALIDACION rv
       WHERE rv.CLAVE_REP IN (${inList})
+        ${versionCargaFiltro ? `AND rv.VERSION_CARGA=${esc(versionCargaFiltro)}` : ''}
       ORDER BY rv.CLAVE_REP, rv.CLAVE_VALIDACION
     `);
     res.json({ ok: true, data: rows });
@@ -314,7 +348,8 @@ router.get('/clientes/:clave/reportes', requireAuth, async (req, res) => {
 router.get('/clientes/:clave/validaciones', requireAuth, async (req, res) => {
   try {
     const claveCliente = req.params.clave;
-    const repFiltro    = req.query.rep || null; // CLAVE_REP base opcional
+    const repFiltro       = req.query.rep || null; // CLAVE_REP base opcional
+    const versionCargaFiltro = req.query.version_carga || null; // filtrar por VERSION_CARGA
     const esTodos = claveCliente === 'todos';
 
     // -- Nombre del cliente + plataformas contratadas
@@ -356,6 +391,7 @@ router.get('/clientes/:clave/validaciones', requireAuth, async (req, res) => {
         FROM REPORTE_VALIDACION rv
         WHERE rv.CLAVE_REP IN (${inList})
         ${platFilter}
+        ${versionCargaFiltro ? `AND rv.VERSION_CARGA=${esc(versionCargaFiltro)}` : ''}
         ORDER BY rv.CLAVE_REP, rv.CLAVE_VALIDACION
       `);
     } else {
@@ -392,6 +428,7 @@ router.get('/clientes/:clave/validaciones', requireAuth, async (req, res) => {
         FROM REPORTE_VALIDACION rv
         WHERE rv.CLAVE_REP IN (${inList})
         ${platFilter}
+        ${versionCargaFiltro ? `AND rv.VERSION_CARGA=${esc(versionCargaFiltro)}` : ''}
         ORDER BY rv.CLAVE_REP, rv.CLAVE_VALIDACION
       `);
     }

@@ -1321,8 +1321,15 @@
               </select>
             </div>
             <div id="vcli-version-wrap" style="display:none;">
-              <label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px;">Versión</label>
+              <label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px;">Versión Reporte</label>
               <select id="vcli-version" onchange="loadValCliente()"
+                style="padding:7px 12px;border:1px solid #ddd;border-radius:6px;font-size:13px;min-width:160px;">
+                <option value="">— Todas —</option>
+              </select>
+            </div>
+            <div id="vcli-val-version-wrap" style="display:none;">
+              <label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px;">Versión Validaciones</label>
+              <select id="vcli-val-version" onchange="vcliOnValVersionChange()"
                 style="padding:7px 12px;border:1px solid #ddd;border-radius:6px;font-size:13px;min-width:160px;">
                 <option value="">— Todas —</option>
               </select>
@@ -5229,6 +5236,56 @@
     } else {
       wrap.style.display = 'none';
     }
+    // Cargar versiones de validaciones para el reporte seleccionado
+    const contrato = document.getElementById('vcli-contrato').value;
+    const repEspecifica = selVer.value || base;
+    await vcliCargarVersionesValidaciones(repEspecifica, contrato);
+    loadValCliente();
+  }
+
+  async function vcliCargarVersionesValidaciones(repEspecifica, contrato) {
+    const wrap = document.getElementById('vcli-val-version-wrap');
+    const sel = document.getElementById('vcli-val-version');
+    sel.innerHTML = '<option value="">— Todas —</option>';
+    if (!repEspecifica) { wrap.style.display = 'none'; return; }
+    try {
+      // Obtener versiones distintas de validaciones para este reporte
+      const [rVers, rCliente] = await Promise.all([
+        fetch(`/api/contratos/estatus-validacion/versiones?clave_rep=${encodeURIComponent(repEspecifica)}`).then(x => x.json()),
+        contrato ? fetch(`/api/contratos/contratos/${encodeURIComponent(contrato)}/validacion-cliente?clave_rep=${encodeURIComponent(repEspecifica)}`).then(x => x.json()) : Promise.resolve({ data: null })
+      ]);
+      const versiones = rVers.data || [];
+      const versionCliente = rCliente.data || null;
+      if (versiones.length) {
+        wrap.style.display = '';
+        versiones.forEach(v => {
+          const o = document.createElement('option');
+          o.value = v;
+          const esCliente = v === versionCliente;
+          o.textContent = `${v}${esCliente ? ' ★ Ver. Cliente' : ''}`;
+          if (esCliente) { o.style.fontWeight = '700'; o.style.color = '#1a3558'; sel.value = v; }
+          sel.appendChild(o);
+        });
+        if (versionCliente) sel.value = versionCliente;
+      } else {
+        wrap.style.display = 'none';
+      }
+    } catch(e) { wrap.style.display = 'none'; }
+  }
+
+  async function vcliOnValVersionChange() {
+    const contrato = document.getElementById('vcli-contrato').value;
+    const repBase = document.getElementById('vcli-rep').value;
+    const repVer = document.getElementById('vcli-version').value;
+    const repEspecifica = repVer || repBase;
+    const version = document.getElementById('vcli-val-version').value;
+    // Guardar selección como versión del cliente
+    if (contrato && repEspecifica && version) {
+      await fetch(`/api/contratos/contratos/${encodeURIComponent(contrato)}/validacion-cliente`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clave_rep: repEspecifica, version_carga: version })
+      });
+    }
     loadValCliente();
   }
 
@@ -5243,7 +5300,10 @@
     wrap.innerHTML = '<div class="loading">Cargando validaciones…</div>';
     badge.textContent = '';
     try {
-      const url = `/api/contratos/clientes/${encodeURIComponent(clave)}/validaciones?rep=${encodeURIComponent(rep)}`;
+      // Versión de validaciones seleccionada
+      const valVersion = document.getElementById('vcli-val-version') ? document.getElementById('vcli-val-version').value : '';
+      let url = `/api/contratos/clientes/${encodeURIComponent(clave)}/validaciones?rep=${encodeURIComponent(rep)}`;
+      if (valVersion) url += `&version_carga=${encodeURIComponent(valVersion)}`;
       const r = await fetch(url).then(x => x.json());
       if (!r.ok) { wrap.innerHTML = `<div class="loading" style="color:#e74c3c;">Error: ${r.message}</div>`; return; }
       vcliData = r.data || [];
