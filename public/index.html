@@ -5258,12 +5258,31 @@
     const porRep = {};
     data.forEach(v => { if (!porRep[v.CLAVE_REP]) porRep[v.CLAVE_REP]=[]; porRep[v.CLAVE_REP].push(v); });
 
+    const contrato = document.getElementById('vcli-contrato').value;
+    const repVerSeleccionada = document.getElementById('vcli-version') ? document.getElementById('vcli-version').value : '';
+    const repBase = document.getElementById('vcli-rep').value;
+    // Obtener ID_ESTATUS_REP de la versión seleccionada
+    const versionInfo = (_vcliRepVersiones[repBase] || []).find(v => v.clave_rep === repVerSeleccionada);
+    const idEstatusRepVcli = versionInfo ? versionInfo.id_estatus_rep : null;
+
     wrap.innerHTML = Object.entries(porRep).map(([rep, vals]) => `
       <div style="background:#fff;border:1px solid #e0e6ed;border-radius:8px;margin-bottom:16px;overflow:hidden;">
-        <div style="background:#1a3558;color:#fff;padding:8px 14px;font-weight:700;font-size:13px;display:flex;align-items:center;gap:10px;">
+        <div style="background:#1a3558;color:#fff;padding:8px 14px;font-weight:700;font-size:13px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
           <span>📊 ${rep}</span>
           <span style="font-weight:400;font-size:12px;">(${vals.length} validaciones)</span>
           ${cliente ? `<span style="background:rgba(255,255,255,.2);padding:2px 8px;border-radius:10px;font-size:11px;">🏢 ${cliente}</span>` : ''}
+          <span style="margin-left:auto;display:flex;gap:8px;align-items:center;">
+            ${idEstatusRepVcli ? `
+              <button onclick="abrirPersonalizacion(${idEstatusRepVcli},'${contrato}')"
+                style="padding:3px 10px;background:#e67e22;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:11px;">
+                + Subversión
+              </button>
+              <button onclick="togglePersonalizaciones(${idEstatusRepVcli},'${contrato}',this)"
+                style="padding:3px 8px;background:rgba(255,255,255,.2);color:#fff;border:1px solid rgba(255,255,255,.3);border-radius:4px;cursor:pointer;font-size:11px;">
+                ▶ Ver. Personalizadas
+              </button>
+            ` : ''}
+          </span>
         </div>
         <div style="overflow:auto;max-height:65vh;">
           <table style="width:max-content;min-width:100%;border-collapse:collapse;font-size:12px;">
@@ -5280,6 +5299,7 @@
                 <th style="padding:6px 12px;text-align:center;white-space:nowrap;border-bottom:2px solid #c5d0dc;">Último Cambio</th>
                 <th style="padding:6px 12px;text-align:center;white-space:nowrap;border-bottom:2px solid #c5d0dc;">Plataforma</th>
                 <th style="padding:6px 12px;text-align:center;white-space:nowrap;border-bottom:2px solid #c5d0dc;">Versión</th>
+                <th style="padding:6px 12px;text-align:center;white-space:nowrap;border-bottom:2px solid #c5d0dc;">Estatus Proyecto</th>
                 <!-- Acción removida — solo visual -->
               </tr>
             </thead>
@@ -5310,6 +5330,21 @@
                 </td>
                 <td style="padding:5px 12px;text-align:center;white-space:nowrap;">${v.CLAVE_PLATAFORMA||''}</td>
                 <td style="padding:5px 12px;text-align:center;"><span style="font-size:11px;background:#f0f4ff;color:#1a3558;padding:2px 7px;border-radius:10px;font-family:monospace;">${v.VERSION_CARGA||'—'}</span></td>
+                <td style="padding:5px 12px;text-align:center;">
+                  <select onchange="actualizarEstatusProyectoVal('${v.CLAVE_VALIDACION}','${v.CLAVE_PLATAFORMA||''}',this.value,'${v.VERSION_CARGA||''}')"
+                    style="font-size:11px;padding:2px 4px;border:1px solid #ddd;border-radius:4px;max-width:130px;">
+                    <option value="">—</option>
+                    <option value="IDENTIFICADO" ${v.ESTATUS==='IDENTIFICADO'?'selected':''}>IDENTIFICADO</option>
+                    <option value="EN DOCUMENTACION" ${v.ESTATUS==='EN DOCUMENTACION'?'selected':''}>EN DOCUMENTACION</option>
+                    <option value="DOCUMENTADO" ${v.ESTATUS==='DOCUMENTADO'?'selected':''}>DOCUMENTADO</option>
+                    <option value="EN ANALISIS PROG" ${v.ESTATUS==='EN ANALISIS PROG'?'selected':''}>EN ANALISIS PROG</option>
+                    <option value="ANALIZADO" ${v.ESTATUS==='ANALIZADO'?'selected':''}>ANALIZADO</option>
+                    <option value="EN PROGRAMACION" ${v.ESTATUS==='EN PROGRAMACION'?'selected':''}>EN PROGRAMACION</option>
+                    <option value="PROGRAMADO" ${v.ESTATUS==='PROGRAMADO'?'selected':''}>PROGRAMADO</option>
+                    <option value="EN CERTIFICACION" ${v.ESTATUS==='EN CERTIFICACION'?'selected':''}>EN CERTIFICACION</option>
+                    <option value="CERTIFICADO" ${v.ESTATUS==='CERTIFICADO'?'selected':''}>CERTIFICADO</option>
+                  </select>
+                </td>
                 <!-- Acción removida — solo visual -->
               </tr>`).join('')}
             </tbody>
@@ -6096,6 +6131,16 @@
         document.getElementById('inv-plat-msg').innerHTML = `<span style="color:#e74c3c;">❌ ${r.message}</span>`;
       }
     } catch(e) { document.getElementById('inv-plat-msg').innerHTML = '<span style="color:#e74c3c;">Error: ' + e.message + '</span>'; }
+  }
+
+  async function actualizarEstatusProyectoVal(clave_validacion, clave_plataforma, estatus, version_carga) {
+    if (!clave_validacion || !clave_plataforma || !estatus) return;
+    try {
+      await fetch('/api/contratos/estatus-validacion/estatus', {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clave_validacion, clave_plataforma, estatus, version: version_carga || null })
+      });
+    } catch(e) { console.error('Error actualizando estatus proyecto validacion:', e.message); }
   }
 
   let _valEstatusCurrent = {};
