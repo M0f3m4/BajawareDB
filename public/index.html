@@ -1315,9 +1315,16 @@
             </div>
             <div>
               <label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px;">Reporte</label>
-              <select id="vcli-rep" onchange="loadValCliente()"
+              <select id="vcli-rep" onchange="vcliOnRepChange()"
                 style="padding:7px 12px;border:1px solid #ddd;border-radius:6px;font-size:13px;min-width:280px;" disabled>
                 <option value="">— Selecciona reporte —</option>
+              </select>
+            </div>
+            <div id="vcli-version-wrap" style="display:none;">
+              <label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px;">Versión</label>
+              <select id="vcli-version" onchange="loadValCliente()"
+                style="padding:7px 12px;border:1px solid #ddd;border-radius:6px;font-size:13px;min-width:160px;">
+                <option value="">— Todas —</option>
               </select>
             </div>
             <input id="vcli-search" type="text" placeholder="Buscar en tabla..."
@@ -5158,34 +5165,71 @@
     await vcliCargarReportes(clave, contrato);
   }
 
+  let _vcliRepVersiones = {}; // mapa CLAVE_REP_BASE → [{CLAVE_REP, VERSION_CARGA, ID_ESTATUS_REP}]
+
   async function vcliCargarReportes(clave, contrato) {
     const selRep = document.getElementById('vcli-rep');
+    document.getElementById('vcli-version-wrap').style.display = 'none';
+    _vcliRepVersiones = {};
     try {
-      // Si hay contrato seleccionado: reportes de ese contrato; si no: todos del cliente
       const url = contrato
         ? `/api/contratos/contratos/${encodeURIComponent(contrato)}/reportes`
         : `/api/contratos/clientes/${encodeURIComponent(clave)}/reportes`;
       const r = await fetch(url).then(x => x.json());
       selRep.innerHTML = '<option value="">— Selecciona reporte —</option>';
-      // /contratos/:clave/reportes devuelve objetos con CLAVE_REP; /clientes/:clave/reportes devuelve strings
-      const lista = (r.data || []).map(x => typeof x === 'string' ? x : x.CLAVE_REP);
-      lista.forEach(rep => {
-        const o = document.createElement('option');
-        o.value = rep; o.textContent = rep;
-        selRep.appendChild(o);
+      const data = r.data || [];
+      // Deduplicar por CLAVE_REP_BASE y guardar versiones
+      const basesVistas = new Set();
+      data.forEach(x => {
+        const base = (typeof x === 'string') ? x : (x.CLAVE_REP_BASE || x.CLAVE_REP);
+        const especifica = (typeof x === 'string') ? x : x.CLAVE_REP;
+        if (!_vcliRepVersiones[base]) _vcliRepVersiones[base] = [];
+        _vcliRepVersiones[base].push({ clave_rep: especifica, version_carga: x.VERSION_CARGA || null, id_estatus_rep: x.ID_ESTATUS_REP || null });
+        if (!basesVistas.has(base)) {
+          basesVistas.add(base);
+          const o = document.createElement('option');
+          o.value = base; o.textContent = base;
+          selRep.appendChild(o);
+        }
       });
-      selRep.disabled = lista.length === 0;
+      selRep.disabled = basesVistas.size === 0;
     } catch(e) {
       selRep.innerHTML = '<option value="">Error cargando reportes</option>';
     }
   }
 
+  function vcliOnRepChange() {
+    const base = document.getElementById('vcli-rep').value;
+    const wrap = document.getElementById('vcli-version-wrap');
+    const selVer = document.getElementById('vcli-version');
+    selVer.innerHTML = '<option value="">— Todas —</option>';
+    if (base && _vcliRepVersiones[base]) {
+      const versiones = _vcliRepVersiones[base].filter(v => v.version_carga);
+      if (versiones.length) {
+        wrap.style.display = '';
+        versiones.forEach(v => {
+          const o = document.createElement('option');
+          o.value = v.clave_rep;
+          o.textContent = `${v.clave_rep} (${v.version_carga})`;
+          selVer.appendChild(o);
+        });
+      } else {
+        wrap.style.display = 'none';
+      }
+    } else {
+      wrap.style.display = 'none';
+    }
+    loadValCliente();
+  }
+
   async function loadValCliente() {
-    const clave = document.getElementById('vcli-select').value;
-    const rep   = document.getElementById('vcli-rep').value;
-    const wrap  = document.getElementById('vcli-content');
-    const badge = document.getElementById('vcli-badge');
-    if (!clave || !rep) return;
+    const clave   = document.getElementById('vcli-select').value;
+    const repBase = document.getElementById('vcli-rep').value;
+    const repVer  = document.getElementById('vcli-version') ? document.getElementById('vcli-version').value : '';
+    const rep     = repVer || repBase; // Si hay versión específica seleccionada, úsala
+    const wrap    = document.getElementById('vcli-content');
+    const badge   = document.getElementById('vcli-badge');
+    if (!clave || !repBase) return;
     wrap.innerHTML = '<div class="loading">Cargando validaciones…</div>';
     badge.textContent = '';
     try {
