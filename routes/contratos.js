@@ -200,11 +200,11 @@ router.put('/contratos/:contrato/reporte/:rep/estatus', requireAuth, async (req,
 router.get('/contratos/:clave/validacion-estatus', requireAuth, async (req, res) => {
   try {
     const { clave_validacion, clave_plataforma, version_carga } = req.query;
-    if (!clave_validacion || !clave_plataforma) return res.json({ ok: true, data: [] });
-    let where = `WHERE CLAVE_CONTRATO=${esc(req.params.clave)} AND CLAVE_VALIDACION=${esc(clave_validacion)} AND CLAVE_PLATAFORMA=${esc(clave_plataforma)}`;
+    let where = `WHERE CLAVE_CONTRATO=${esc(req.params.clave)}`;
+    if (clave_validacion) where += ` AND CLAVE_VALIDACION=${esc(clave_validacion)}`;
+    if (clave_plataforma) where += ` AND CLAVE_PLATAFORMA=${esc(clave_plataforma)}`;
     if (version_carga) where += ` AND VERSION_CARGA=${esc(version_carga)}`;
     const rows = await query(`SELECT CLAVE_VALIDACION, CLAVE_PLATAFORMA, VERSION_CARGA, ESTATUS_PROYECTO FROM CONTRATOS_VALIDACION_ESTATUS ${where}`);
-    // Devolver mapa clave_validacion → estatus
     const mapa = {};
     rows.forEach(r => { mapa[`${r.CLAVE_VALIDACION}|${r.CLAVE_PLATAFORMA}`] = r.ESTATUS_PROYECTO; });
     res.json({ ok: true, data: mapa });
