@@ -5184,7 +5184,12 @@
         const base = (typeof x === 'string') ? x : (x.CLAVE_REP_BASE || x.CLAVE_REP);
         const especifica = (typeof x === 'string') ? x : x.CLAVE_REP;
         if (!_vcliRepVersiones[base]) _vcliRepVersiones[base] = [];
-        _vcliRepVersiones[base].push({ clave_rep: especifica, version_carga: x.VERSION_CARGA || null, id_estatus_rep: x.ID_ESTATUS_REP || null });
+        _vcliRepVersiones[base].push({
+          clave_rep: especifica,
+          version_carga: x.VERSION_CARGA || null,
+          id_estatus_rep: x.ID_ESTATUS_REP || null,
+          version_cliente: x.VERSION_CLIENTE ? 1 : 0
+        });
         if (!basesVistas.has(base)) {
           basesVistas.add(base);
           const o = document.createElement('option');
@@ -5207,12 +5212,17 @@
       const versiones = _vcliRepVersiones[base].filter(v => v.version_carga);
       if (versiones.length) {
         wrap.style.display = '';
+        let autoSelect = '';
         versiones.forEach(v => {
           const o = document.createElement('option');
           o.value = v.clave_rep;
-          o.textContent = `${v.clave_rep} (${v.version_carga})`;
+          const esCliente = v.version_cliente === 1;
+          o.textContent = `${v.version_carga || v.clave_rep}${esCliente ? ' ★ Ver. Cliente' : ''}`;
+          if (esCliente) { o.style.fontWeight = '700'; o.style.color = '#1a3558'; autoSelect = v.clave_rep; }
           selVer.appendChild(o);
         });
+        // Auto-seleccionar la versión del cliente si existe
+        if (autoSelect) selVer.value = autoSelect;
       } else {
         wrap.style.display = 'none';
       }
