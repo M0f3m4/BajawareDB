@@ -1329,10 +1329,16 @@
             </div>
             <div id="vcli-val-version-wrap" style="display:none;">
               <label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px;">Versión Validaciones</label>
-              <select id="vcli-val-version" onchange="vcliOnValVersionChange()"
-                style="padding:7px 12px;border:1px solid #ddd;border-radius:6px;font-size:13px;min-width:160px;">
-                <option value="">— Todas —</option>
-              </select>
+              <div style="display:flex;gap:6px;align-items:center;">
+                <select id="vcli-val-version" onchange="vcliOnValVersionChange()"
+                  style="padding:7px 12px;border:1px solid #ddd;border-radius:6px;font-size:13px;min-width:160px;">
+                  <option value="">— Todas —</option>
+                </select>
+                <button onclick="vcliMarcarVersionCliente()" title="Marcar como versión del cliente"
+                  style="padding:6px 10px;background:#1a3558;color:#fff;border:none;border-radius:6px;font-size:12px;cursor:pointer;white-space:nowrap;">
+                  ★ Ver. Cliente
+                </button>
+              </div>
             </div>
             <input id="vcli-search" type="text" placeholder="Buscar en tabla..."
               oninput="filtrarValCliente()"
@@ -5273,6 +5279,25 @@
     } catch(e) { wrap.style.display = 'none'; }
   }
 
+  async function vcliMarcarVersionCliente() {
+    const contrato = document.getElementById('vcli-contrato').value;
+    const repBase  = document.getElementById('vcli-rep').value;
+    const repVer   = document.getElementById('vcli-version') ? document.getElementById('vcli-version').value : '';
+    const repEspecifica = repVer || repBase;
+    const version  = document.getElementById('vcli-val-version').value;
+    if (!contrato || !repEspecifica || !version) {
+      alert('Selecciona una versión de validaciones primero.'); return;
+    }
+    try {
+      await fetch(`/api/contratos/contratos/${encodeURIComponent(contrato)}/validacion-cliente`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clave_rep: repEspecifica, version_carga: version })
+      });
+      // Recargar dropdown para reflejar ★
+      await vcliCargarVersionesValidaciones(repEspecifica, contrato);
+    } catch(e) { console.error('Error marcando versión cliente:', e.message); }
+  }
+
   async function vcliOnValVersionChange() {
     const contrato = document.getElementById('vcli-contrato').value;
     const repBase = document.getElementById('vcli-rep').value;
@@ -5311,9 +5336,10 @@
       badge.textContent = `${vcliData.length} validaciones`;
       // Cargar estatus proyecto por contrato
       let _vcliEstatusProyecto = {};
-      if (contrato && valVersion) {
+      if (contrato) {
         try {
-          const re = await fetch(`/api/contratos/contratos/${encodeURIComponent(contrato)}/validacion-estatus?version_carga=${encodeURIComponent(valVersion)}`).then(x => x.json());
+          const verParam = valVersion || 'GLOBAL';
+          const re = await fetch(`/api/contratos/contratos/${encodeURIComponent(contrato)}/validacion-estatus?version_carga=${encodeURIComponent(verParam)}`).then(x => x.json());
           _vcliEstatusProyecto = re.data || {};
         } catch(e) {}
       }
@@ -6221,10 +6247,12 @@
     if (!clave_validacion || !clave_plataforma || !estatus) return;
     const contrato = document.getElementById('vcli-contrato').value;
     if (!contrato) return;
+    // Usar la versión seleccionada de validaciones, o la de carga de la validación misma
+    const valVer = (document.getElementById('vcli-val-version') ? document.getElementById('vcli-val-version').value : '') || version_carga || 'GLOBAL';
     try {
       await fetch(`/api/contratos/contratos/${encodeURIComponent(contrato)}/validacion-estatus`, {
         method: 'PUT', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ clave_validacion, clave_plataforma, version_carga: version_carga || '', estatus_proyecto: estatus })
+        body: JSON.stringify({ clave_validacion, clave_plataforma, version_carga: valVer, estatus_proyecto: estatus })
       });
     } catch(e) { console.error('Error actualizando estatus proyecto validacion:', e.message); }
   }
