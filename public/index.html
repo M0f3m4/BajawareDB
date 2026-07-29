@@ -1320,13 +1320,7 @@
                 <option value="">— Selecciona reporte —</option>
               </select>
             </div>
-            <div id="vcli-version-wrap" style="display:none;">
-              <label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px;">Versión Reporte</label>
-              <select id="vcli-version" onchange="loadValCliente()"
-                style="padding:7px 12px;border:1px solid #ddd;border-radius:6px;font-size:13px;min-width:160px;">
-                <option value="">— Todas —</option>
-              </select>
-            </div>
+            <!-- Versión Reporte eliminada — no necesaria -->
             <div id="vcli-val-version-wrap" style="display:none;">
               <label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px;">Versión Validaciones</label>
               <div style="display:flex;gap:6px;align-items:center;">
@@ -5230,33 +5224,10 @@
 
   async function vcliOnRepChange() {
     const base = document.getElementById('vcli-rep').value;
-    const wrap = document.getElementById('vcli-version-wrap');
-    const selVer = document.getElementById('vcli-version');
-    selVer.innerHTML = '<option value="">— Todas —</option>';
-    if (base && _vcliRepVersiones[base]) {
-      const versiones = _vcliRepVersiones[base].filter(v => v.version_carga);
-      if (versiones.length) {
-        wrap.style.display = '';
-        let autoSelect = '';
-        versiones.forEach(v => {
-          const o = document.createElement('option');
-          o.value = v.clave_rep;
-          const esCliente = v.version_cliente === 1;
-          o.textContent = `${v.version_carga || v.clave_rep}${esCliente ? ' ★ Ver. Cliente' : ''}`;
-          if (esCliente) { o.style.fontWeight = '700'; o.style.color = '#1a3558'; autoSelect = v.clave_rep; }
-          selVer.appendChild(o);
-        });
-        // Auto-seleccionar la versión del cliente si existe
-        if (autoSelect) selVer.value = autoSelect;
-      } else {
-        wrap.style.display = 'none';
-      }
-    } else {
-      wrap.style.display = 'none';
-    }
-    // Cargar versiones de validaciones para el reporte seleccionado
     const contrato = document.getElementById('vcli-contrato').value;
-    const repEspecifica = selVer.value || base;
+    // Usar el primer clave_rep específico disponible para este base
+    const versiones = (_vcliRepVersiones[base] || []);
+    const repEspecifica = versiones.length ? versiones[0].clave_rep : base;
     await vcliCargarVersionesValidaciones(repEspecifica, contrato);
     loadValCliente();
   }
@@ -5313,8 +5284,8 @@
   async function vcliOnValVersionChange() {
     const contrato = document.getElementById('vcli-contrato').value;
     const repBase = document.getElementById('vcli-rep').value;
-    const repVer = document.getElementById('vcli-version').value;
-    const repEspecifica = repVer || repBase;
+    const versiones = (_vcliRepVersiones[repBase] || []);
+    const repEspecifica = versiones.length ? versiones[0].clave_rep : repBase;
     const version = document.getElementById('vcli-val-version').value;
     // Guardar selección como versión del cliente
     if (contrato && repEspecifica && version) {
@@ -5329,8 +5300,7 @@
   async function loadValCliente() {
     const clave   = document.getElementById('vcli-select').value;
     const repBase = document.getElementById('vcli-rep').value;
-    const repVer  = document.getElementById('vcli-version') ? document.getElementById('vcli-version').value : '';
-    const rep     = repVer || repBase; // Si hay versión específica seleccionada, úsala
+    const rep     = repBase; // Sin filtro de versión de reporte
     const wrap    = document.getElementById('vcli-content');
     const badge   = document.getElementById('vcli-badge');
     if (!clave || !repBase) return;
