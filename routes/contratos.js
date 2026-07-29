@@ -571,7 +571,7 @@ router.get('/reportes/search', requireAuth, async (req, res) => {
   try {
     const q = (req.query.q || '').replace(/'/g, "''");
     const rows = await query(`
-      SELECT TOP 20 DISTINCT cr.CLAVE_REP, ir.DESCRIPCION_ESP
+      SELECT DISTINCT TOP 20 cr.CLAVE_REP, ir.DESCRIPCION_ESP
       FROM CONTRATOS_REPORTES cr
       LEFT JOIN INVENTARIO_REPORTES ir ON ir.CLAVE_REP_GENERAL = cr.CLAVE_REP
       WHERE cr.CLAVE_REP LIKE '%${q}%'
