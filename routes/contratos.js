@@ -673,6 +673,9 @@ router.put('/estatus-reporte', requireAuth, async (req, res) => {
     } else {
       const invRow = await query(`SELECT CLAVE_REP_GENERAL FROM INVENTARIO_REPORTES WHERE CLAVE_REP=${esc(clave_rep)}`);
       const claveRepGeneral = invRow.length ? invRow[0].CLAVE_REP_GENERAL : clave_rep;
+      // Auto-insertar en CAT_REPORTES_GENERALES si no existe
+      const existeRepGen = await query(`SELECT 1 FROM CAT_REPORTES_GENERALES WHERE CLAVE_REP_GENERAL=${esc(claveRepGeneral)}`);
+      if (!existeRepGen.length) await query(`INSERT INTO CAT_REPORTES_GENERALES (CLAVE_REP_GENERAL) VALUES (${esc(claveRepGeneral)})`);
       await query(`
         INSERT INTO ESTATUS_REPORTE
           (CLAVE_REP, CLAVE_REP_GENERAL, CLAVE_PLATAFORMA, VERSION, VERSION_CARGA,
@@ -1286,6 +1289,8 @@ router.put('/estatus-reporte/estatus', requireAuth, async (req, res) => {
     } else {
       const invRow = await query(`SELECT CLAVE_REP_GENERAL FROM INVENTARIO_REPORTES WHERE CLAVE_REP=${esc(clave_rep)}`);
       const claveRepGeneral = invRow.length ? invRow[0].CLAVE_REP_GENERAL : clave_rep;
+      const existeRepGen2 = await query(`SELECT 1 FROM CAT_REPORTES_GENERALES WHERE CLAVE_REP_GENERAL=${esc(claveRepGeneral)}`);
+      if (!existeRepGen2.length) await query(`INSERT INTO CAT_REPORTES_GENERALES (CLAVE_REP_GENERAL) VALUES (${esc(claveRepGeneral)})`);
       await query(`
         INSERT INTO ESTATUS_REPORTE
           (CLAVE_REP, CLAVE_REP_GENERAL, CLAVE_PLATAFORMA, VERSION, VERSION_CARGA,
