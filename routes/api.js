@@ -218,6 +218,30 @@ router.get('/inventario/layouts', requireAuth, async (req, res) => {
   }
 });
 
+// ── GET /api/inventario/layouts/resumen — lista agrupada ──
+router.get('/inventario/layouts/resumen', requireAuth, async (req, res) => {
+  const { entidad, texto } = req.query;
+  let where = 'WHERE 1=1';
+  if (entidad) where += ` AND CLAVE_ENTIDADREGULADA = '${entidad.replace(/'/g,"''")}'`;
+  if (texto)   where += ` AND CLAVE_LAYOUT LIKE '%${texto.replace(/'/g,"''")}%'`;
+  try {
+    const rows = await query(`
+      SELECT DISTINCT CLAVE_LAYOUT, CLAVE_ENTIDADREGULADA, CLAVE_PAIS,
+             MAX(VERSION) AS VERSION,
+             COUNT(*) AS TOTAL_CAMPOS
+      FROM LAYOUTS
+      ${where}
+      GROUP BY CLAVE_LAYOUT, CLAVE_ENTIDADREGULADA, CLAVE_PAIS
+      ORDER BY CLAVE_ENTIDADREGULADA, CLAVE_LAYOUT
+    `);
+    // Entidades para filtro
+    const entidades = await query(`SELECT DISTINCT CLAVE_ENTIDADREGULADA FROM LAYOUTS WHERE CLAVE_ENTIDADREGULADA IS NOT NULL ORDER BY CLAVE_ENTIDADREGULADA`);
+    res.json({ ok: true, data: rows, entidades: entidades.map(r => r.CLAVE_ENTIDADREGULADA) });
+  } catch (err) {
+    res.status(500).json({ ok: false, message: err.message });
+  }
+});
+
 // ── GET /api/sprints/activo ───────────────────────────────
 router.get('/sprints/activo', requireAuth, async (req, res) => {
   try {

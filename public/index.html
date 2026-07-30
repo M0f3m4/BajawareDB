@@ -734,14 +734,11 @@
 
         <!-- Toolbar principal -->
         <div class="toolbar" style="flex-wrap:wrap;gap:8px;margin-bottom:10px;align-items:center;">
-          <select id="lay-entidad" onchange="loadLayouts()" style="min-width:180px;">
+          <select id="lay-entidad" onchange="loadLayoutsResumen()" style="min-width:180px;">
             <option value="">Todas las entidades</option>
           </select>
-          <select id="lay-layout" onchange="loadLayouts()" style="min-width:180px;">
-            <option value="">Todos los layouts</option>
-          </select>
-          <input type="text" id="lay-texto" placeholder="Buscar campo o layout..." oninput="loadLayoutsDebounced()" style="padding:7px 12px;border:1px solid #ddd;border-radius:6px;font-size:13px;min-width:200px;" />
-          <button onclick="loadLayouts()" style="padding:7px 16px;background:#1a3558;color:#fff;border:none;border-radius:6px;font-size:13px;cursor:pointer;">Buscar</button>
+          <input type="text" id="lay-texto" placeholder="Buscar layout..." oninput="loadLayoutsResumenDebounced()" style="padding:7px 12px;border:1px solid #ddd;border-radius:6px;font-size:13px;min-width:200px;" />
+          <button onclick="loadLayoutsResumen()" style="padding:7px 16px;background:#1a3558;color:#fff;border:none;border-radius:6px;font-size:13px;cursor:pointer;">Buscar</button>
           <!-- Separador -->
           <div style="flex:1"></div>
           <!-- Carga Excel -->
@@ -798,7 +795,7 @@
           <span class="dot dot-warn" id="layouts-dot"></span>
           <span id="layouts-status">Cargando datos...</span>
         </div>
-        <div class="data-table-wrap" id="layouts-table-wrap">
+        <div id="layouts-accordion" style="margin-top:8px;">
           <div class="loading">Cargando...</div>
         </div>
       </div>
@@ -2358,6 +2355,139 @@
   function loadLayoutsDebounced() {
     clearTimeout(_layTimer);
     _layTimer = setTimeout(loadLayouts, 350);
+  }
+
+  function loadLayoutsResumenDebounced() {
+    clearTimeout(_layTimer);
+    _layTimer = setTimeout(loadLayoutsResumen, 350);
+  }
+
+  async function loadLayoutsResumen() {
+    const wrap    = document.getElementById('layouts-accordion');
+    const dot     = document.getElementById('layouts-dot');
+    const lbl     = document.getElementById('layouts-status');
+    const entidad = (document.getElementById('lay-entidad') || {}).value || '';
+    const texto   = (document.getElementById('lay-texto')   || {}).value?.trim() || '';
+    wrap.innerHTML = '<div class="loading">Cargando...</div>';
+
+    let url = '/api/inventario/layouts/resumen?x=1';
+    if (entidad) url += '&entidad=' + encodeURIComponent(entidad);
+    if (texto)   url += '&texto='   + encodeURIComponent(texto);
+
+    try {
+      const res  = await fetch(url);
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.message);
+
+      // Poblar dropdown de entidades la primera vez
+      if (!_layInited && data.entidades?.length) {
+        _layInited = true;
+        const selE = document.getElementById('lay-entidad');
+        data.entidades.forEach(v => {
+          const o = document.createElement('option');
+          o.value = v; o.textContent = v; selE.appendChild(o);
+        });
+      }
+
+      dot.className = 'dot dot-ok';
+      lbl.textContent = data.data.length + ' layouts · ' + new Date().toLocaleTimeString();
+
+      if (!data.data.length) {
+        wrap.innerHTML = '<div class="loading">Sin layouts para esos filtros.</div>';
+        return;
+      }
+
+      // Agrupar por entidad
+      const porEntidad = {};
+      data.data.forEach(l => {
+        const e = l.CLAVE_ENTIDADREGULADA || '—';
+        if (!porEntidad[e]) porEntidad[e] = [];
+        porEntidad[e].push(l);
+      });
+
+      wrap.innerHTML = Object.entries(porEntidad).map(([ent, layouts]) => `
+        <div style="margin-bottom:16px;">
+          <div style="font-size:11px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;padding-left:4px;">
+            ${ent} (${layouts.length})
+          </div>
+          <div style="display:grid;gap:4px;">
+            ${layouts.map(l => `
+              <div style="border:1px solid #e0e6ed;border-radius:8px;overflow:hidden;">
+                <div onclick="toggleLayoutDetalle('${l.CLAVE_LAYOUT}','${l.CLAVE_ENTIDADREGULADA||''}',this)"
+                  style="display:flex;align-items:center;gap:12px;padding:10px 16px;cursor:pointer;background:#fff;user-select:none;"
+                  onmouseover="this.style.background='#f8f9fa'" onmouseout="this.style.background='#fff'">
+                  <span style="font-size:18px;color:#aaa;transition:transform .2s;" class="lay-arrow">▶</span>
+                  <div style="flex:1;">
+                    <div style="font-weight:600;color:#1a3558;font-size:13px;">${l.CLAVE_LAYOUT}</div>
+                    <div style="font-size:11px;color:#888;">${l.TOTAL_CAMPOS} campos</div>
+                  </div>
+                  ${l.VERSION ? `<span style="font-size:11px;background:#f0f4ff;color:#1a3558;padding:2px 8px;border-radius:10px;font-family:monospace;">${l.VERSION}</span>` : ''}
+                  <span style="font-size:11px;color:#aaa;">${l.CLAVE_PAIS||''}</span>
+                </div>
+                <div class="lay-detalle" style="display:none;border-top:1px solid #e0e6ed;"></div>
+              </div>`).join('')}
+          </div>
+        </div>`).join('');
+
+    } catch (e) {
+      dot.className = 'dot dot-err';
+      lbl.textContent = 'Error: ' + e.message;
+      wrap.innerHTML = '<div class="loading">Error al cargar layouts.</div>';
+    }
+  }
+
+  async function toggleLayoutDetalle(clave_layout, clave_entidad, headerEl) {
+    const card    = headerEl.parentElement;
+    const detalle = card.querySelector('.lay-detalle');
+    const arrow   = headerEl.querySelector('.lay-arrow');
+
+    if (detalle.style.display !== 'none') {
+      detalle.style.display = 'none';
+      arrow.style.transform = '';
+      return;
+    }
+
+    arrow.style.transform = 'rotate(90deg)';
+    detalle.style.display = 'block';
+
+    if (detalle.dataset.loaded) return;
+    detalle.dataset.loaded = '1';
+    detalle.innerHTML = '<div class="loading" style="padding:16px;">Cargando campos...</div>';
+
+    try {
+      let url = `/api/inventario/layouts?layout=${encodeURIComponent(clave_layout)}`;
+      if (clave_entidad) url += `&entidad=${encodeURIComponent(clave_entidad)}`;
+      const r = await fetch(url).then(x => x.json());
+      if (!r.ok) throw new Error(r.message);
+      const campos = r.data || [];
+      detalle.innerHTML = `
+        <div style="overflow-x:auto;">
+          <table style="width:100%;border-collapse:collapse;font-size:12px;">
+            <thead><tr style="background:#f0f2f5;">
+              <th style="padding:6px 10px;text-align:left;color:#555;">#</th>
+              <th style="padding:6px 10px;text-align:left;color:#555;">Campo</th>
+              <th style="padding:6px 10px;text-align:center;color:#555;">Llave</th>
+              <th style="padding:6px 10px;text-align:left;color:#555;">Tipo</th>
+              <th style="padding:6px 10px;text-align:left;color:#555;">Formato</th>
+              <th style="padding:6px 10px;text-align:center;color:#555;">Obligatorio</th>
+              <th style="padding:6px 10px;text-align:left;color:#555;">Validación</th>
+            </tr></thead>
+            <tbody>${campos.map((c,i) => `
+              <tr style="background:${i%2===0?'#fff':'#f8f9fa'}">
+                <td style="padding:5px 10px;color:#aaa;font-size:11px;">${c.ORDEN??''}</td>
+                <td style="padding:5px 10px;font-weight:500;">${c.NOMBRE_CAMPO??''}</td>
+                <td style="padding:5px 10px;text-align:center;">${c.LLAVE==='SI'||c.LLAVE==='1'?'🔑':''}</td>
+                <td style="padding:5px 10px;"><span style="font-size:11px;background:#f0f2f5;padding:1px 6px;border-radius:4px;">${c.TIPO_DATO??''}</span></td>
+                <td style="padding:5px 10px;font-size:11px;color:#888;">${c.FORMATO??''}</td>
+                <td style="padding:5px 10px;text-align:center;">${c.OBLIGATORIO==='SI'||c.OBLIGATORIO==='1'?'✓':''}</td>
+                <td style="padding:5px 10px;font-size:11px;color:#888;max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${c.VALIDACION??''}">${c.VALIDACION??''}</td>
+              </tr>`).join('')}
+            </tbody>
+          </table>
+        </div>`;
+    } catch(e) {
+      detalle.innerHTML = `<div style="padding:12px;color:#e74c3c;">Error: ${e.message}</div>`;
+    }
   }
 
   let _layInited = false;
@@ -6633,7 +6763,7 @@
   }
 
   const lazyLoaders = {
-    'inv-layouts':    loadLayouts,
+    'inv-layouts':    loadLayoutsResumen,
     'inv-reportes':   initInvReportes,
     'inv-estatus':    initEstatus,
     'inv-estatus-val': initEstatusVal,
