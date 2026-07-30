@@ -2465,34 +2465,36 @@
       const r = await fetch(url).then(x => x.json());
       if (!r.ok) throw new Error(r.message);
       const campos = r.data || [];
+      const th = s => `<th style="padding:7px 10px;text-align:left;white-space:nowrap;background:#1a3558;color:#fff;position:sticky;top:0;font-size:11px;">${s}</th>`;
+      const td = (v, opts='') => `<td style="padding:5px 10px;font-size:11px;white-space:nowrap;${opts}">${v??''}</td>`;
       document.getElementById('lay-detalle-body').innerHTML = `
         <div style="margin-bottom:8px;font-size:12px;color:#888;">${campos.length} campos</div>
-        <table style="width:100%;border-collapse:collapse;font-size:12px;">
-          <thead><tr style="background:#1a3558;color:#fff;">
-            <th style="padding:8px 10px;text-align:center;">#</th>
-            <th style="padding:8px 10px;text-align:left;">Campo</th>
-            <th style="padding:8px 10px;text-align:left;">Layout CITI</th>
-            <th style="padding:8px 10px;text-align:center;">Llave</th>
-            <th style="padding:8px 10px;text-align:left;">Tipo</th>
-            <th style="padding:8px 10px;text-align:left;">Formato</th>
-            <th style="padding:8px 10px;text-align:center;">Obligatorio</th>
-            <th style="padding:8px 10px;text-align:left;">Validación</th>
-            <th style="padding:8px 10px;text-align:left;">Catálogo</th>
-          </tr></thead>
-          <tbody>${campos.map((c,i) => `
-            <tr style="background:${i%2===0?'#fff':'#f8f9fa'}">
-              <td style="padding:6px 10px;text-align:center;color:#aaa;font-size:11px;">${c.ORDEN??''}</td>
-              <td style="padding:6px 10px;font-weight:500;">${c.NOMBRE_CAMPO??''}</td>
-              <td style="padding:6px 10px;font-size:11px;color:#888;">${c.CLAVE_LAYOUT_CITI??''}</td>
-              <td style="padding:6px 10px;text-align:center;">${c.LLAVE==='SI'||c.LLAVE==='1'?'🔑':''}</td>
-              <td style="padding:6px 10px;"><span style="font-size:11px;background:#f0f2f5;padding:1px 6px;border-radius:4px;">${c.TIPO_DATO??''}</span></td>
-              <td style="padding:6px 10px;font-size:11px;color:#888;">${c.FORMATO??''}</td>
-              <td style="padding:6px 10px;text-align:center;">${c.OBLIGATORIO==='SI'||c.OBLIGATORIO==='1'?'✓':''}</td>
-              <td style="padding:6px 10px;font-size:11px;color:#888;max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${c.VALIDACION??''}">${c.VALIDACION??''}</td>
-              <td style="padding:6px 10px;font-size:11px;color:#888;">${c.CATALOGO??''}</td>
-            </tr>`).join('')}
-          </tbody>
-        </table>`;
+        <div style="overflow:auto;max-height:70vh;">
+          <table style="border-collapse:collapse;font-size:12px;min-width:max-content;">
+            <thead><tr>
+              ${th('#')}${th('Campo')}${th('Layout CITI')}${th('Llave')}${th('Tipo')}${th('Formato')}${th('Obligatorio')}${th('Validación')}${th('Catálogo')}${th('Descripción ESP')}${th('Descripción ING')}${th('Observaciones')}${th('Validez Info')}${th('Fuente')}${th('Versión')}
+            </tr></thead>
+            <tbody>${campos.map((c,i) => `
+              <tr style="background:${i%2===0?'#fff':'#f8f9fa'}">
+                ${td(c.ORDEN,'text-align:center;color:#aaa;')}
+                ${td(`<strong>${c.NOMBRE_CAMPO??''}</strong>`)}
+                ${td(c.CLAVE_LAYOUT_CITI,'color:#888;')}
+                ${td(c.LLAVE==='SI'||c.LLAVE==='1'?'🔑':'','text-align:center;')}
+                ${td(c.TIPO_DATO?`<span style="background:#f0f2f5;padding:1px 6px;border-radius:4px;">${c.TIPO_DATO}</span>`:'')}
+                ${td(c.FORMATO,'color:#888;')}
+                ${td(c.OBLIGATORIO==='SI'||c.OBLIGATORIO==='1'?'✓':'','text-align:center;')}
+                ${td(c.VALIDACION??'','color:#888;max-width:180px;overflow:hidden;text-overflow:ellipsis;')}
+                ${td(c.CATALOGO??'','color:#888;')}
+                ${td(c.DESCRIPCION_ESP??'','max-width:220px;overflow:hidden;text-overflow:ellipsis;color:#555;')}
+                ${td(c.DESCRIPCION_ING??'','max-width:220px;overflow:hidden;text-overflow:ellipsis;color:#888;')}
+                ${td(c.OBSERVACIONES??'','max-width:160px;overflow:hidden;text-overflow:ellipsis;color:#888;')}
+                ${td(c.VALIDEZ_INFO??'','color:#888;')}
+                ${td(c.FUENTE??'','color:#888;')}
+                ${td(c.VERSION??'','color:#aaa;font-family:monospace;')}
+              </tr>`).join('')}
+            </tbody>
+          </table>
+        </div>`;
     } catch(e) {
       document.getElementById('lay-detalle-body').innerHTML = `<p style="color:#e74c3c;">Error: ${e.message}</p>`;
     }
