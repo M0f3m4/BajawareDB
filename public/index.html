@@ -800,6 +800,23 @@
         </div>
       </div>
 
+      <!-- Modal: detalle de layout -->
+      <div id="lay-detalle-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9999;align-items:flex-start;justify-content:center;padding:32px 16px;overflow-y:auto;">
+        <div style="background:#fff;border-radius:12px;width:100%;max-width:960px;box-shadow:0 12px 48px rgba(0,0,0,.25);margin:auto;">
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:18px 24px;border-bottom:1px solid #eee;position:sticky;top:0;background:#fff;z-index:1;border-radius:12px 12px 0 0;">
+            <div>
+              <h3 id="lay-detalle-titulo" style="margin:0;font-size:16px;color:#1a3558;"></h3>
+              <p id="lay-detalle-sub" style="margin:4px 0 0;font-size:12px;color:#888;"></p>
+            </div>
+            <button onclick="document.getElementById('lay-detalle-modal').style.display='none'"
+              style="background:none;border:none;font-size:22px;cursor:pointer;color:#888;padding:4px 8px;">✕</button>
+          </div>
+          <div id="lay-detalle-body" style="padding:20px 24px;overflow-x:auto;">
+            <div class="loading">Cargando campos...</div>
+          </div>
+        </div>
+      </div>
+
       <!-- Sprints — Activo -->
       <div class="content-section" id="sec-spr-activo">
         <h2 class="section-title">Sprints — Sprint Activo</h2>
@@ -2413,18 +2430,17 @@
           <div style="display:grid;gap:4px;">
             ${layouts.map(l => `
               <div style="border:1px solid #e0e6ed;border-radius:8px;overflow:hidden;">
-                <div onclick="toggleLayoutDetalle('${l.CLAVE_LAYOUT}','${l.CLAVE_ENTIDADREGULADA||''}',this)"
+                <div onclick="abrirDetalleLayout('${l.CLAVE_LAYOUT}','${l.CLAVE_ENTIDADREGULADA||''}','${l.CLAVE_PAIS||''}','${l.VERSION||''}')"
                   style="display:flex;align-items:center;gap:12px;padding:10px 16px;cursor:pointer;background:#fff;user-select:none;"
                   onmouseover="this.style.background='#f8f9fa'" onmouseout="this.style.background='#fff'">
-                  <span style="font-size:18px;color:#aaa;transition:transform .2s;" class="lay-arrow">▶</span>
                   <div style="flex:1;">
                     <div style="font-weight:600;color:#1a3558;font-size:13px;">${l.CLAVE_LAYOUT}</div>
                     <div style="font-size:11px;color:#888;">${l.TOTAL_CAMPOS} campos</div>
                   </div>
                   ${l.VERSION ? `<span style="font-size:11px;background:#f0f4ff;color:#1a3558;padding:2px 8px;border-radius:10px;font-family:monospace;">${l.VERSION}</span>` : ''}
                   <span style="font-size:11px;color:#aaa;">${l.CLAVE_PAIS||''}</span>
+                  <span style="color:#aaa;font-size:14px;">→</span>
                 </div>
-                <div class="lay-detalle" style="display:none;border-top:1px solid #e0e6ed;"></div>
               </div>`).join('')}
           </div>
         </div>`).join('');
@@ -2433,6 +2449,52 @@
       dot.className = 'dot dot-err';
       lbl.textContent = 'Error: ' + e.message;
       wrap.innerHTML = '<div class="loading">Error al cargar layouts.</div>';
+    }
+  }
+
+  async function abrirDetalleLayout(clave_layout, clave_entidad, clave_pais, version) {
+    document.getElementById('lay-detalle-titulo').textContent = clave_layout;
+    document.getElementById('lay-detalle-sub').textContent =
+      [clave_entidad, clave_pais, version ? `v${version}` : ''].filter(Boolean).join(' · ');
+    document.getElementById('lay-detalle-body').innerHTML = '<div class="loading">Cargando campos...</div>';
+    document.getElementById('lay-detalle-modal').style.display = 'flex';
+
+    try {
+      let url = `/api/inventario/layouts?layout=${encodeURIComponent(clave_layout)}`;
+      if (clave_entidad) url += `&entidad=${encodeURIComponent(clave_entidad)}`;
+      const r = await fetch(url).then(x => x.json());
+      if (!r.ok) throw new Error(r.message);
+      const campos = r.data || [];
+      document.getElementById('lay-detalle-body').innerHTML = `
+        <div style="margin-bottom:8px;font-size:12px;color:#888;">${campos.length} campos</div>
+        <table style="width:100%;border-collapse:collapse;font-size:12px;">
+          <thead><tr style="background:#1a3558;color:#fff;">
+            <th style="padding:8px 10px;text-align:center;">#</th>
+            <th style="padding:8px 10px;text-align:left;">Campo</th>
+            <th style="padding:8px 10px;text-align:left;">Layout CITI</th>
+            <th style="padding:8px 10px;text-align:center;">Llave</th>
+            <th style="padding:8px 10px;text-align:left;">Tipo</th>
+            <th style="padding:8px 10px;text-align:left;">Formato</th>
+            <th style="padding:8px 10px;text-align:center;">Obligatorio</th>
+            <th style="padding:8px 10px;text-align:left;">Validación</th>
+            <th style="padding:8px 10px;text-align:left;">Catálogo</th>
+          </tr></thead>
+          <tbody>${campos.map((c,i) => `
+            <tr style="background:${i%2===0?'#fff':'#f8f9fa'}">
+              <td style="padding:6px 10px;text-align:center;color:#aaa;font-size:11px;">${c.ORDEN??''}</td>
+              <td style="padding:6px 10px;font-weight:500;">${c.NOMBRE_CAMPO??''}</td>
+              <td style="padding:6px 10px;font-size:11px;color:#888;">${c.CLAVE_LAYOUT_CITI??''}</td>
+              <td style="padding:6px 10px;text-align:center;">${c.LLAVE==='SI'||c.LLAVE==='1'?'🔑':''}</td>
+              <td style="padding:6px 10px;"><span style="font-size:11px;background:#f0f2f5;padding:1px 6px;border-radius:4px;">${c.TIPO_DATO??''}</span></td>
+              <td style="padding:6px 10px;font-size:11px;color:#888;">${c.FORMATO??''}</td>
+              <td style="padding:6px 10px;text-align:center;">${c.OBLIGATORIO==='SI'||c.OBLIGATORIO==='1'?'✓':''}</td>
+              <td style="padding:6px 10px;font-size:11px;color:#888;max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${c.VALIDACION??''}">${c.VALIDACION??''}</td>
+              <td style="padding:6px 10px;font-size:11px;color:#888;">${c.CATALOGO??''}</td>
+            </tr>`).join('')}
+          </tbody>
+        </table>`;
+    } catch(e) {
+      document.getElementById('lay-detalle-body').innerHTML = `<p style="color:#e74c3c;">Error: ${e.message}</p>`;
     }
   }
 
