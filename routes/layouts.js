@@ -319,7 +319,7 @@ router.post('/upload', requireAuth, async (req, res) => {
     const nivel    = detectarNivel(cambios);
     const actual   = await getVersionActual(claveBD);
     const nuevaSem = calcularNuevoSem(actual, nivel);
-    const versionStr = `${nuevaSem.major}.${nuevaSem.minor}.${nuevaSem.patch}`;
+    const versionStr = req.body.version || `${nuevaSem.major}.${nuevaSem.minor}.${nuevaSem.patch}`;
 
     // ── Insertar en LAYOUT_VERSIONES ──────────────────────
     let jiraSummary = null, jiraStatus = null;
