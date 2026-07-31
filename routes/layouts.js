@@ -66,61 +66,51 @@ function mapColumns(headers) {
 
 // ── Parsear Excel → rows + header + catalogos ────────────
 function parseExcel(buffer) {
-  const wb    = XLSX.read(buffer, { type: 'buffer', cellDates: true });
-  // Iterar TODAS las hojas excepto CATALOGOS
-  // Normalizar cada hoja con su propio mapeo → objetos planos
-  const catKeyword = 'CATALOGO';
-  const normalizedRows = []; // objetos normalizados {CLAVE_LAYOUT, NOMBRE_CAMPO, ...}
-  let colMapping = {}; // para compatibilidad con código existente (se usa en session)
+  const wb  = XLSX.read(buffer, { type: 'buffer', cellDates: true });
+  // Asumir siempre: fila 1 = headers, datos desde fila 2
+  // Procesar todas las hojas excepto CATALOGOS
+  const COLS_TEMPLATE = ['CLAVE_PAIS','CLAVE_ENTIDADREGULADA','CLAVE_LAYOUT','ORDEN','NOMBRE_CAMPO','LLAVE','TIPO_DATO','FORMATO','OBLIGATORIO','VALIDACION','CATALOGO','DESCRIPCION_ESP','DESCRIPCION_ING','OBSERVACIONES','VALIDEZ_INFO','FUENTE'];
+  const normalizedRows = [];
+  let colMapping = {}; // mantener para compatibilidad
   let headerIdx = 0;
 
   for (const sheetName of wb.SheetNames) {
-    if (sheetName.toUpperCase().includes(catKeyword)) continue;
-    const s = wb.Sheets[sheetName];
-    const r = XLSX.utils.sheet_to_json(s, { header: 1, defval: null });
-    for (let i = 0; i < Math.min(r.length, 30); i++) {
-      const candidate = (r[i]||[]).map(h => (h||'').toString().trim());
-      if (candidate.filter(Boolean).length >= 3) {
-        const m = mapColumns(candidate);
-        if (m.CLAVE_LAYOUT || m.NOMBRE_CAMPO) {
-          if (!Object.keys(colMapping).length) colMapping = m;
-          const getVal = (row, col) => {
-            if (m[col] === undefined) return null;
-            const v = row[m[col]];
-            return v !== null && v !== undefined ? String(v).trim() || null : null;
-          };
-          // Convertir cada fila de datos en objeto normalizado
-          for (const row of r.slice(i + 1)) {
-            const layout = getVal(row, 'CLAVE_LAYOUT');
-            const campo  = getVal(row, 'NOMBRE_CAMPO');
-            if (!layout || !campo) continue;
-            normalizedRows.push({
-              CLAVE_LAYOUT:          layout,
-              NOMBRE_CAMPO:          campo,
-              CLAVE_PAIS:            getVal(row, 'CLAVE_PAIS'),
-              CLAVE_ENTIDADREGULADA: getVal(row, 'CLAVE_ENTIDADREGULADA'),
-              CLAVE_LAYOUT_CITI:     getVal(row, 'CLAVE_LAYOUT_CITI'),
-              ORDEN:                 getVal(row, 'ORDEN'),
-              LLAVE:                 getVal(row, 'LLAVE'),
-              TIPO_DATO:             getVal(row, 'TIPO_DATO'),
-              FORMATO:               getVal(row, 'FORMATO'),
-              OBLIGATORIO:           getVal(row, 'OBLIGATORIO'),
-              VALIDACION:            getVal(row, 'VALIDACION'),
-              CATALOGO:              getVal(row, 'CATALOGO'),
-              DESCRIPCION_ESP:       getVal(row, 'DESCRIPCION_ESP'),
-              DESCRIPCION_ING:       getVal(row, 'DESCRIPCION_ING'),
-              OBSERVACIONES:         getVal(row, 'OBSERVACIONES'),
-              VALIDEZ_INFO:          getVal(row, 'VALIDEZ_INFO'),
-              FUENTE:                getVal(row, 'FUENTE'),
-            });
-          }
-          break;
-        }
+    if (sheetName.toUpperCase().includes('CATALOGO')) continue;
+    const ws   = wb.Sheets[sheetName];
+    const data = XLSX.utils.sheet_to_json(ws, { defval: null }); // objetos con header de fila 1
+    for (const row of data) {
+      // Normalizar claves (mayúsculas, quitar espacios)
+      const norm = {};
+      for (const [k, v] of Object.entries(row)) {
+        const key = k.toUpperCase().trim().replace(/\s+/g, '_');
+        norm[key] = v !== null && v !== undefined && v !== '' ? String(v).trim() : null;
       }
+      // Mapear variantes al nombre canónico
+      const get = key => norm[key] ?? null;
+      const layout = get('CLAVE_LAYOUT') || get('LAYOUT');
+      const campo  = get('NOMBRE_CAMPO') || get('CAMPO') || get('FIELD');
+      if (!layout || !campo) continue;
+      normalizedRows.push({
+        CLAVE_LAYOUT:          layout,
+        NOMBRE_CAMPO:          campo,
+        CLAVE_PAIS:            get('CLAVE_PAIS') || get('PAIS'),
+        CLAVE_ENTIDADREGULADA: get('CLAVE_ENTIDADREGULADA') || get('ENTIDAD') || get('EMPRESA'),
+        CLAVE_LAYOUT_CITI:     get('CLAVE_LAYOUT_CITI'),
+        ORDEN:                 get('ORDEN'),
+        LLAVE:                 get('LLAVE'),
+        TIPO_DATO:             get('TIPO_DATO') || get('TIPO'),
+        FORMATO:               get('FORMATO'),
+        OBLIGATORIO:           get('OBLIGATORIO'),
+        VALIDACION:            get('VALIDACION') || get('VALIDACIÓN'),
+        CATALOGO:              get('CATALOGO') || get('CATÁLOGO'),
+        DESCRIPCION_ESP:       get('DESCRIPCION_ESP') || get('DESCRIPCION') || get('DESCRIPCIÓN'),
+        DESCRIPCION_ING:       get('DESCRIPCION_ING') || get('DESCRIPCION_INGLES'),
+        OBSERVACIONES:         get('OBSERVACIONES'),
+        VALIDEZ_INFO:          get('VALIDEZ_INFO') || get('VALIDEZ_INFORMACION'),
+        FUENTE:                get('FUENTE'),
+      });
     }
   }
-  // rows es un array de objetos normalizados; el código de upload usa colMapping para get()
-  // lo reemplazamos con los objetos directamente
   const rows = normalizedRows;
 
   // Buscar hoja CATALOGOS
