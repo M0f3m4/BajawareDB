@@ -60,20 +60,52 @@ function mapColumns(headers) {
   return mapping;
 }
 
-// ── Parsear Excel → rows + header ────────────────────────
+// ── Parsear Excel → rows + header + catalogos ────────────
 function parseExcel(buffer) {
   const wb    = XLSX.read(buffer, { type: 'buffer', cellDates: true });
-  const sheet = wb.Sheets[wb.SheetNames[0]];
-  const rows  = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: null });
-  let headerIdx = -1, colMapping = {};
-  for (let i = 0; i < Math.min(rows.length, 30); i++) {
-    const candidate = (rows[i]||[]).map(h => (h||'').toString().trim());
-    if (candidate.filter(Boolean).length >= 3) {
-      const m = mapColumns(candidate);
-      if (m.CLAVE_LAYOUT || m.NOMBRE_CAMPO) { headerIdx = i; colMapping = m; break; }
+  // Buscar hoja de layout (primera hoja que tenga CLAVE_LAYOUT o NOMBRE_CAMPO)
+  let sheet = wb.Sheets[wb.SheetNames[0]];
+  let rows = [], headerIdx = -1, colMapping = {};
+  for (const sheetName of wb.SheetNames) {
+    const s = wb.Sheets[sheetName];
+    const r = XLSX.utils.sheet_to_json(s, { header: 1, defval: null });
+    let found = false;
+    for (let i = 0; i < Math.min(r.length, 30); i++) {
+      const candidate = (r[i]||[]).map(h => (h||'').toString().trim());
+      if (candidate.filter(Boolean).length >= 3) {
+        const m = mapColumns(candidate);
+        if (m.CLAVE_LAYOUT || m.NOMBRE_CAMPO) { headerIdx = i; colMapping = m; rows = r; found = true; break; }
+      }
+    }
+    if (found) break;
+  }
+
+  // Buscar hoja CATALOGOS
+  let catalogos = [];
+  const catSheetName = wb.SheetNames.find(n => n.toUpperCase().includes('CATALOGO'));
+  if (catSheetName) {
+    const catSheet = wb.Sheets[catSheetName];
+    const catRows  = XLSX.utils.sheet_to_json(catSheet, { header: 1, defval: null });
+    if (catRows.length > 1) {
+      // Detectar headers
+      const headers = (catRows[0]||[]).map(h => (h||'').toString().toUpperCase().trim());
+      const iCat  = headers.findIndex(h => h.includes('CATALOGO') || h.includes('CATÁLOGO'));
+      const iClave = headers.findIndex(h => h === 'CLAVE' || h.includes('CLAVE'));
+      const iDesc  = headers.findIndex(h => h.includes('DESCRIPCION') || h.includes('DESCRIPCIÓN'));
+      const iOrden = headers.findIndex(h => h.includes('ORDEN') || h === 'ORDER');
+      if (iCat >= 0 && iClave >= 0 && iDesc >= 0) {
+        for (const row of catRows.slice(1)) {
+          const cat  = row[iCat]  ? String(row[iCat]).trim()  : null;
+          const clave= row[iClave]? String(row[iClave]).trim(): null;
+          const desc = row[iDesc] ? String(row[iDesc]).trim() : null;
+          const orden= iOrden >= 0 && row[iOrden] ? parseInt(row[iOrden]) : null;
+          if (cat && clave && desc) catalogos.push({ catalogo: cat, clave, descripcion: desc, orden });
+        }
+      }
     }
   }
-  return { rows, headerIdx, colMapping };
+
+  return { rows, headerIdx, colMapping, catalogos };
 }
 
 const esc = v => v === null || v === undefined ? 'NULL' : `'${String(v).replace(/'/g,"''")}'`;
@@ -172,6 +204,7 @@ router.post('/preview', requireAuth, upload.single('archivo'), async (req, res) 
       filename:   req.file.originalname,
       rows:       rows.slice(headerIdx + 1),
       colMapping,
+      catalogos,
     };
 
     res.json({
@@ -399,9 +432,25 @@ router.post('/upload', requireAuth, async (req, res) => {
     });
   }
 
+  // ── Guardar catálogos del Excel ───────────────────────────
+  const catalogos = session.catalogos || [];
+  let catInsertados = 0, catOmitidos = 0;
+  for (const cat of catalogos) {
+    try {
+      const existe = await query(`SELECT 1 FROM LAYOUT_CATALOGO_DATOS WHERE CATALOGO=${esc(cat.catalogo)} AND CLAVE=${esc(cat.clave)}`);
+      if (!existe.length) {
+        await query(`INSERT INTO LAYOUT_CATALOGO_DATOS (CATALOGO, CLAVE, DESCRIPCION, ORDEN) VALUES (${esc(cat.catalogo)}, ${esc(cat.clave)}, ${esc(cat.descripcion)}, ${cat.orden != null ? cat.orden : 'NULL'})`);
+        catInsertados++;
+      } else {
+        await query(`UPDATE LAYOUT_CATALOGO_DATOS SET DESCRIPCION=${esc(cat.descripcion)}, ORDEN=${cat.orden != null ? cat.orden : 'NULL'} WHERE CATALOGO=${esc(cat.catalogo)} AND CLAVE=${esc(cat.clave)}`);
+        catOmitidos++;
+      }
+    } catch(e) { console.warn('[layouts-cat]', e.message); }
+  }
+
   delete req.session.layoutUpload;
 
-  res.json({ ok: true, jira_ticket: jiraTicket || null, resultados });
+  res.json({ ok: true, jira_ticket: jiraTicket || null, resultados, catalogos: { insertados: catInsertados, actualizados: catOmitidos } });
 });
 
 // ─────────────────────────────────────────────────────────
