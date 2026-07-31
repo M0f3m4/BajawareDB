@@ -2795,18 +2795,23 @@
         return;
       }
 
-      title.textContent = '✅ Versión ' + data.version + ' guardada localmente';
+      const resultados = data.resultados || [];
+      const totalCampos = resultados.reduce((s,r) => s + (r.campos_nuevos||0) + (r.campos_actualizados||0), 0);
+      const versiones   = [...new Set(resultados.map(r => r.version).filter(Boolean))].join(', ');
+      const layouts     = resultados.map(r => r.clave_layout).join(', ');
+      title.textContent = `✅ ${resultados.length} layout(s) procesado(s)`;
       body.innerHTML = `
         <div style="background:#f0faf5;border-radius:8px;padding:14px;text-align:center;margin-bottom:14px;">
-          <div style="font-size:36px;font-weight:700;color:#27ae60;">${data.filas_procesadas}</div>
+          <div style="font-size:36px;font-weight:700;color:#27ae60;">${totalCampos}</div>
           <div style="font-size:13px;color:#555;">campos procesados del Excel</div>
         </div>
-        <p style="font-size:13px;margin:0 0 6px;"><strong>Layouts:</strong> ${(data.layouts_usados||[]).join(', ')}</p>
-        <p style="font-size:13px;margin:0 0 10px;"><strong>Archivo:</strong> ${data.archivo}</p>
-        <div style="background:#fff8e1;border:1px solid #ffe082;border-radius:7px;padding:10px 12px;font-size:12px;color:#795548;">
-          📋 Los datos están guardados en <code>data/layout-versiones.json</code> (versión ${data.version}).
-          Cuando haya acceso admin a la BD, se aplican directo desde ahí.
-        </div>`;
+        ${resultados.map(r => `
+          <div style="background:#f8f9fa;border-radius:6px;padding:8px 12px;margin-bottom:6px;font-size:12px;">
+            <strong>${r.clave_layout}</strong> — v${r.version} —
+            ${r.campos_nuevos} nuevos, ${r.campos_actualizados} actualizados
+            ${r.errores?.length ? `<span style="color:#e74c3c;"> · ${r.errores.length} errores</span>` : ''}
+          </div>`).join('')}
+        <p style="font-size:13px;margin:10px 0 0;color:#888;">Versión: ${versiones || window._layVersion || '—'} | Layouts: ${layouts}</p>`;
 
       if (document.getElementById('lay-versiones-panel').style.display !== 'none') loadVersiones();
       loadLayouts();
