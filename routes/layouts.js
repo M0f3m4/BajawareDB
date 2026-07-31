@@ -46,7 +46,11 @@ const COL_MAP = {
   OBLIGATORIO:           ['OBLIGATORIO','REQUIRED','REQUERIDO'],
   VALIDACION:            ['VALIDACION','VALIDACIÓN','VALIDATION','RULE'],
   CATALOGO:              ['CATALOGO','CATÁLOGO','CATALOG'],
-  DESCRIPCION_ESP:       ['DESCRIPCION_ESP','DESCRIPCION','DESCRIPCIÓN','DESCRIPTION'],
+  DESCRIPCION_ESP:       ['DESCRIPCION_ESP','DESCRIPCION','DESCRIPCIÓN','DESCRIPTION','DESCRIPCION ESP'],
+  DESCRIPCION_ING:       ['DESCRIPCION_ING','DESCRIPCION_INGLES','DESCRIPCIÓN INGLÉS','DESCRIPTION_EN','DESCRIPCION INGLES'],
+  OBSERVACIONES:         ['OBSERVACIONES','OBSERVATIONS','NOTAS'],
+  VALIDEZ_INFO:          ['VALIDEZ_INFO','VALIDEZ_INFORMACION','VALIDEZ INFORMACION','VALIDEZ INFO','VALIDITY'],
+  FUENTE:                ['FUENTE','SOURCE','ORIGEN'],
 };
 function mapColumns(headers) {
   const mapping = {};
@@ -63,9 +67,13 @@ function mapColumns(headers) {
 // ── Parsear Excel → rows + header + catalogos ────────────
 function parseExcel(buffer) {
   const wb    = XLSX.read(buffer, { type: 'buffer', cellDates: true });
-  // Iterar TODAS las hojas excepto CATALOGOS y combinar filas
-  let rows = [], headerIdx = 0, colMapping = {};
+  // Iterar TODAS las hojas excepto CATALOGOS
+  // Normalizar cada hoja con su propio mapeo → objetos planos
   const catKeyword = 'CATALOGO';
+  const normalizedRows = []; // objetos normalizados {CLAVE_LAYOUT, NOMBRE_CAMPO, ...}
+  let colMapping = {}; // para compatibilidad con código existente (se usa en session)
+  let headerIdx = 0;
+
   for (const sheetName of wb.SheetNames) {
     if (sheetName.toUpperCase().includes(catKeyword)) continue;
     const s = wb.Sheets[sheetName];
@@ -75,14 +83,45 @@ function parseExcel(buffer) {
       if (candidate.filter(Boolean).length >= 3) {
         const m = mapColumns(candidate);
         if (m.CLAVE_LAYOUT || m.NOMBRE_CAMPO) {
-          if (!Object.keys(colMapping).length) colMapping = m; // usar primer mapeo encontrado
-          // Agregar solo filas de datos (saltar header)
-          rows.push(...r.slice(i + 1));
+          if (!Object.keys(colMapping).length) colMapping = m;
+          const getVal = (row, col) => {
+            if (m[col] === undefined) return null;
+            const v = row[m[col]];
+            return v !== null && v !== undefined ? String(v).trim() || null : null;
+          };
+          // Convertir cada fila de datos en objeto normalizado
+          for (const row of r.slice(i + 1)) {
+            const layout = getVal(row, 'CLAVE_LAYOUT');
+            const campo  = getVal(row, 'NOMBRE_CAMPO');
+            if (!layout || !campo) continue;
+            normalizedRows.push({
+              CLAVE_LAYOUT:          layout,
+              NOMBRE_CAMPO:          campo,
+              CLAVE_PAIS:            getVal(row, 'CLAVE_PAIS'),
+              CLAVE_ENTIDADREGULADA: getVal(row, 'CLAVE_ENTIDADREGULADA'),
+              CLAVE_LAYOUT_CITI:     getVal(row, 'CLAVE_LAYOUT_CITI'),
+              ORDEN:                 getVal(row, 'ORDEN'),
+              LLAVE:                 getVal(row, 'LLAVE'),
+              TIPO_DATO:             getVal(row, 'TIPO_DATO'),
+              FORMATO:               getVal(row, 'FORMATO'),
+              OBLIGATORIO:           getVal(row, 'OBLIGATORIO'),
+              VALIDACION:            getVal(row, 'VALIDACION'),
+              CATALOGO:              getVal(row, 'CATALOGO'),
+              DESCRIPCION_ESP:       getVal(row, 'DESCRIPCION_ESP'),
+              DESCRIPCION_ING:       getVal(row, 'DESCRIPCION_ING'),
+              OBSERVACIONES:         getVal(row, 'OBSERVACIONES'),
+              VALIDEZ_INFO:          getVal(row, 'VALIDEZ_INFO'),
+              FUENTE:                getVal(row, 'FUENTE'),
+            });
+          }
           break;
         }
       }
     }
   }
+  // rows es un array de objetos normalizados; el código de upload usa colMapping para get()
+  // lo reemplazamos con los objetos directamente
+  const rows = normalizedRows;
 
   // Buscar hoja CATALOGOS
   let catalogos = [];
@@ -146,7 +185,7 @@ function detectarNivel(cambios) {
 
 // Campos que definen MINOR vs PATCH
 const CAMPOS_MINOR = ['TIPO_DATO','OBLIGATORIO','LLAVE','VALIDACION'];
-const CAMPOS_PATCH = ['DESCRIPCION_ESP','FORMATO','CATALOGO','CLAVE_LAYOUT_CITI'];
+const CAMPOS_PATCH = ['DESCRIPCION_ESP','DESCRIPCION_ING','FORMATO','CATALOGO','CLAVE_LAYOUT_CITI','OBSERVACIONES','VALIDEZ_INFO','FUENTE'];
 
 // ─────────────────────────────────────────────────────────
 // PASO 1: POST /api/layouts/preview
@@ -240,13 +279,13 @@ router.post('/upload', requireAuth, async (req, res) => {
   const filename = session.filename;
   const { rows, colMapping } = session;
 
+  // rows ya son objetos normalizados — get lee directamente la propiedad
   const get = (row, col) => {
-    if (colMapping[col] === undefined) return null;
-    const v = row[colMapping[col]];
-    return v !== null && v !== undefined ? String(v).trim() : null;
+    const v = row[col];
+    return v !== null && v !== undefined ? String(v).trim() || null : null;
   };
 
-  const dataRows = rows.filter(r => r[colMapping.CLAVE_LAYOUT] && r[colMapping.NOMBRE_CAMPO]);
+  const dataRows = rows.filter(r => r.CLAVE_LAYOUT && r.NOMBRE_CAMPO);
 
   // Agrupar filas por layout destino
   const porLayout = {};
@@ -298,6 +337,10 @@ router.post('/upload', requireAuth, async (req, res) => {
         VALIDACION:            get(row, 'VALIDACION'),
         CATALOGO:              get(row, 'CATALOGO'),
         DESCRIPCION_ESP:       get(row, 'DESCRIPCION_ESP'),
+        DESCRIPCION_ING:       get(row, 'DESCRIPCION_ING'),
+        OBSERVACIONES:         get(row, 'OBSERVACIONES'),
+        VALIDEZ_INFO:          get(row, 'VALIDEZ_INFO'),
+        FUENTE:                get(row, 'FUENTE'),
       };
 
       try {
@@ -337,13 +380,16 @@ router.post('/upload', requireAuth, async (req, res) => {
             INSERT INTO LAYOUTS (
               CLAVE_PAIS, CLAVE_ENTIDADREGULADA, CLAVE_LAYOUT, NOMBRE_CAMPO,
               CLAVE_LAYOUT_CITI, ORDEN, LLAVE, TIPO_DATO, FORMATO, OBLIGATORIO,
-              VALIDACION, CATALOGO, DESCRIPCION_ESP
+              VALIDACION, CATALOGO, DESCRIPCION_ESP, DESCRIPCION_ING,
+              OBSERVACIONES, VALIDEZ_INFO, FUENTE
             ) VALUES (
               ${esc(campos.CLAVE_PAIS||'MX')}, ${esc(campos.CLAVE_ENTIDADREGULADA||'MX')},
               ${esc(claveBD)}, ${esc(nombreCampo)},
               ${esc(campos.CLAVE_LAYOUT_CITI)}, ${esc(campos.ORDEN)}, ${esc(campos.LLAVE)},
               ${esc(campos.TIPO_DATO)}, ${esc(campos.FORMATO)}, ${esc(campos.OBLIGATORIO)},
-              ${esc(campos.VALIDACION)}, ${esc(campos.CATALOGO)}, ${esc(campos.DESCRIPCION_ESP)}
+              ${esc(campos.VALIDACION)}, ${esc(campos.CATALOGO)}, ${esc(campos.DESCRIPCION_ESP)},
+              ${esc(campos.DESCRIPCION_ING)}, ${esc(campos.OBSERVACIONES)},
+              ${esc(campos.VALIDEZ_INFO)}, ${esc(campos.FUENTE)}
             )`);
           camposNuevos++;
         }
