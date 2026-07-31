@@ -1078,7 +1078,75 @@
         <div id="invr-scroll-top" style="overflow-x:auto;overflow-y:hidden;height:16px;"><div id="invr-scroll-ghost" style="height:1px;"></div></div>
         <div class="data-table-wrap" id="invr-content"><div class="loading">Cargando...</div></div>
       </div>
-      <div class="content-section" id="sec-inv-catalogos"><h2 class="section-title">Inventario — Catálogos</h2><div class="placeholder-card"><div class="icon">📚</div>Próximamente</div></div>
+      <!-- Inventario — Catálogos -->
+      <div class="content-section" id="sec-inv-catalogos">
+        <h2 class="section-title">Inventario — Catálogos</h2>
+        <div style="display:flex;gap:10px;align-items:center;margin-bottom:16px;">
+          <input id="cat-buscar" type="text" placeholder="Buscar catálogo..." oninput="filtrarCatalogos()"
+            style="padding:7px 12px;border:1px solid #ddd;border-radius:6px;font-size:13px;min-width:220px;">
+          <button onclick="abrirNuevoCatalogo()"
+            style="padding:7px 16px;background:#1a3558;color:#fff;border:none;border-radius:6px;font-size:13px;cursor:pointer;">
+            + Nuevo catálogo
+          </button>
+        </div>
+        <div id="cat-lista" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px;">
+          <div class="loading">Cargando...</div>
+        </div>
+      </div>
+
+      <!-- Modal: valores de catálogo -->
+      <div id="cat-detalle-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;align-items:flex-start;justify-content:center;padding:32px 16px;overflow-y:auto;">
+        <div style="background:#fff;border-radius:12px;width:100%;max-width:680px;box-shadow:0 12px 48px rgba(0,0,0,.25);margin:auto;">
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:18px 24px;border-bottom:1px solid #eee;position:sticky;top:0;background:#fff;z-index:1;border-radius:12px 12px 0 0;">
+            <h3 id="cat-detalle-titulo" style="margin:0;font-size:16px;color:#1a3558;"></h3>
+            <div style="display:flex;gap:8px;">
+              <button onclick="abrirNuevoValor()"
+                style="padding:6px 14px;background:#1a3558;color:#fff;border:none;border-radius:6px;font-size:12px;cursor:pointer;">
+                + Agregar valor
+              </button>
+              <button onclick="document.getElementById('cat-detalle-modal').style.display='none'"
+                style="background:none;border:none;font-size:22px;cursor:pointer;color:#888;">✕</button>
+            </div>
+          </div>
+          <div id="cat-detalle-body" style="padding:20px 24px;"></div>
+        </div>
+      </div>
+
+      <!-- Modal: nuevo/editar valor -->
+      <div id="cat-valor-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:10000;align-items:center;justify-content:center;">
+        <div style="background:#fff;border-radius:12px;padding:28px 32px;width:400px;box-shadow:0 8px 32px rgba(0,0,0,.2);">
+          <h3 id="cat-valor-titulo" style="margin:0 0 20px;font-size:15px;color:#1a3558;"></h3>
+          <div style="display:grid;gap:12px;">
+            <div>
+              <label style="font-size:11px;font-weight:600;color:#555;display:block;margin-bottom:4px;">Catálogo *</label>
+              <input id="cat-v-catalogo" type="text" style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;box-sizing:border-box;">
+            </div>
+            <div>
+              <label style="font-size:11px;font-weight:600;color:#555;display:block;margin-bottom:4px;">Clave *</label>
+              <input id="cat-v-clave" type="text" style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;box-sizing:border-box;">
+            </div>
+            <div>
+              <label style="font-size:11px;font-weight:600;color:#555;display:block;margin-bottom:4px;">Descripción *</label>
+              <input id="cat-v-descripcion" type="text" style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;box-sizing:border-box;">
+            </div>
+            <div>
+              <label style="font-size:11px;font-weight:600;color:#555;display:block;margin-bottom:4px;">Orden</label>
+              <input id="cat-v-orden" type="number" style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;box-sizing:border-box;">
+            </div>
+          </div>
+          <div id="cat-v-msg" style="margin-top:12px;font-size:13px;min-height:18px;"></div>
+          <div style="display:flex;gap:10px;margin-top:18px;justify-content:flex-end;">
+            <button onclick="document.getElementById('cat-valor-modal').style.display='none'"
+              style="padding:7px 18px;background:#f0f4f8;color:#555;border:1px solid #ddd;border-radius:6px;font-size:13px;cursor:pointer;">
+              Cancelar
+            </button>
+            <button onclick="guardarValorCatalogo()"
+              style="padding:7px 18px;background:#1a3558;color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;">
+              💾 Guardar
+            </button>
+          </div>
+        </div>
+      </div>
 
       <!-- Inventario de Validaciones -->
       <div class="content-section" id="sec-inv-validaciones">
@@ -4195,6 +4263,135 @@
     } catch(e) { wrap.innerHTML = `<p style="color:#e74c3c;">Error: ${e.message}</p>`; }
   }
 
+  // ── Catálogos de Layouts ──────────────────────────────────
+  let _catData = [], _catActual = null, _catValorId = null;
+
+  async function loadCatalogos() {
+    const wrap = document.getElementById('cat-lista');
+    wrap.innerHTML = '<div class="loading">Cargando...</div>';
+    try {
+      const r = await fetch('/api/inventario/catalogos').then(x => x.json());
+      _catData = r.data || [];
+      renderCatalogos(_catData);
+    } catch(e) { wrap.innerHTML = `<p style="color:#e74c3c;">Error: ${e.message}</p>`; }
+  }
+
+  function filtrarCatalogos() {
+    const q = document.getElementById('cat-buscar').value.toLowerCase();
+    renderCatalogos(_catData.filter(c => c.CATALOGO.toLowerCase().includes(q)));
+  }
+
+  function renderCatalogos(data) {
+    const wrap = document.getElementById('cat-lista');
+    if (!data.length) { wrap.innerHTML = '<p style="color:#aaa;font-size:13px;">Sin catálogos.</p>'; return; }
+    wrap.innerHTML = data.map(c => `
+      <div onclick="abrirDetalleCatalogo('${c.CATALOGO}')"
+        style="background:#fff;border:1px solid #e0e6ed;border-radius:8px;padding:16px;cursor:pointer;transition:box-shadow .15s;"
+        onmouseover="this.style.boxShadow='0 4px 12px rgba(0,0,0,.1)'" onmouseout="this.style.boxShadow=''">
+        <div style="font-weight:600;color:#1a3558;font-size:13px;margin-bottom:4px;">${c.CATALOGO}</div>
+        <div style="font-size:11px;color:#888;">${c.TOTAL_VALORES} valor${c.TOTAL_VALORES!==1?'es':''}</div>
+      </div>`).join('');
+  }
+
+  async function abrirDetalleCatalogo(nombre) {
+    _catActual = nombre;
+    document.getElementById('cat-detalle-titulo').textContent = `📚 ${nombre}`;
+    document.getElementById('cat-detalle-body').innerHTML = '<div class="loading">Cargando...</div>';
+    document.getElementById('cat-detalle-modal').style.display = 'flex';
+    try {
+      const r = await fetch(`/api/inventario/catalogos/${encodeURIComponent(nombre)}`).then(x => x.json());
+      const data = r.data || [];
+      document.getElementById('cat-detalle-body').innerHTML = data.length ? `
+        <table style="width:100%;border-collapse:collapse;font-size:13px;">
+          <thead><tr style="background:#f0f2f5;">
+            <th style="padding:8px 10px;text-align:center;color:#555;">#</th>
+            <th style="padding:8px 10px;text-align:left;color:#555;">Clave</th>
+            <th style="padding:8px 10px;text-align:left;color:#555;">Descripción</th>
+            <th style="padding:8px 10px;text-align:center;color:#555;">Orden</th>
+            <th style="padding:8px 10px;text-align:center;color:#555;">Acción</th>
+          </tr></thead>
+          <tbody>${data.map((v,i) => `
+            <tr style="background:${i%2===0?'#fff':'#f8f9fa'}">
+              <td style="padding:7px 10px;text-align:center;color:#aaa;font-size:11px;">${i+1}</td>
+              <td style="padding:7px 10px;font-family:monospace;font-weight:600;color:#1a3558;">${v.CLAVE}</td>
+              <td style="padding:7px 10px;">${v.DESCRIPCION}</td>
+              <td style="padding:7px 10px;text-align:center;color:#888;">${v.ORDEN??'—'}</td>
+              <td style="padding:7px 10px;text-align:center;white-space:nowrap;">
+                <button onclick="editarValor(${v.ID},'${v.CLAVE.replace(/'/g,"\\'")}','${v.DESCRIPCION.replace(/'/g,"\\'")}',${v.ORDEN??'null'})"
+                  style="padding:3px 8px;background:#1a3558;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:11px;margin-right:4px;">✏️</button>
+                <button onclick="borrarValorCatalogo(${v.ID})"
+                  style="padding:3px 8px;background:#e74c3c;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:11px;">✕</button>
+              </td>
+            </tr>`).join('')}
+          </tbody>
+        </table>` : '<p style="color:#aaa;font-size:13px;">Sin valores. Agrega el primero.</p>';
+    } catch(e) { document.getElementById('cat-detalle-body').innerHTML = `<p style="color:#e74c3c;">Error: ${e.message}</p>`; }
+  }
+
+  function abrirNuevoCatalogo() {
+    _catValorId = null;
+    document.getElementById('cat-valor-titulo').textContent = '+ Nuevo valor de catálogo';
+    document.getElementById('cat-v-catalogo').value = '';
+    document.getElementById('cat-v-catalogo').disabled = false;
+    document.getElementById('cat-v-clave').value = '';
+    document.getElementById('cat-v-descripcion').value = '';
+    document.getElementById('cat-v-orden').value = '';
+    document.getElementById('cat-v-msg').innerHTML = '';
+    document.getElementById('cat-valor-modal').style.display = 'flex';
+  }
+
+  function abrirNuevoValor() {
+    _catValorId = null;
+    document.getElementById('cat-valor-titulo').textContent = `+ Nuevo valor — ${_catActual}`;
+    document.getElementById('cat-v-catalogo').value = _catActual || '';
+    document.getElementById('cat-v-catalogo').disabled = !!_catActual;
+    document.getElementById('cat-v-clave').value = '';
+    document.getElementById('cat-v-descripcion').value = '';
+    document.getElementById('cat-v-orden').value = '';
+    document.getElementById('cat-v-msg').innerHTML = '';
+    document.getElementById('cat-valor-modal').style.display = 'flex';
+  }
+
+  function editarValor(id, clave, descripcion, orden) {
+    _catValorId = id;
+    document.getElementById('cat-valor-titulo').textContent = `✏️ Editar valor — ${_catActual}`;
+    document.getElementById('cat-v-catalogo').value = _catActual || '';
+    document.getElementById('cat-v-catalogo').disabled = true;
+    document.getElementById('cat-v-clave').value = clave;
+    document.getElementById('cat-v-descripcion').value = descripcion;
+    document.getElementById('cat-v-orden').value = orden ?? '';
+    document.getElementById('cat-v-msg').innerHTML = '';
+    document.getElementById('cat-valor-modal').style.display = 'flex';
+  }
+
+  async function guardarValorCatalogo() {
+    const catalogo   = document.getElementById('cat-v-catalogo').value.trim();
+    const clave      = document.getElementById('cat-v-clave').value.trim();
+    const descripcion= document.getElementById('cat-v-descripcion').value.trim();
+    const orden      = document.getElementById('cat-v-orden').value.trim();
+    const msg        = document.getElementById('cat-v-msg');
+    if (!catalogo || !clave || !descripcion) { msg.innerHTML = '<span style="color:#e74c3c;">Completa todos los campos requeridos.</span>'; return; }
+    msg.innerHTML = 'Guardando...';
+    try {
+      const url    = _catValorId ? `/api/inventario/catalogos/${_catValorId}` : '/api/inventario/catalogos';
+      const method = _catValorId ? 'PUT' : 'POST';
+      const body   = _catValorId ? { clave, descripcion, orden: orden||null } : { catalogo, clave, descripcion, orden: orden||null };
+      const r = await fetch(url, { method, headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) }).then(x => x.json());
+      if (r.ok) {
+        document.getElementById('cat-valor-modal').style.display = 'none';
+        if (_catActual) await abrirDetalleCatalogo(_catActual);
+        await loadCatalogos();
+      } else { msg.innerHTML = `<span style="color:#e74c3c;">❌ ${r.message}</span>`; }
+    } catch(e) { msg.innerHTML = `<span style="color:#e74c3c;">Error: ${e.message}</span>`; }
+  }
+
+  async function borrarValorCatalogo(id) {
+    if (!confirm('¿Borrar este valor?')) return;
+    await fetch(`/api/inventario/catalogos/${id}`, { method: 'DELETE' });
+    await abrirDetalleCatalogo(_catActual);
+    await loadCatalogos();
+  }
+
   async function initEstatus() {
     try {
       const [platRes, estRes] = await Promise.all([
@@ -6900,6 +7097,7 @@
 
   const lazyLoaders = {
     'inv-layouts':    loadLayoutsResumen,
+    'inv-catalogos':  loadCatalogos,
     'inv-reportes':   initInvReportes,
     'inv-estatus':    initEstatus,
     'inv-estatus-val': initEstatusVal,

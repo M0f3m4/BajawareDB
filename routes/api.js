@@ -220,6 +220,68 @@ router.get('/inventario/layouts', requireAuth, async (req, res) => {
   }
 });
 
+// ── GET /api/inventario/catalogos — lista de catálogos ───
+router.get('/inventario/catalogos', requireAuth, async (req, res) => {
+  try {
+    const rows = await query(`
+      SELECT CATALOGO, COUNT(*) AS TOTAL_VALORES, MIN(ORDEN) AS MIN_ORDEN
+      FROM LAYOUT_CATALOGO_DATOS
+      GROUP BY CATALOGO
+      ORDER BY CATALOGO
+    `);
+    res.json({ ok: true, data: rows });
+  } catch (err) { res.status(500).json({ ok: false, message: err.message }); }
+});
+
+// ── GET /api/inventario/catalogos/:nombre — valores ───────
+router.get('/inventario/catalogos/:nombre', requireAuth, async (req, res) => {
+  try {
+    const rows = await query(`
+      SELECT ID, CATALOGO, CLAVE, DESCRIPCION, ORDEN
+      FROM LAYOUT_CATALOGO_DATOS
+      WHERE CATALOGO = '${req.params.nombre.replace(/'/g,"''")}'
+      ORDER BY ISNULL(ORDEN, 9999), CLAVE
+    `);
+    res.json({ ok: true, data: rows });
+  } catch (err) { res.status(500).json({ ok: false, message: err.message }); }
+});
+
+// ── POST /api/inventario/catalogos — crear valor ──────────
+router.post('/inventario/catalogos', requireAuth, async (req, res) => {
+  try {
+    const { catalogo, clave, descripcion, orden } = req.body;
+    if (!catalogo || !clave || !descripcion) return res.status(400).json({ ok: false, message: 'Faltan campos requeridos' });
+    await query(`
+      INSERT INTO LAYOUT_CATALOGO_DATOS (CATALOGO, CLAVE, DESCRIPCION, ORDEN)
+      VALUES ('${catalogo.replace(/'/g,"''")}', '${clave.replace(/'/g,"''")}', '${descripcion.replace(/'/g,"''")}', ${orden != null ? parseInt(orden) : 'NULL'})
+    `);
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ ok: false, message: err.message }); }
+});
+
+// ── PUT /api/inventario/catalogos/:id — editar valor ─────
+router.put('/inventario/catalogos/:id', requireAuth, async (req, res) => {
+  try {
+    const { clave, descripcion, orden } = req.body;
+    await query(`
+      UPDATE LAYOUT_CATALOGO_DATOS SET
+        CLAVE='${(clave||'').replace(/'/g,"''")}',
+        DESCRIPCION='${(descripcion||'').replace(/'/g,"''")}',
+        ORDEN=${orden != null ? parseInt(orden) : 'NULL'}
+      WHERE ID=${parseInt(req.params.id)}
+    `);
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ ok: false, message: err.message }); }
+});
+
+// ── DELETE /api/inventario/catalogos/:id ─────────────────
+router.delete('/inventario/catalogos/:id', requireAuth, async (req, res) => {
+  try {
+    await query(`DELETE FROM LAYOUT_CATALOGO_DATOS WHERE ID=${parseInt(req.params.id)}`);
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ ok: false, message: err.message }); }
+});
+
 // ── GET /api/inventario/layouts/resumen — lista agrupada ──
 router.get('/inventario/layouts/resumen', requireAuth, async (req, res) => {
   const { entidad, texto } = req.query;
