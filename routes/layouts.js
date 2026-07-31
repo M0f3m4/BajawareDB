@@ -185,33 +185,17 @@ const CAMPOS_PATCH = ['DESCRIPCION_ESP','DESCRIPCION_ING','FORMATO','CATALOGO','
 router.post('/preview', requireAuth, upload.single('archivo'), async (req, res) => {
   if (!req.file) return res.status(400).json({ ok: false, message: 'No se recibió archivo' });
   try {
-    const { rows, headerIdx, colMapping, catalogos } = parseExcel(req.file.buffer);
-    if (headerIdx === -1) {
-      const preview = [];
-      for (let i = 0; i < Math.min(rows.length, 8); i++) {
-        const vals = (rows[i]||[]).map(h=>(h||'').toString().trim()).filter(Boolean);
-        if (vals.length) preview.push({ fila: i+1, cols: vals });
-      }
-      return res.status(400).json({
-        ok: false,
-        message: 'No se encontraron columnas requeridas en las primeras 30 filas',
-        preview,
-        tip: 'El Excel debe tener CLAVE_LAYOUT (o LAYOUT) y NOMBRE_CAMPO (o CAMPO, FIELD)'
-      });
-    }
+    const { rows, catalogos } = parseExcel(req.file.buffer);
+    // rows ya son objetos normalizados con propiedades directas
+    const get = (row, col) => row[col] ?? null;
+    const dataRows = rows.filter(r => r.CLAVE_LAYOUT && r.NOMBRE_CAMPO);
+    if (!dataRows.length) return res.status(400).json({
+      ok: false,
+      message: 'No hay filas válidas. Verifica que el Excel siga el template (fila 1 = headers, columnas CLAVE_LAYOUT y NOMBRE_CAMPO requeridas)',
+      tip: 'Descarga el template desde el botón 📥 Template'
+    });
 
-    const get = (row, col) => {
-      if (colMapping[col] === undefined) return null;
-      const v = row[colMapping[col]];
-      return v !== null && v !== undefined ? String(v).trim() : null;
-    };
-
-    const dataRows = rows.slice(headerIdx + 1).filter(r =>
-      r[colMapping.CLAVE_LAYOUT] && r[colMapping.NOMBRE_CAMPO]
-    );
-    if (!dataRows.length) return res.status(400).json({ ok: false, message: 'No hay filas válidas' });
-
-    const layoutsExcel = [...new Set(dataRows.map(r => get(r,'CLAVE_LAYOUT')).filter(Boolean))];
+    const layoutsExcel = [...new Set(dataRows.map(r => r.CLAVE_LAYOUT).filter(Boolean))];
     const bdLayouts    = (await query(`SELECT DISTINCT CLAVE_LAYOUT FROM LAYOUTS ORDER BY CLAVE_LAYOUT`))
                           .map(r => r.CLAVE_LAYOUT);
 
