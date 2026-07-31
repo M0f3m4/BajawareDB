@@ -152,7 +152,7 @@ const CAMPOS_PATCH = ['DESCRIPCION_ESP','FORMATO','CATALOGO','CLAVE_LAYOUT_CITI'
 router.post('/preview', requireAuth, upload.single('archivo'), async (req, res) => {
   if (!req.file) return res.status(400).json({ ok: false, message: 'No se recibió archivo' });
   try {
-    const { rows, headerIdx, colMapping } = parseExcel(req.file.buffer);
+    const { rows, headerIdx, colMapping, catalogos } = parseExcel(req.file.buffer);
     if (headerIdx === -1) {
       const preview = [];
       for (let i = 0; i < Math.min(rows.length, 8); i++) {
