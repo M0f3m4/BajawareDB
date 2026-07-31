@@ -742,7 +742,7 @@
           <!-- Separador -->
           <div style="flex:1"></div>
           <!-- Carga Excel -->
-          <input type="file" id="lay-excel-input" accept=".xlsx,.xls" style="display:none" onchange="uploadLayoutExcel(this)" />
+          <input type="file" id="lay-excel-input" accept=".xlsx,.xls" style="display:none" onchange="abrirModalVersionLayout(this)" />
           <button onclick="document.getElementById('lay-excel-input').click()"
                   style="padding:7px 14px;background:#27ae60;color:#fff;border:none;border-radius:6px;font-size:13px;cursor:pointer;display:flex;align-items:center;gap:6px;">
             📥 Cargar Excel
@@ -765,6 +765,37 @@
           </div>
           <div id="lay-versiones-content" style="padding:12px 16px;">
             <div class="loading">Cargando versiones...</div>
+          </div>
+        </div>
+
+        <!-- Modal: versión de layout antes de subir -->
+        <div id="lay-version-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;align-items:center;justify-content:center;">
+          <div style="background:#fff;border-radius:12px;padding:28px 32px;width:400px;box-shadow:0 8px 32px rgba(0,0,0,.2);">
+            <h3 style="margin:0 0 6px;font-size:15px;color:#1a3558;">📋 Datos de la carga</h3>
+            <p id="lay-version-filename" style="font-size:12px;color:#888;margin:0 0 20px;"></p>
+            <div style="display:grid;gap:14px;">
+              <div>
+                <label style="font-size:11px;font-weight:600;color:#555;display:block;margin-bottom:4px;">Versión *</label>
+                <input id="lay-version-input" type="text" placeholder="ej. 7.1"
+                  style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;box-sizing:border-box;">
+              </div>
+              <div>
+                <label style="font-size:11px;font-weight:600;color:#555;display:block;margin-bottom:4px;">Descripción</label>
+                <input id="lay-version-desc" type="text" placeholder="ej. Actualización Q4 2024"
+                  style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;box-sizing:border-box;">
+              </div>
+            </div>
+            <div id="lay-version-msg" style="margin-top:12px;font-size:13px;min-height:18px;"></div>
+            <div style="display:flex;gap:10px;margin-top:20px;justify-content:flex-end;">
+              <button onclick="cerrarModalVersionLayout()"
+                style="padding:8px 18px;background:#f0f4f8;color:#555;border:1px solid #ddd;border-radius:6px;font-size:13px;cursor:pointer;">
+                Cancelar
+              </button>
+              <button onclick="confirmarUploadLayout()"
+                style="padding:8px 20px;background:#27ae60;color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;">
+                📥 Cargar
+              </button>
+            </div>
           </div>
         </div>
 
@@ -2617,11 +2648,42 @@
   }
 
   // ── UPLOAD EXCEL → LAYOUTS ───────────────────────────────
+  let _layUploadFile = null;
+
+  function abrirModalVersionLayout(input) {
+    const file = input.files[0];
+    if (!file) return;
+    _layUploadFile = file;
+    input.value = '';
+    document.getElementById('lay-version-filename').textContent = '📄 ' + file.name;
+    document.getElementById('lay-version-input').value = '';
+    document.getElementById('lay-version-desc').value = '';
+    document.getElementById('lay-version-msg').innerHTML = '';
+    document.getElementById('lay-version-modal').style.display = 'flex';
+  }
+
+  function cerrarModalVersionLayout() {
+    document.getElementById('lay-version-modal').style.display = 'none';
+    _layUploadFile = null;
+  }
+
+  async function confirmarUploadLayout() {
+    const version = document.getElementById('lay-version-input').value.trim();
+    const desc    = document.getElementById('lay-version-desc').value.trim();
+    const msg     = document.getElementById('lay-version-msg');
+    if (!version) { msg.innerHTML = '<span style="color:#e74c3c;">Ingresa la versión.</span>'; return; }
+    document.getElementById('lay-version-modal').style.display = 'none';
+    // Crear input fake con el archivo guardado
+    const fakeInput = { files: [_layUploadFile], _version: version, _desc: desc };
+    await uploadLayoutExcel(fakeInput);
+    _layUploadFile = null;
+  }
+
   // PASO 1: subir Excel → mostrar pantalla de mapeo
   async function uploadLayoutExcel(input) {
     const file = input.files[0];
     if (!file) return;
-    input.value = '';
+    if (input.value !== undefined) input.value = '';
 
     const modal = document.getElementById('lay-upload-modal');
     const title = document.getElementById('lay-modal-title');
@@ -2633,6 +2695,8 @@
 
     const fd = new FormData();
     fd.append('archivo', file);
+    if (input._version) fd.append('version', input._version);
+    if (input._desc)    fd.append('descripcion', input._desc);
 
     try {
       const res  = await fetch('/api/layouts/preview', { method: 'POST', body: fd });
