@@ -2672,6 +2672,8 @@
     const desc    = document.getElementById('lay-version-desc').value.trim();
     const msg     = document.getElementById('lay-version-msg');
     if (!version) { msg.innerHTML = '<span style="color:#e74c3c;">Ingresa la versión.</span>'; return; }
+    window._layVersion = version;
+    window._layDesc    = desc;
     document.getElementById('lay-version-modal').style.display = 'none';
     // Crear input fake con el archivo guardado
     const fakeInput = { files: [_layUploadFile], _version: version, _desc: desc };
@@ -2723,6 +2725,7 @@
       const filasMapa = data.layouts_excel.map(exLayout => {
         const sug = data.sugerencias[exLayout];
         const opts = `<option value="">(ignorar este layout)</option>` +
+          `<option value="__NUEVO__" ${!sug ? 'selected' : ''}>✨ Crear como nuevo layout: ${exLayout}</option>` +
           data.layouts_bd.map(b =>
             `<option value="${b}" ${b === sug ? 'selected' : ''}>${b}</option>`
           ).join('');
@@ -2782,7 +2785,7 @@
       const res  = await fetch('/api/layouts/upload', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mapeo })
+        body: JSON.stringify({ mapeo, version: window._layVersion || '', descripcion: window._layDesc || '' })
       });
       const data = await res.json();
 

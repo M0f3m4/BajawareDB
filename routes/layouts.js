@@ -215,8 +215,9 @@ router.post('/upload', requireAuth, async (req, res) => {
   const porLayout = {};
   for (const row of dataRows) {
     const claveExcel = get(row, 'CLAVE_LAYOUT');
-    const claveBD    = mapeo[claveExcel] || claveExcel;
-    if (!claveBD) continue;
+    let claveBD = mapeo[claveExcel];
+    if (claveBD === '__NUEVO__') claveBD = claveExcel; // crear nuevo con nombre del Excel
+    else if (!claveBD) continue; // ignorar
     if (!porLayout[claveBD]) porLayout[claveBD] = [];
     porLayout[claveBD].push({ row, claveExcel });
   }
@@ -349,6 +350,19 @@ router.post('/upload', requireAuth, async (req, res) => {
         ${esc(filename)}, ${items.length}, ${camposNuevos}, ${camposActualizados},
         ${cambios.eliminados}, ${esc(usuario)}, ${esc(notas)}
       )`);
+
+    // ── Registrar en INVENTARIO_VERSIONES ────────────────
+    try {
+      const version    = req.body.version    || `${nuevaSem.major}.${nuevaSem.minor}.${nuevaSem.patch}`;
+      const descripcion = req.body.descripcion || notas || '';
+      const existeInvVer = await query(`SELECT 1 FROM INVENTARIO_VERSIONES WHERE TIPO_OBJETO='LAYOUT' AND CLAVE_OBJ=${esc(claveBD)} AND VERSION=${esc(version)}`);
+      if (!existeInvVer.length) {
+        await query(`
+          INSERT INTO INVENTARIO_VERSIONES (TIPO_OBJETO, CLAVE_OBJ, VERSION, REGULACION, TIPO_VERSION, DESCRIPCION, ESTATUS, USUARIO)
+          VALUES ('LAYOUT', ${esc(claveBD)}, ${esc(version)}, NULL, ${esc(nivel)}, ${esc(descripcion)}, 'IDENTIFICADO', ${esc(usuario)})
+        `);
+      }
+    } catch(e3) { console.warn('[layouts] INVENTARIO_VERSIONES error:', e3.message); }
 
     // ── Marcar alerta QA como PROCESADA ──────────────────
     if (jiraTicket) {
