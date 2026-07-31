@@ -66,48 +66,55 @@ function mapColumns(headers) {
 
 // ── Parsear Excel → rows + header + catalogos ────────────
 function parseExcel(buffer) {
-  const wb  = XLSX.read(buffer, { type: 'buffer', cellDates: true });
-  // Asumir siempre: fila 1 = headers, datos desde fila 2
-  // Procesar todas las hojas excepto CATALOGOS
-  const COLS_TEMPLATE = ['CLAVE_PAIS','CLAVE_ENTIDADREGULADA','CLAVE_LAYOUT','ORDEN','NOMBRE_CAMPO','LLAVE','TIPO_DATO','FORMATO','OBLIGATORIO','VALIDACION','CATALOGO','DESCRIPCION_ESP','DESCRIPCION_ING','OBSERVACIONES','VALIDEZ_INFO','FUENTE'];
+  const wb = XLSX.read(buffer, { type: 'buffer', cellDates: true });
+  // Auto-detectar fila de headers en cada hoja (puede estar en fila 1, 2, 3, etc.)
+  // Normalizar datos a objetos planos para evitar problemas de índice de columna
   const normalizedRows = [];
-  let colMapping = {}; // mantener para compatibilidad
-  let headerIdx = 0;
+  let colMapping = {}; // para compatibilidad
+  let headerIdx = -1;
 
   for (const sheetName of wb.SheetNames) {
     if (sheetName.toUpperCase().includes('CATALOGO')) continue;
-    const ws   = wb.Sheets[sheetName];
-    const data = XLSX.utils.sheet_to_json(ws, { defval: null }); // objetos con header de fila 1
-    for (const row of data) {
-      // Normalizar claves (mayúsculas, quitar espacios)
-      const norm = {};
-      for (const [k, v] of Object.entries(row)) {
-        const key = k.toUpperCase().trim().replace(/\s+/g, '_');
-        norm[key] = v !== null && v !== undefined && v !== '' ? String(v).trim() : null;
-      }
-      // Mapear variantes al nombre canónico
-      const get = key => norm[key] ?? null;
-      const layout = get('CLAVE_LAYOUT') || get('LAYOUT');
-      const campo  = get('NOMBRE_CAMPO') || get('CAMPO') || get('FIELD');
+    const ws = wb.Sheets[sheetName];
+    const raw = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null });
+    let hIdx = -1, hMap = {};
+    // Buscar fila de headers en las primeras 10 filas
+    for (let i = 0; i < Math.min(raw.length, 10); i++) {
+      const candidate = (raw[i]||[]).map(h => (h||'').toString().trim());
+      const m = mapColumns(candidate);
+      if (m.CLAVE_LAYOUT || m.NOMBRE_CAMPO) { hIdx = i; hMap = m; break; }
+    }
+    if (hIdx === -1) continue; // hoja sin headers reconocibles
+    if (headerIdx === -1) { headerIdx = hIdx; colMapping = hMap; }
+
+    // Normalizar filas de datos con el mapeo de esta hoja
+    const getVal = (row, col) => {
+      if (hMap[col] === undefined) return null;
+      const v = row[hMap[col]];
+      return v !== null && v !== undefined && String(v).trim() !== '' ? String(v).trim() : null;
+    };
+    for (const row of raw.slice(hIdx + 1)) {
+      const layout = getVal(row, 'CLAVE_LAYOUT');
+      const campo  = getVal(row, 'NOMBRE_CAMPO');
       if (!layout || !campo) continue;
       normalizedRows.push({
         CLAVE_LAYOUT:          layout,
         NOMBRE_CAMPO:          campo,
-        CLAVE_PAIS:            get('CLAVE_PAIS') || get('PAIS'),
-        CLAVE_ENTIDADREGULADA: get('CLAVE_ENTIDADREGULADA') || get('ENTIDAD') || get('EMPRESA'),
-        CLAVE_LAYOUT_CITI:     get('CLAVE_LAYOUT_CITI'),
-        ORDEN:                 get('ORDEN'),
-        LLAVE:                 get('LLAVE'),
-        TIPO_DATO:             get('TIPO_DATO') || get('TIPO'),
-        FORMATO:               get('FORMATO'),
-        OBLIGATORIO:           get('OBLIGATORIO'),
-        VALIDACION:            get('VALIDACION') || get('VALIDACIÓN'),
-        CATALOGO:              get('CATALOGO') || get('CATÁLOGO'),
-        DESCRIPCION_ESP:       get('DESCRIPCION_ESP') || get('DESCRIPCION') || get('DESCRIPCIÓN'),
-        DESCRIPCION_ING:       get('DESCRIPCION_ING') || get('DESCRIPCION_INGLES'),
-        OBSERVACIONES:         get('OBSERVACIONES'),
-        VALIDEZ_INFO:          get('VALIDEZ_INFO') || get('VALIDEZ_INFORMACION'),
-        FUENTE:                get('FUENTE'),
+        CLAVE_PAIS:            getVal(row, 'CLAVE_PAIS'),
+        CLAVE_ENTIDADREGULADA: getVal(row, 'CLAVE_ENTIDADREGULADA'),
+        CLAVE_LAYOUT_CITI:     getVal(row, 'CLAVE_LAYOUT_CITI'),
+        ORDEN:                 getVal(row, 'ORDEN'),
+        LLAVE:                 getVal(row, 'LLAVE'),
+        TIPO_DATO:             getVal(row, 'TIPO_DATO'),
+        FORMATO:               getVal(row, 'FORMATO'),
+        OBLIGATORIO:           getVal(row, 'OBLIGATORIO'),
+        VALIDACION:            getVal(row, 'VALIDACION'),
+        CATALOGO:              getVal(row, 'CATALOGO'),
+        DESCRIPCION_ESP:       getVal(row, 'DESCRIPCION_ESP'),
+        DESCRIPCION_ING:       getVal(row, 'DESCRIPCION_ING'),
+        OBSERVACIONES:         getVal(row, 'OBSERVACIONES'),
+        VALIDEZ_INFO:          getVal(row, 'VALIDEZ_INFO'),
+        FUENTE:                getVal(row, 'FUENTE'),
       });
     }
   }
