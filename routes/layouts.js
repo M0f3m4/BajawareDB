@@ -320,6 +320,11 @@ router.post('/upload', requireAuth, async (req, res) => {
     const actual   = await getVersionActual(claveBD);
     const nuevaSem = calcularNuevoSem(actual, nivel);
     const versionStr = req.body.version || `${nuevaSem.major}.${nuevaSem.minor}.${nuevaSem.patch}`;
+    // Parsear versionStr para VER_MAJOR/MINOR/PATCH
+    const vParts = versionStr.split('.');
+    const vMajor = parseInt(vParts[0]) || nuevaSem.major;
+    const vMinor = parseInt(vParts[1] ?? nuevaSem.minor) || 0;
+    const vPatch = parseInt(vParts[2] ?? nuevaSem.patch) || 0;
 
     // ── Insertar en LAYOUT_VERSIONES ──────────────────────
     let jiraSummary = null, jiraStatus = null;
@@ -345,7 +350,7 @@ router.post('/upload', requireAuth, async (req, res) => {
         ARCHIVO_NOMBRE, FILAS_PROCESADAS, CAMPOS_NUEVOS, CAMPOS_ACTUALIZADOS,
         CAMPOS_ELIMINADOS, USUARIO, NOTAS
       ) VALUES (
-        ${esc(claveBD)}, ${nuevaSem.major}, ${nuevaSem.minor}, ${nuevaSem.patch}, ${esc(nivel)},
+        ${esc(claveBD)}, ${vMajor}, ${vMinor}, ${vPatch}, ${esc(nivel)},
         ${esc(jiraTicket||null)}, ${esc(jiraStatus)}, ${esc(jiraSummary)},
         ${esc(filename)}, ${items.length}, ${camposNuevos}, ${camposActualizados},
         ${cambios.eliminados}, ${esc(usuario)}, ${esc(notas)}
