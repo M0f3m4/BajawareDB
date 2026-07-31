@@ -2878,7 +2878,7 @@
       const fmt = d => d ? new Date(d).toLocaleString('es-MX', { dateStyle: 'short', timeStyle: 'short', timeZone: 'America/Mexico_City' }) : '—';
       // Normalizar: JSON local usa minúsculas, SQL Server usaría MAYÚSCULAS
       const n = v => ({
-        version:    v.version    ?? v.VERSION,
+        version:    v.version    ?? v.VERSION ?? (v.VER_MAJOR !== undefined ? `${v.VER_MAJOR}.${v.VER_MINOR}.${v.VER_PATCH}` : undefined),
         layout:     v.clave_layout ?? v.CLAVE_LAYOUT ?? '(varios)',
         layouts:    v.layouts,
         archivo:    v.archivo    ?? v.ARCHIVO_NOMBRE,
