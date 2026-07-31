@@ -226,8 +226,8 @@ router.post('/preview', requireAuth, upload.single('archivo'), async (req, res) 
     // Guardar en sesión para paso 2
     req.session.layoutUpload = {
       filename:   req.file.originalname,
-      rows:       rows.slice(headerIdx + 1),
-      colMapping,
+      rows,       // ya normalizados, sin fila de header
+      colMapping: {},
       catalogos,
     };
 
