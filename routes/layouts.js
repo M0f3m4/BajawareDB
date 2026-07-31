@@ -63,21 +63,25 @@ function mapColumns(headers) {
 // ── Parsear Excel → rows + header + catalogos ────────────
 function parseExcel(buffer) {
   const wb    = XLSX.read(buffer, { type: 'buffer', cellDates: true });
-  // Buscar hoja de layout (primera hoja que tenga CLAVE_LAYOUT o NOMBRE_CAMPO)
-  let sheet = wb.Sheets[wb.SheetNames[0]];
-  let rows = [], headerIdx = -1, colMapping = {};
+  // Iterar TODAS las hojas excepto CATALOGOS y combinar filas
+  let rows = [], headerIdx = 0, colMapping = {};
+  const catKeyword = 'CATALOGO';
   for (const sheetName of wb.SheetNames) {
+    if (sheetName.toUpperCase().includes(catKeyword)) continue;
     const s = wb.Sheets[sheetName];
     const r = XLSX.utils.sheet_to_json(s, { header: 1, defval: null });
-    let found = false;
     for (let i = 0; i < Math.min(r.length, 30); i++) {
       const candidate = (r[i]||[]).map(h => (h||'').toString().trim());
       if (candidate.filter(Boolean).length >= 3) {
         const m = mapColumns(candidate);
-        if (m.CLAVE_LAYOUT || m.NOMBRE_CAMPO) { headerIdx = i; colMapping = m; rows = r; found = true; break; }
+        if (m.CLAVE_LAYOUT || m.NOMBRE_CAMPO) {
+          if (!Object.keys(colMapping).length) colMapping = m; // usar primer mapeo encontrado
+          // Agregar solo filas de datos (saltar header)
+          rows.push(...r.slice(i + 1));
+          break;
+        }
       }
     }
-    if (found) break;
   }
 
   // Buscar hoja CATALOGOS
