@@ -224,10 +224,14 @@ router.get('/inventario/layouts', requireAuth, async (req, res) => {
 router.get('/inventario/catalogos', requireAuth, async (req, res) => {
   try {
     const rows = await query(`
-      SELECT CATALOGO, COUNT(*) AS TOTAL_VALORES, MIN(ORDEN) AS MIN_ORDEN
-      FROM LAYOUT_CATALOGO_DATOS
-      GROUP BY CATALOGO
-      ORDER BY CATALOGO
+      SELECT lcd.CATALOGO, COUNT(*) AS TOTAL_VALORES,
+        STUFF((SELECT DISTINCT ', ' + l.CLAVE_LAYOUT
+               FROM LAYOUTS l
+               WHERE l.CATALOGO = lcd.CATALOGO AND l.CLAVE_LAYOUT IS NOT NULL
+               FOR XML PATH('')), 1, 2, '') AS LAYOUTS_USADOS
+      FROM LAYOUT_CATALOGO_DATOS lcd
+      GROUP BY lcd.CATALOGO
+      ORDER BY lcd.CATALOGO
     `);
     res.json({ ok: true, data: rows });
   } catch (err) { res.status(500).json({ ok: false, message: err.message }); }

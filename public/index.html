@@ -4320,6 +4320,7 @@
         onmouseover="this.style.boxShadow='0 4px 12px rgba(0,0,0,.1)'" onmouseout="this.style.boxShadow=''">
         <div style="font-weight:600;color:#1a3558;font-size:13px;margin-bottom:4px;">${c.CATALOGO}</div>
         <div style="font-size:11px;color:#888;">${c.TOTAL_VALORES} valor${c.TOTAL_VALORES!==1?'es':''}</div>
+        ${c.LAYOUTS_USADOS ? `<div style="font-size:10px;color:#aaa;margin-top:5px;line-height:1.4;">${c.LAYOUTS_USADOS}</div>` : ''}
       </div>`).join('');
   }
 
