@@ -5289,7 +5289,7 @@
               title="Crear versión personalizada para este cliente">
               + Ver.
             </button>
-            <button onclick="togglePersonalizaciones(${r.ID_ESTATUS_REP},'${document.getElementById('bc-rep-contrato').value}', this)"
+            <button onclick="togglePersonalizaciones(${r.ID_ESTATUS_REP},'${document.getElementById('bc-rep-contrato').value}',this,'REPORTE')"
               style="padding:3px 8px;background:#f0f4f8;color:#1a3558;border:1px solid #ddd;border-radius:4px;cursor:pointer;font-size:11px;">
               ▶
             </button>
@@ -5343,7 +5343,7 @@
     } catch(e) { msg.innerHTML = `<span style="color:#e74c3c;">Error: ${e.message}</span>`; }
   }
 
-  async function togglePersonalizaciones(id_estatus_rep, contrato_id, btn) {
+  async function togglePersonalizaciones(id_estatus_rep, contrato_id, btn, tipo) {
     const rowId = `pers-row-${id_estatus_rep}`;
     const existing = document.getElementById(rowId);
     if (existing) { existing.remove(); btn.textContent = '▶'; return; }
@@ -5357,12 +5357,12 @@
           <div style="display:flex;align-items:center;gap:10px;padding:4px 8px;background:#fff;border:1px solid #e0e6ed;border-radius:6px;margin-bottom:4px;">
             <span style="font-family:monospace;font-size:12px;color:#e67e22;font-weight:600;">${p.SUBVERSION||'—'}</span>
             <span>${estatusPill(p.ESTATUS)}</span>
-            <button onclick="abrirPersonalizacion(${id_estatus_rep},'${contrato_id}',${p.ID},'${p.SUBVERSION||''}','${p.ESTATUS||''}')"
+            <button onclick="abrirPersonalizacion(${id_estatus_rep},'${contrato_id}',${p.ID},'${p.SUBVERSION||''}','${p.ESTATUS||''}','${tipo||''}')"
               style="padding:2px 8px;background:#1a3558;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:11px;">Editar</button>
             <button onclick="borrarPersonalizacion(${p.ID})"
               style="padding:2px 8px;background:#e74c3c;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:11px;">✕</button>
           </div>`).join('') : '<span style="color:#aaa;font-size:12px;">Sin versiones personalizadas.</span>'}
-        <button onclick="abrirPersonalizacion(${id_estatus_rep},'${contrato_id}')"
+        <button onclick="abrirPersonalizacion(${id_estatus_rep},'${contrato_id}',null,'','','${tipo||''}')"
           style="margin-top:6px;padding:4px 12px;background:#e67e22;color:#fff;border:none;border-radius:5px;cursor:pointer;font-size:12px;">
           + Agregar versión
         </button>
@@ -5829,7 +5829,7 @@
                 style="padding:3px 10px;background:#e67e22;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:11px;">
                 + Subversión
               </button>
-              <button onclick="togglePersonalizaciones(${idEstatusRepVcli},'${contrato}',this)"
+              <button onclick="togglePersonalizaciones(${idEstatusRepVcli},'${contrato}',this,'VALIDACION')"
                 style="padding:3px 8px;background:rgba(255,255,255,.2);color:#fff;border:1px solid rgba(255,255,255,.3);border-radius:4px;cursor:pointer;font-size:11px;">
                 ▶ Ver. Personalizadas
               </button>
