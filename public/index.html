@@ -734,6 +734,9 @@
 
         <!-- Toolbar principal -->
         <div class="toolbar" style="flex-wrap:wrap;gap:8px;margin-bottom:10px;align-items:center;">
+          <select id="lay-pais" onchange="layOnPaisChange()" style="min-width:120px;">
+            <option value="">Todos los países</option>
+          </select>
           <select id="lay-entidad" onchange="loadLayoutsResumen()" style="min-width:180px;">
             <option value="">Todas las entidades</option>
           </select>
@@ -2478,15 +2481,36 @@
     _layTimer = setTimeout(loadLayoutsResumen, 350);
   }
 
+  let _layPaisEntidades = []; // [{pais, entidad}]
+
+  function layOnPaisChange() {
+    const pais = document.getElementById('lay-pais').value;
+    const selE = document.getElementById('lay-entidad');
+    const prev = selE.value;
+    selE.innerHTML = '<option value="">Todas las entidades</option>';
+    const filtradas = pais
+      ? _layPaisEntidades.filter(x => x.pais === pais)
+      : _layPaisEntidades;
+    [...new Set(filtradas.map(x => x.entidad))].sort().forEach(e => {
+      const o = document.createElement('option');
+      o.value = e; o.textContent = e;
+      if (e === prev) o.selected = true;
+      selE.appendChild(o);
+    });
+    loadLayoutsResumen();
+  }
+
   async function loadLayoutsResumen() {
     const wrap    = document.getElementById('layouts-accordion');
     const dot     = document.getElementById('layouts-dot');
     const lbl     = document.getElementById('layouts-status');
+    const pais    = (document.getElementById('lay-pais')    || {}).value || '';
     const entidad = (document.getElementById('lay-entidad') || {}).value || '';
     const texto   = (document.getElementById('lay-texto')   || {}).value?.trim() || '';
     wrap.innerHTML = '<div class="loading">Cargando...</div>';
 
     let url = '/api/inventario/layouts/resumen?x=1';
+    if (pais)    url += '&pais='    + encodeURIComponent(pais);
     if (entidad) url += '&entidad=' + encodeURIComponent(entidad);
     if (texto)   url += '&texto='   + encodeURIComponent(texto);
 
@@ -2495,11 +2519,17 @@
       const data = await res.json();
       if (!data.ok) throw new Error(data.message);
 
-      // Poblar dropdown de entidades la primera vez
-      if (!_layInited && data.entidades?.length) {
+      // Poblar dropdowns la primera vez
+      if (!_layInited && (data.paises?.length || data.entidades?.length)) {
         _layInited = true;
+        _layPaisEntidades = data.entidades || [];
+        const selP = document.getElementById('lay-pais');
+        (data.paises || []).forEach(v => {
+          const o = document.createElement('option');
+          o.value = v; o.textContent = v; selP.appendChild(o);
+        });
         const selE = document.getElementById('lay-entidad');
-        data.entidades.forEach(v => {
+        [...new Set(_layPaisEntidades.map(x => x.entidad))].sort().forEach(v => {
           const o = document.createElement('option');
           o.value = v; o.textContent = v; selE.appendChild(o);
         });

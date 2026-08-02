@@ -284,8 +284,9 @@ router.delete('/inventario/catalogos/:id', requireAuth, async (req, res) => {
 
 // ── GET /api/inventario/layouts/resumen — lista agrupada ──
 router.get('/inventario/layouts/resumen', requireAuth, async (req, res) => {
-  const { entidad, texto } = req.query;
+  const { entidad, texto, pais } = req.query;
   let where = 'WHERE 1=1';
+  if (pais)    where += ` AND CLAVE_PAIS = '${pais.replace(/'/g,"''")}'`;
   if (entidad) where += ` AND CLAVE_ENTIDADREGULADA = '${entidad.replace(/'/g,"''")}'`;
   if (texto)   where += ` AND CLAVE_LAYOUT LIKE '%${texto.replace(/'/g,"''")}%'`;
   try {
@@ -298,9 +299,14 @@ router.get('/inventario/layouts/resumen', requireAuth, async (req, res) => {
       GROUP BY CLAVE_LAYOUT, CLAVE_ENTIDADREGULADA, CLAVE_PAIS
       ORDER BY CLAVE_ENTIDADREGULADA, CLAVE_LAYOUT
     `);
-    // Entidades para filtro
-    const entidades = await query(`SELECT DISTINCT CLAVE_ENTIDADREGULADA FROM LAYOUTS WHERE CLAVE_ENTIDADREGULADA IS NOT NULL ORDER BY CLAVE_ENTIDADREGULADA`);
-    res.json({ ok: true, data: rows, entidades: entidades.map(r => r.CLAVE_ENTIDADREGULADA) });
+    // Países y entidades para filtros (con relación pais→entidad)
+    const paises = await query(`SELECT DISTINCT CLAVE_PAIS FROM LAYOUTS WHERE CLAVE_PAIS IS NOT NULL ORDER BY CLAVE_PAIS`);
+    const entidades = await query(`SELECT DISTINCT CLAVE_PAIS, CLAVE_ENTIDADREGULADA FROM LAYOUTS WHERE CLAVE_ENTIDADREGULADA IS NOT NULL ORDER BY CLAVE_ENTIDADREGULADA`);
+    res.json({
+      ok: true, data: rows,
+      paises: paises.map(r => r.CLAVE_PAIS),
+      entidades: entidades.map(r => ({ pais: r.CLAVE_PAIS, entidad: r.CLAVE_ENTIDADREGULADA }))
+    });
   } catch (err) {
     res.status(500).json({ ok: false, message: err.message });
   }
