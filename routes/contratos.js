@@ -132,10 +132,12 @@ router.get('/personalizaciones', requireAuth, async (req, res) => {
   try {
     const { estatus_reporte_id, contrato_id } = req.query;
     if (!estatus_reporte_id || !contrato_id) return res.json({ ok: true, data: [] });
+    const { tipo } = req.query;
+    const tipoFilter = tipo ? `AND TIPO=${esc(tipo)}` : '';
     const rows = await query(`
-      SELECT ID, ESTATUS_REPORTE_ID, CONTRATO_ID, SUBVERSION, ESTATUS
+      SELECT ID, ESTATUS_REPORTE_ID, CONTRATO_ID, SUBVERSION, ESTATUS, TIPO
       FROM PERSONALIZACIONES
-      WHERE ESTATUS_REPORTE_ID=${parseInt(estatus_reporte_id)} AND CONTRATO_ID=${esc(contrato_id)}
+      WHERE ESTATUS_REPORTE_ID=${parseInt(estatus_reporte_id)} AND CONTRATO_ID=${esc(contrato_id)} ${tipoFilter}
       ORDER BY ID
     `);
     res.json({ ok: true, data: rows });
@@ -145,11 +147,11 @@ router.get('/personalizaciones', requireAuth, async (req, res) => {
 // ── POST crear personalización ─────────────────────────────
 router.post('/personalizaciones', requireAuth, async (req, res) => {
   try {
-    const { estatus_reporte_id, contrato_id, subversion, estatus } = req.body;
+    const { estatus_reporte_id, contrato_id, subversion, estatus, tipo } = req.body;
     const usuario = req.session.user?.username || 'sistema';
     await query(`
-      INSERT INTO PERSONALIZACIONES (ESTATUS_REPORTE_ID, CONTRATO_ID, SUBVERSION, ESTATUS)
-      VALUES (${parseInt(estatus_reporte_id)}, ${esc(contrato_id)}, ${esc(subversion)}, ${esc(estatus)})
+      INSERT INTO PERSONALIZACIONES (ESTATUS_REPORTE_ID, CONTRATO_ID, SUBVERSION, ESTATUS, TIPO)
+      VALUES (${parseInt(estatus_reporte_id)}, ${esc(contrato_id)}, ${esc(subversion)}, ${esc(estatus)}, ${esc(tipo||null)})
     `);
     await auditLog(usuario, 'contratos', 'PERSONALIZACION_CREAR', { estatus_reporte_id, contrato_id, subversion, estatus });
     res.json({ ok: true });

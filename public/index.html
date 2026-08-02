@@ -5284,7 +5284,7 @@
             })()}
           </td>
           <td style="padding:6px 10px;text-align:center;white-space:nowrap;">
-            <button onclick="abrirPersonalizacion(${r.ID_ESTATUS_REP},'${document.getElementById('bc-rep-contrato').value}')"
+            <button onclick="abrirPersonalizacion(${r.ID_ESTATUS_REP},'${document.getElementById('bc-rep-contrato').value}',null,'','','REPORTE')"
               style="padding:3px 10px;background:#e67e22;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:11px;margin-right:3px;"
               title="Crear versión personalizada para este cliente">
               + Ver.
@@ -5310,8 +5310,8 @@
   // ── Personalizaciones ─────────────────────────────────────
   let _persCurrent = {};
 
-  function abrirPersonalizacion(id_estatus_rep, contrato_id, id_pers, subversion_actual, estatus_actual) {
-    _persCurrent = { id_estatus_rep, contrato_id, id_pers: id_pers || null };
+  function abrirPersonalizacion(id_estatus_rep, contrato_id, id_pers, subversion_actual, estatus_actual, tipo) {
+    _persCurrent = { id_estatus_rep, contrato_id, id_pers: id_pers || null, tipo: tipo || null };
     document.getElementById('pers-modal-title').textContent = id_pers ? 'Editar Versión' : '+ Versión Personalizada';
     document.getElementById('pers-modal-info').textContent = `ID Estatus: ${id_estatus_rep} | Contrato: ${contrato_id}`;
     document.getElementById('pers-subversion').value = subversion_actual || '';
@@ -5327,12 +5327,12 @@
     if (!subversion) { msg.innerHTML = '<span style="color:#e74c3c;">Ingresa la subversión.</span>'; return; }
     msg.innerHTML = 'Guardando...';
     try {
-      const { id_estatus_rep, contrato_id, id_pers } = _persCurrent;
+      const { id_estatus_rep, contrato_id, id_pers, tipo } = _persCurrent;
       const url    = id_pers ? `/api/contratos/personalizaciones/${id_pers}` : '/api/contratos/personalizaciones';
       const method = id_pers ? 'PUT' : 'POST';
       const body   = id_pers
         ? { subversion, estatus }
-        : { estatus_reporte_id: id_estatus_rep, contrato_id, subversion, estatus };
+        : { estatus_reporte_id: id_estatus_rep, contrato_id, subversion, estatus, tipo };
       const r = await fetch(url, { method, headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) }).then(x => x.json());
       if (r.ok) {
         msg.innerHTML = '<span style="color:#27ae60;">✅ Guardado.</span>';
@@ -5825,7 +5825,7 @@
           ${cliente ? `<span style="background:rgba(255,255,255,.2);padding:2px 8px;border-radius:10px;font-size:11px;">🏢 ${cliente}</span>` : ''}
           <span style="margin-left:auto;display:flex;gap:8px;align-items:center;">
             ${idEstatusRepVcli ? `
-              <button onclick="abrirPersonalizacion(${idEstatusRepVcli},'${contrato}')"
+              <button onclick="abrirPersonalizacion(${idEstatusRepVcli},'${contrato}',null,'','','VALIDACION')"
                 style="padding:3px 10px;background:#e67e22;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:11px;">
                 + Subversión
               </button>
