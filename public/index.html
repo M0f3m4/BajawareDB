@@ -5812,10 +5812,9 @@
     data.forEach(v => { if (!porRep[v.CLAVE_REP]) porRep[v.CLAVE_REP]=[]; porRep[v.CLAVE_REP].push(v); });
 
     const contrato = document.getElementById('vcli-contrato').value;
-    const repVerSeleccionada = document.getElementById('vcli-version') ? document.getElementById('vcli-version').value : '';
     const repBase = document.getElementById('vcli-rep').value;
-    // Obtener ID_ESTATUS_REP de la versión seleccionada
-    const versionInfo = (_vcliRepVersiones[repBase] || []).find(v => v.clave_rep === repVerSeleccionada);
+    // Usar la primera versión disponible del reporte (vcli-version fue eliminado)
+    const versionInfo = (_vcliRepVersiones[repBase] || [])[0] || null;
     const idEstatusRepVcli = versionInfo ? versionInfo.id_estatus_rep : null;
 
     wrap.innerHTML = Object.entries(porRep).map(([rep, vals]) => `
