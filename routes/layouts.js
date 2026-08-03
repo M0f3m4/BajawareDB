@@ -127,14 +127,21 @@ function parseExcel(buffer) {
     const catSheet = wb.Sheets[catSheetName];
     const catRows  = XLSX.utils.sheet_to_json(catSheet, { header: 1, defval: null });
     if (catRows.length > 1) {
-      // Detectar headers
-      const headers = (catRows[0]||[]).map(h => (h||'').toString().toUpperCase().trim());
-      const iCat  = headers.findIndex(h => h.includes('CATALOGO') || h.includes('CATÁLOGO'));
-      const iClave = headers.findIndex(h => h === 'CLAVE' || h.includes('CLAVE'));
-      const iDesc  = headers.findIndex(h => h.includes('DESCRIPCION') || h.includes('DESCRIPCIÓN'));
-      const iOrden = headers.findIndex(h => h.includes('ORDEN') || h === 'ORDER');
-      if (iCat >= 0 && iClave >= 0 && iDesc >= 0) {
-        for (const row of catRows.slice(1)) {
+      // Auto-detectar fila de headers en las primeras 5 filas
+      let hRowIdx = -1, iCat = -1, iClave = -1, iDesc = -1, iOrden = -1;
+      for (let i = 0; i < Math.min(catRows.length, 5); i++) {
+        const h = (catRows[i]||[]).map(v => (v||'').toString().toUpperCase().trim());
+        const ci  = h.findIndex(v => v === 'CATALOGO' || v === 'CATÁLOGO');
+        const cli = h.findIndex(v => v === 'CLAVE');
+        const di  = h.findIndex(v => v.includes('DESCRIPCION') || v.includes('DESCRIPCIÓN'));
+        if (ci >= 0 && cli >= 0 && di >= 0) {
+          hRowIdx = i; iCat = ci; iClave = cli; iDesc = di;
+          iOrden = h.findIndex(v => v === 'ORDEN' || v === 'ORDER');
+          break;
+        }
+      }
+      if (hRowIdx >= 0) {
+        for (const row of catRows.slice(hRowIdx + 1)) {
           const cat  = row[iCat]  ? String(row[iCat]).trim()  : null;
           const clave= row[iClave]? String(row[iClave]).trim(): null;
           const desc = row[iDesc] ? String(row[iDesc]).trim() : null;
