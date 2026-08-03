@@ -2987,8 +2987,15 @@
         fecha:      v.fecha      ?? v.FECHA_CARGA,
         mapeo:      v.mapeo,
       });
-      // Guardar datos en variable global para comparar
-      window._versionesData = data.data;
+      // Guardar datos normalizados en variable global para comparar
+      window._versionesData = data.data.map(v => ({
+        id:       v.ID_VERSION ?? v.id,
+        version:  v.VERSION_SEM ?? (v.VER_MAJOR !== undefined ? `${v.VER_MAJOR}.${v.VER_MINOR}.${v.VER_PATCH}` : v.version),
+        clave_layout: v.CLAVE_LAYOUT ?? v.clave_layout,
+        layouts:  v.layouts || [v.CLAVE_LAYOUT ?? v.clave_layout],
+        datos:    v.datos || [],
+        ...v
+      }));
 
       const btnComparar = `<button onclick="abrirComparador()"
         id="btn-comparar-vers"
