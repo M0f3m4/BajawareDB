@@ -407,17 +407,26 @@ router.post('/upload', requireAuth, async (req, res) => {
       cambios.patch      ? `${cambios.patch} cambios PATCH`        : null,
     ].filter(Boolean).join(' | ') || null;
 
+    // Snapshot completo de campos al momento de la carga
+    const camposActualesSnap = await query(`
+      SELECT NOMBRE_CAMPO, TIPO_DATO, FORMATO, OBLIGATORIO, LLAVE,
+             VALIDACION, CATALOGO, DESCRIPCION_ESP, DESCRIPCION_ING,
+             OBSERVACIONES, VALIDEZ_INFO, FUENTE, ORDEN, CLAVE_LAYOUT_CITI
+      FROM LAYOUTS WHERE CLAVE_LAYOUT=${esc(claveBD)} ORDER BY ORDEN
+    `);
+    const camposJson = JSON.stringify(camposActualesSnap.map(c => ({ ...c, CLAVE_LAYOUT: claveBD })));
+
     await query(`
       INSERT INTO LAYOUT_VERSIONES (
         CLAVE_LAYOUT, VER_MAJOR, VER_MINOR, VER_PATCH, NIVEL_CAMBIO,
         JIRA_TICKET, JIRA_STATUS, JIRA_SUMMARY,
         ARCHIVO_NOMBRE, FILAS_PROCESADAS, CAMPOS_NUEVOS, CAMPOS_ACTUALIZADOS,
-        CAMPOS_ELIMINADOS, USUARIO, NOTAS
+        CAMPOS_ELIMINADOS, USUARIO, NOTAS, CAMPOS_JSON
       ) VALUES (
         ${esc(claveBD)}, ${vMajor}, ${vMinor}, ${vPatch}, ${esc(nivel)},
         ${esc(jiraTicket||null)}, ${esc(jiraStatus)}, ${esc(jiraSummary)},
         ${esc(filename)}, ${items.length}, ${camposNuevos}, ${camposActualizados},
-        ${cambios.eliminados}, ${esc(usuario)}, ${esc(notas)}
+        ${cambios.eliminados}, ${esc(usuario)}, ${esc(notas)}, ${esc(camposJson)}
       )`);
 
     // ── Registrar en INVENTARIO_VERSIONES ────────────────
@@ -498,11 +507,16 @@ router.get('/versiones', requireAuth, async (req, res) => {
         JIRA_TICKET, JIRA_STATUS, JIRA_SUMMARY,
         ARCHIVO_NOMBRE, FILAS_PROCESADAS, CAMPOS_NUEVOS,
         CAMPOS_ACTUALIZADOS, CAMPOS_ELIMINADOS,
-        USUARIO, FECHA_CARGA, NOTAS
+        USUARIO, FECHA_CARGA, NOTAS, CAMPOS_JSON
       FROM LAYOUT_VERSIONES ${where}
       ORDER BY FECHA_CARGA DESC
     `);
-    res.json({ ok: true, data: rows });
+    const data = rows.map(r => {
+      const datos = r.CAMPOS_JSON ? (() => { try { return JSON.parse(r.CAMPOS_JSON); } catch(_) { return []; } })() : [];
+      const { CAMPOS_JSON, ...rest } = r;
+      return { ...rest, datos };
+    });
+    res.json({ ok: true, data });
   } catch (e) {
     // Fallback a JSON local si la tabla aún no existe
     let data = leerVersionesJSON();
