@@ -2608,10 +2608,10 @@
                 ${td(c.ORDEN,'text-align:center;color:#aaa;')}
                 ${td(`<strong>${c.NOMBRE_CAMPO??''}</strong>`)}
                 ${td(c.CLAVE_LAYOUT_CITI,'color:#888;')}
-                ${td(c.LLAVE==='SI'||c.LLAVE==='1'?'🔑':'','text-align:center;')}
+                ${td((c.LLAVE||'').toUpperCase()==='SI'||c.LLAVE==='1'?'🔑':'','text-align:center;')}
                 ${td(c.TIPO_DATO?`<span style="background:#f0f2f5;padding:1px 6px;border-radius:4px;">${c.TIPO_DATO}</span>`:'')}
                 ${td(c.FORMATO,'color:#888;')}
-                ${td(c.OBLIGATORIO==='SI'||c.OBLIGATORIO==='1'?'✓':'','text-align:center;')}
+                ${td((c.OBLIGATORIO||'').toUpperCase()==='SI'||c.OBLIGATORIO==='1'?'✓':'','text-align:center;')}
                 ${td(c.VALIDACION??'','color:#888;max-width:180px;overflow:hidden;text-overflow:ellipsis;')}
                 ${td(c.CATALOGO??'','color:#888;')}
                 ${td(c.DESCRIPCION_ESP??'','max-width:220px;overflow:hidden;text-overflow:ellipsis;color:#555;')}
