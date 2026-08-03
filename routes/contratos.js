@@ -1126,72 +1126,106 @@ router.post('/inventario-validaciones/upload', requireAuth, upload.single('archi
     const wb   = XLSX.read(req.file.buffer, { type: 'buffer' });
     const ws   = wb.Sheets[wb.SheetNames[0]];
     const rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
+
+    // Normalizar filas válidas
+    const validas = rows.map(r => ({
+      clave:    String(r.CLAVE_VALIDACION || '').trim(),
+      claveRep: String(r.CLAVE_REP || '').trim(),
+      pais:     String(r.CLAVE_PAIS || '').trim(),
+      entidad:  String(r.CLAVE_ENTIDADREGULADA || '').trim(),
+      reg:      String(r.CLAVE_REG || '').trim(),
+      idAnt:    String(r.ID_VALIDACION_ANT || '').trim(),
+      desc:     String(r.DESCRIPCION_VALIDACION || '').trim(),
+      tipo:     String(r.TIPO_VALIDACION || '').trim(),
+      tipoCalc: String(r.TIPO_VALIDACION_CALC || '').trim(),
+    })).filter(r => r.clave);
+
+    // ── 1. Pre-cargar existentes en una sola query ──────────
+    const existingRows = await query(`SELECT CLAVE_VALIDACION FROM INVENTARIO_VALIDACIONES`);
+    const existingSet  = new Set(existingRows.map(r => r.CLAVE_VALIDACION));
+
+    const existingHist = await query(`SELECT CLAVE_VALIDACION FROM INVENTARIO_VALIDACIONES_HIST WHERE VERSION_CARGA=${esc(version)}`);
+    const existingHistSet = new Set(existingHist.map(r => r.CLAVE_VALIDACION));
+
+    const toInsert = validas.filter(r => !existingSet.has(r.clave));
+    const toUpdate = validas.filter(r =>  existingSet.has(r.clave));
+    const toHist   = validas.filter(r => !existingHistSet.has(r.clave));
+
+    const CHUNK = 200;
     let insertados = 0, actualizados = 0, errores = 0;
-    const validacionesProcesadas = [];
 
-    for (const r of rows) {
-      const clave    = String(r.CLAVE_VALIDACION || '').trim();
-      const claveRep = String(r.CLAVE_REP || '').trim();
-      if (!clave) continue;
+    // ── 2. Batch INSERT INVENTARIO_VALIDACIONES ─────────────
+    for (let i = 0; i < toInsert.length; i += CHUNK) {
+      const chunk = toInsert.slice(i, i + CHUNK);
+      const vals  = chunk.map(r =>
+        `(${esc(r.clave)},${esc(r.pais)},${esc(r.entidad)},${esc(r.reg)},${esc(r.claveRep)},` +
+        `${esc(r.idAnt)},${esc(r.desc)},${esc(r.tipo)},${esc(r.tipoCalc)},${esc(version)},GETDATE())`
+      ).join(',');
       try {
-        // Upsert en INVENTARIO_VALIDACIONES
-        const existeInv = await query(`SELECT 1 FROM INVENTARIO_VALIDACIONES WHERE CLAVE_VALIDACION=${esc(clave)}`);
-        if (!existeInv.length) {
-          await query(`
-            INSERT INTO INVENTARIO_VALIDACIONES
-              (CLAVE_VALIDACION, CLAVE_PAIS, CLAVE_ENTIDADREGULADA, CLAVE_REG, CLAVE_REP,
-               ID_VALIDACION_ANT, DESCRIPCION_VALIDACION, TIPO_VALIDACION, TIPO_VALIDACION_CALC, VERSION_CARGA, FECHA_ALTA)
-            VALUES
-              (${esc(clave)}, ${esc(r.CLAVE_PAIS)}, ${esc(r.CLAVE_ENTIDADREGULADA)}, ${esc(r.CLAVE_REG)}, ${esc(claveRep)},
-               ${esc(r.ID_VALIDACION_ANT)}, ${esc(r.DESCRIPCION_VALIDACION)}, ${esc(r.TIPO_VALIDACION)}, ${esc(r.TIPO_VALIDACION_CALC)}, ${esc(version)}, GETDATE())
-          `);
-          insertados++;
-        } else {
-          await query(`
-            UPDATE INVENTARIO_VALIDACIONES SET
-              CLAVE_REP=${esc(claveRep)}, DESCRIPCION_VALIDACION=${esc(r.DESCRIPCION_VALIDACION)},
-              TIPO_VALIDACION=${esc(r.TIPO_VALIDACION)}, VERSION_CARGA=${esc(version)}, FECHA_ACTUALIZADA=GETDATE()
-            WHERE CLAVE_VALIDACION=${esc(clave)}
-          `);
-          actualizados++;
-        }
-        validacionesProcesadas.push({
-          CLAVE_VALIDACION: clave,
-          CLAVE_REP: claveRep,
-          DESCRIPCION_VALIDACION: String(r.DESCRIPCION_VALIDACION || '').trim(),
-          TIPO_VALIDACION: String(r.TIPO_VALIDACION || '').trim()
-        });
-        // Registrar historial en INVENTARIO_VALIDACIONES_HIST
-        try {
-          const existeHist = await query(`
-            SELECT 1 FROM INVENTARIO_VALIDACIONES_HIST
-            WHERE CLAVE_VALIDACION=${esc(clave)} AND VERSION_CARGA=${esc(version)}
-          `);
-          if (!existeHist.length) {
-            await query(`
-              INSERT INTO INVENTARIO_VALIDACIONES_HIST
-                (CLAVE_VALIDACION, VERSION_CARGA, CLAVE_PAIS, CLAVE_ENTIDADREGULADA, CLAVE_REG, CLAVE_REP,
-                 DESCRIPCION_VALIDACION, TIPO_VALIDACION, TIPO_VALIDACION_CALC)
-              VALUES
-                (${esc(clave)}, ${esc(version)}, ${esc(r.CLAVE_PAIS)}, ${esc(r.CLAVE_ENTIDADREGULADA)},
-                 ${esc(r.CLAVE_REG)}, ${esc(claveRep)}, ${esc(r.DESCRIPCION_VALIDACION)},
-                 ${esc(r.TIPO_VALIDACION)}, ${esc(r.TIPO_VALIDACION_CALC)})
-            `);
-          }
-        } catch(e2) { console.warn('[inv-val-hist] error:', e2.message); }
-
-        // Registrar en INVENTARIO_VERSIONES
-        try {
-          if (force) {
-            await query(`DELETE FROM INVENTARIO_VERSIONES WHERE TIPO_OBJETO='VALIDACION' AND CLAVE_OBJ=${esc(clave)} AND VERSION=${esc(version)}`);
-          }
-          await query(`
-            INSERT INTO INVENTARIO_VERSIONES (TIPO_OBJETO, CLAVE_OBJ, VERSION, REGULACION, TIPO_VERSION, DESCRIPCION, ESTATUS, USUARIO)
-            VALUES ('VALIDACION', ${esc(clave)}, ${esc(version)}, ${esc(regulacion)}, ${esc(tipo_version)}, ${esc(descripcion)}, 'IDENTIFICADO', ${esc(usuario)})
-          `);
-        } catch(e3) { console.warn('[inv-versiones] error:', e3.message); }
-      } catch(e2) { console.error('[upload-val] fila error:', e2.message); errores++; }
+        await query(`INSERT INTO INVENTARIO_VALIDACIONES
+          (CLAVE_VALIDACION,CLAVE_PAIS,CLAVE_ENTIDADREGULADA,CLAVE_REG,CLAVE_REP,
+           ID_VALIDACION_ANT,DESCRIPCION_VALIDACION,TIPO_VALIDACION,TIPO_VALIDACION_CALC,VERSION_CARGA,FECHA_ALTA)
+          VALUES ${vals}`);
+        insertados += chunk.length;
+      } catch(e) { console.error('[upload-val] batch insert error:', e.message); errores += chunk.length; }
     }
+
+    // ── 3. Batch UPDATE usando MERGE ────────────────────────
+    for (let i = 0; i < toUpdate.length; i += CHUNK) {
+      const chunk = toUpdate.slice(i, i + CHUNK);
+      const vals  = chunk.map(r =>
+        `(${esc(r.clave)},${esc(r.claveRep)},${esc(r.desc)},${esc(r.tipo)},${esc(r.tipoCalc)})`
+      ).join(',');
+      try {
+        await query(`
+          UPDATE t SET
+            t.CLAVE_REP=s.cr, t.DESCRIPCION_VALIDACION=s.dv,
+            t.TIPO_VALIDACION=s.tv, t.TIPO_VALIDACION_CALC=s.tvc,
+            t.VERSION_CARGA=${esc(version)}, t.FECHA_ACTUALIZADA=GETDATE()
+          FROM INVENTARIO_VALIDACIONES t
+          JOIN (VALUES ${vals}) AS s(cv,cr,dv,tv,tvc)
+            ON t.CLAVE_VALIDACION = s.cv`);
+        actualizados += chunk.length;
+      } catch(e) { console.error('[upload-val] batch update error:', e.message); errores += chunk.length; }
+    }
+
+    // ── 4. Batch INSERT INVENTARIO_VALIDACIONES_HIST ────────
+    for (let i = 0; i < toHist.length; i += CHUNK) {
+      const chunk = toHist.slice(i, i + CHUNK);
+      const vals  = chunk.map(r =>
+        `(${esc(r.clave)},${esc(version)},${esc(r.pais)},${esc(r.entidad)},${esc(r.reg)},` +
+        `${esc(r.claveRep)},${esc(r.desc)},${esc(r.tipo)},${esc(r.tipoCalc)})`
+      ).join(',');
+      try {
+        await query(`INSERT INTO INVENTARIO_VALIDACIONES_HIST
+          (CLAVE_VALIDACION,VERSION_CARGA,CLAVE_PAIS,CLAVE_ENTIDADREGULADA,CLAVE_REG,
+           CLAVE_REP,DESCRIPCION_VALIDACION,TIPO_VALIDACION,TIPO_VALIDACION_CALC)
+          VALUES ${vals}`);
+      } catch(e) { console.warn('[inv-val-hist] batch error:', e.message); }
+    }
+
+    // ── 5. Batch INSERT INVENTARIO_VERSIONES ────────────────
+    if (force) {
+      const clavesList = validas.map(r => esc(r.clave)).join(',');
+      try { await query(`DELETE FROM INVENTARIO_VERSIONES WHERE TIPO_OBJETO='VALIDACION' AND VERSION=${esc(version)} AND CLAVE_OBJ IN (${clavesList})`); }
+      catch(e) { console.warn('[inv-versiones] delete error:', e.message); }
+    }
+    for (let i = 0; i < validas.length; i += CHUNK) {
+      const chunk = validas.slice(i, i + CHUNK);
+      const vals  = chunk.map(r =>
+        `('VALIDACION',${esc(r.clave)},${esc(version)},${esc(regulacion)},${esc(tipo_version)},${esc(descripcion)},'IDENTIFICADO',${esc(usuario)})`
+      ).join(',');
+      try {
+        await query(`INSERT INTO INVENTARIO_VERSIONES
+          (TIPO_OBJETO,CLAVE_OBJ,VERSION,REGULACION,TIPO_VERSION,DESCRIPCION,ESTATUS,USUARIO)
+          VALUES ${vals}`);
+      } catch(e) { console.warn('[inv-versiones] batch error:', e.message); }
+    }
+
+    const validacionesProcesadas = validas.map(r => ({
+      CLAVE_VALIDACION: r.clave, CLAVE_REP: r.claveRep,
+      DESCRIPCION_VALIDACION: r.desc, TIPO_VALIDACION: r.tipo
+    }));
     res.json({ ok: true, insertados, actualizados, errores, validaciones: validacionesProcesadas });
   } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
 });
