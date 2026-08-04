@@ -1545,6 +1545,12 @@ router.post('/contratos/upload', requireAuth, upload.single('archivo'), async (r
             // Asegurar que CLAVE_REP existe en CAT_REPORTES_GENERALES (FK requerida)
             const existeRG = await query(`SELECT 1 FROM CAT_REPORTES_GENERALES WHERE CLAVE_REP_GENERAL=${esc(r.rep)}`);
             if (!existeRG.length) await query(`INSERT INTO CAT_REPORTES_GENERALES (CLAVE_REP_GENERAL) VALUES (${esc(r.rep)})`);
+            // Auto-crear en ESTATUS_REPORTE si no existe para esta plataforma
+            const existeER = await query(`SELECT 1 FROM ESTATUS_REPORTE WHERE CLAVE_REP_GENERAL=${esc(r.rep)} AND CLAVE_PLATAFORMA=${esc(c.plataforma)}`);
+            if (!existeER.length) {
+              await query(`INSERT INTO ESTATUS_REPORTE (CLAVE_REP, CLAVE_REP_GENERAL, CLAVE_PLATAFORMA, VERSION, DOCUMENTADO, PROGRAMADO, CERTIFICADO, ESTATUS)
+                VALUES (${esc(r.rep)}, ${esc(r.rep)}, ${esc(c.plataforma)}, '00', 'NO', 'NO', 'NO', 'NO DOCUMENTADO')`);
+            }
             await query(`INSERT INTO CONTRATOS_REPORTES (CLAVE_CONTRATO, CLAVE_REP, FECHA_ESTIMADA_QA, FECHA_ESTIMADA_CERT, FECHA_ESTIMADA_PROD, ACTIVO)
               VALUES (${esc(c.clave)}, ${esc(r.rep)}, ${r.fechaQA ? esc(r.fechaQA) : 'NULL'}, ${r.fechaCert ? esc(r.fechaCert) : 'NULL'}, ${r.fechaProd ? esc(r.fechaProd) : 'NULL'}, 1)`);
             repInsert++;
