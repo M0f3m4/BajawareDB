@@ -5,7 +5,8 @@
     "nombre": "Jorge Morfin",
     "rol": "admin",
     "activo": true,
-    "createdAt": "2026-06-12T00:00:00.000Z"
+    "createdAt": "2026-06-12T00:00:00.000Z",
+    "passwordHash": "$2b$10$EK/YSz.JY8UqWawD.n2JxeolZZt2wPlTqNzLH2mRmQ9SWPTodh8Iq"
   },
   {
     "id": 2,
@@ -13,7 +14,8 @@
     "nombre": "Omar Lozano",
     "rol": "admin",
     "activo": false,
-    "createdAt": "2026-06-23T18:53:27.872Z"
+    "createdAt": "2026-06-23T18:53:27.872Z",
+    "passwordHash": "$2b$10$ffP0ggeKKZ8nYwvOmXuspepyvsc.gWGX.dWUiPrjNKt4peLuT.KX2"
   },
   {
     "id": 3,
@@ -21,7 +23,8 @@
     "nombre": "Omar Lozano",
     "rol": "admin",
     "activo": true,
-    "createdAt": "2026-06-23T18:53:55.671Z"
+    "createdAt": "2026-06-23T18:53:55.671Z",
+    "passwordHash": "$2b$10$EAEcIuKpREqDeJlDpHNkqeVFgo8xrH6T0MgVsHYQfcSZUdH91DtmG"
   },
   {
     "id": 4,
@@ -29,7 +32,8 @@
     "nombre": "Raul Pizano",
     "rol": "admin",
     "activo": true,
-    "createdAt": "2026-06-23T18:56:00.594Z"
+    "createdAt": "2026-06-23T18:56:00.594Z",
+    "passwordHash": "$2b$10$p5YItYt2OCjeI5NWoM/Rd.7XJhkYgooXF2zUGCKHQp7gtVZr7Yn62"
   },
   {
     "id": 5,
@@ -37,7 +41,8 @@
     "nombre": "Fernando Saavedra",
     "rol": "admin",
     "activo": false,
-    "createdAt": "2026-06-23T18:56:31.083Z"
+    "createdAt": "2026-06-23T18:56:31.083Z",
+    "passwordHash": "$2b$10$iqcYVGmpy92j/VPnM5Zn3OFb086sui4SrTx/Foz6AYv3VPehnDbt2"
   },
   {
     "id": 6,
@@ -45,6 +50,7 @@
     "nombre": "Fernando Saavedra",
     "rol": "admin",
     "activo": true,
-    "createdAt": "2026-06-23T18:57:04.295Z"
+    "createdAt": "2026-06-23T18:57:04.295Z",
+    "passwordHash": "$2b$10$uFixCTmwPy0SOXWvpiMqp.TgcoYfNzC6qeMGxeQg0CXD8fXh3cVw."
   }
 ]
