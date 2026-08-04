@@ -1431,59 +1431,131 @@ router.get('/inventario-validaciones/lista', requireAuth, async (req, res) => {
   } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
 });
 
-// ── POST carga Excel contratos (2 hojas) ──────────────────
+// ── helpers para parsear Excel de contratos ───────────────
+function parseContratosExcel(buffer) {
+  const wb = XLSX.read(buffer, { type: 'buffer' });
+  const wsC = wb.Sheets['CONTRATO'] || wb.Sheets[wb.SheetNames[0]];
+  const wsR = wb.Sheets['REPORTES'] || wb.Sheets[wb.SheetNames[1]];
+  const rawC = XLSX.utils.sheet_to_json(wsC, { defval: '' });
+  const rawR = wsR ? XLSX.utils.sheet_to_json(wsR, { defval: '' }) : [];
+  const contratos = rawC.map(r => ({
+    clave:     String(r.CLAVE_CONTRATO   || '').trim(),
+    nombre:    String(r.NOMBRE_CONTRATO  || '').trim(),
+    cliente:   String(r.CLAVE_CLIENTE    || '').trim(),
+    nomCli:    String(r.NOMBRE_CLIENTE   || '').trim(),
+    plataforma:String(r.CLAVE_PLATAFORMA || '').trim(),
+    notas:     String(r.NOTAS || '').trim(),
+  })).filter(r => r.clave && r.cliente && r.plataforma);
+  const reportes = rawR.map(r => ({
+    contrato:  String(r.CLAVE_CONTRATO      || '').trim(),
+    rep:       String(r.CLAVE_REP           || '').trim(),
+    fechaQA:   String(r.FECHA_ESTIMADA_QA   || '').trim() || null,
+    fechaCert: String(r.FECHA_ESTIMADA_CERT || '').trim() || null,
+    fechaProd: String(r.FECHA_ESTIMADA_PROD || '').trim() || null,
+  })).filter(r => r.contrato && r.rep);
+  return { contratos, reportes };
+}
+
+// ── POST /contratos/preview — analiza sin guardar ─────────
+router.post('/contratos/preview', requireAuth, upload.single('archivo'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ ok: false, message: 'No se recibió archivo' });
+  try {
+    const { contratos, reportes } = parseContratosExcel(req.file.buffer);
+
+    // Verificar existencia de clientes y contratos
+    const preview = [];
+    for (const c of contratos) {
+      const [cliRow]  = await query(`SELECT NOMBRE_CLIENTE FROM CLIENTE WHERE CLAVE_CLIENTE=${esc(c.cliente)}`);
+      const [contRow] = await query(`SELECT NOMBRE_CONTRATO FROM CONTRATOS WHERE CLAVE_CONTRATO=${esc(c.clave)}`);
+      const repsContrato = reportes.filter(r => r.contrato === c.clave);
+
+      // Reportes actuales en BD para este contrato
+      const repsBD = await query(`SELECT CLAVE_REP FROM CONTRATOS_REPORTES WHERE CLAVE_CONTRATO=${esc(c.clave)} AND ACTIVO=1`);
+      const repsBDSet = new Set(repsBD.map(r => r.CLAVE_REP));
+      const repsExcelSet = new Set(repsContrato.map(r => r.rep));
+
+      preview.push({
+        clave:        c.clave,
+        nombre:       c.nombre,
+        cliente:      c.cliente,
+        nomCli:       cliRow ? cliRow.NOMBRE_CLIENTE : (c.nomCli || c.cliente),
+        clienteNuevo: !cliRow,
+        plataforma:   c.plataforma,
+        contratoNuevo:!contRow,
+        totalReportes: repsContrato.length,
+        repsNuevos:   repsContrato.filter(r => !repsBDSet.has(r.rep)).map(r => r.rep),
+        repsDesactivar: [...repsBDSet].filter(r => !repsExcelSet.has(r)),
+        repsActualizar: repsContrato.filter(r => repsBDSet.has(r.rep)).map(r => r.rep),
+      });
+    }
+    res.json({ ok: true, preview });
+  } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
+});
+
+// ── POST /contratos/upload — carga real ───────────────────
 router.post('/contratos/upload', requireAuth, upload.single('archivo'), async (req, res) => {
   if (!req.file) return res.status(400).json({ ok: false, message: 'No se recibió archivo' });
   try {
-    const wb = XLSX.read(req.file.buffer, { type: 'buffer' });
+    const usuario = req.session.user?.username || 'sistema';
+    const { contratos, reportes } = parseContratosExcel(req.file.buffer);
 
-    // Hoja CONTRATO
-    const wsC  = wb.Sheets['CONTRATO'] || wb.Sheets[wb.SheetNames[0]];
-    const cont = XLSX.utils.sheet_to_json(wsC, { defval: '' });
-    let contInsert = 0, contErr = 0;
-    for (const r of cont) {
-      const clave = String(r.CLAVE_CONTRATO || '').trim();
-      if (!clave) continue;
+    let cliInsert = 0, contInsert = 0, contUpdate = 0;
+    let repInsert = 0, repUpdate = 0, repDesactivar = 0, errores = 0;
+
+    for (const c of contratos) {
       try {
-        const existe = await query(`SELECT 1 FROM CONTRATOS WHERE CLAVE_CONTRATO=${esc(clave)}`);
-        if (!existe.length) {
-          await query(`
-            INSERT INTO CONTRATOS (CLAVE_CONTRATO, NOMBRE_CONTRATO, CLAVE_CLIENTE, CLAVE_PLATAFORMA, FECHA_ALTA, FECHA_MODIFICA)
-            VALUES (${esc(clave)}, ${esc(r.NOMBRE_CONTRATO)}, ${esc(r.CLAVE_CLIENTE)}, ${esc(r.CLAVE_PLATAFORMA)}, GETDATE(), GETDATE())
-          `);
-          contInsert++;
+        // 1. CLIENTE — insertar si no existe
+        const [cliRow] = await query(`SELECT 1 FROM CLIENTE WHERE CLAVE_CLIENTE=${esc(c.cliente)}`);
+        if (!cliRow) {
+          await query(`INSERT INTO CLIENTE (CLAVE_CLIENTE, NOMBRE_CLIENTE, ACTIVO) VALUES (${esc(c.cliente)}, ${esc(c.nomCli || c.cliente)}, 1)`);
+          cliInsert++;
         }
-      } catch(e2) { contErr++; }
-    }
 
-    // Hoja REPORTES
-    const wsR  = wb.Sheets['REPORTES'] || wb.Sheets[wb.SheetNames[1]];
-    let repInsert = 0, repErr = 0;
-    if (wsR) {
-      const reps = XLSX.utils.sheet_to_json(wsR, { defval: '' });
-      for (const r of reps) {
-        const claveC = String(r.CLAVE_CONTRATO || '').trim();
-        const claveR = String(r.CLAVE_REP || '').trim();
-        if (!claveC || !claveR) continue;
-        try {
-          const existe = await query(`SELECT 1 FROM CONTRATOS_REPORTES WHERE CLAVE_CONTRATO=${esc(claveC)} AND CLAVE_REP=${esc(claveR)}`);
-          if (!existe.length) {
-            await query(`
-              INSERT INTO CONTRATOS_REPORTES (CLAVE_CONTRATO, CLAVE_REP, FECHA_ESTIMADA_QA, FECHA_ESTIMADA_CERT, FECHA_ESTIMADA_PROD)
-              VALUES (
-                ${esc(claveC)}, ${esc(claveR)},
-                ${r.FECHA_ESTIMADA_QA  ? esc(r.FECHA_ESTIMADA_QA)  : 'NULL'},
-                ${r.FECHA_ESTIMADA_CERT ? esc(r.FECHA_ESTIMADA_CERT) : 'NULL'},
-                ${r.FECHA_ESTIMADA_PROD ? esc(r.FECHA_ESTIMADA_PROD) : 'NULL'}
-              )
-            `);
+        // 2. CONTRATO — insert o update
+        const [contRow] = await query(`SELECT 1 FROM CONTRATOS WHERE CLAVE_CONTRATO=${esc(c.clave)}`);
+        if (!contRow) {
+          await query(`INSERT INTO CONTRATOS (CLAVE_CONTRATO, NOMBRE_CONTRATO, CLAVE_CLIENTE, CLAVE_PLATAFORMA, FECHA_ALTA, FECHA_MODIFICA)
+            VALUES (${esc(c.clave)}, ${esc(c.nombre)}, ${esc(c.cliente)}, ${esc(c.plataforma)}, GETDATE(), GETDATE())`);
+          contInsert++;
+        } else {
+          await query(`UPDATE CONTRATOS SET NOMBRE_CONTRATO=${esc(c.nombre)}, CLAVE_PLATAFORMA=${esc(c.plataforma)}, FECHA_MODIFICA=GETDATE()
+            WHERE CLAVE_CONTRATO=${esc(c.clave)}`);
+          contUpdate++;
+        }
+
+        // 3. CONTRATOS_REPORTES
+        const repsContrato = reportes.filter(r => r.contrato === c.clave);
+        const repsBD = await query(`SELECT CLAVE_REP FROM CONTRATOS_REPORTES WHERE CLAVE_CONTRATO=${esc(c.clave)}`);
+        const repsBDSet = new Set(repsBD.map(r => r.CLAVE_REP));
+        const repsExcelSet = new Set(repsContrato.map(r => r.rep));
+
+        for (const r of repsContrato) {
+          if (!repsBDSet.has(r.rep)) {
+            await query(`INSERT INTO CONTRATOS_REPORTES (CLAVE_CONTRATO, CLAVE_REP, FECHA_ESTIMADA_QA, FECHA_ESTIMADA_CERT, FECHA_ESTIMADA_PROD, ACTIVO)
+              VALUES (${esc(c.clave)}, ${esc(r.rep)}, ${r.fechaQA ? esc(r.fechaQA) : 'NULL'}, ${r.fechaCert ? esc(r.fechaCert) : 'NULL'}, ${r.fechaProd ? esc(r.fechaProd) : 'NULL'}, 1)`);
             repInsert++;
+          } else {
+            await query(`UPDATE CONTRATOS_REPORTES SET FECHA_ESTIMADA_QA=${r.fechaQA ? esc(r.fechaQA) : 'NULL'}, FECHA_ESTIMADA_CERT=${r.fechaCert ? esc(r.fechaCert) : 'NULL'}, FECHA_ESTIMADA_PROD=${r.fechaProd ? esc(r.fechaProd) : 'NULL'}, ACTIVO=1
+              WHERE CLAVE_CONTRATO=${esc(c.clave)} AND CLAVE_REP=${esc(r.rep)}`);
+            repUpdate++;
           }
-        } catch(e2) { repErr++; }
-      }
+        }
+
+        // Desactivar reportes que ya no están en el Excel
+        for (const rep of [...repsBDSet].filter(r => !repsExcelSet.has(r))) {
+          await query(`UPDATE CONTRATOS_REPORTES SET ACTIVO=0 WHERE CLAVE_CONTRATO=${esc(c.clave)} AND CLAVE_REP=${esc(rep)}`);
+          repDesactivar++;
+        }
+
+        await auditLog(usuario, 'upload-contratos', 'UPLOAD', {
+          contrato: c.clave, cliente: c.cliente, plataforma: c.plataforma,
+          reportes_nuevos: repInsert, reportes_desactivados: repDesactivar
+        });
+      } catch(e2) { console.error('[upload-contratos]', e2.message); errores++; }
     }
 
-    res.json({ ok: true, contratos: { insertados: contInsert, errores: contErr }, reportes: { insertados: repInsert, errores: repErr } });
+    res.json({ ok: true, clientes: { insertados: cliInsert }, contratos: { insertados: contInsert, actualizados: contUpdate },
+      reportes: { insertados: repInsert, actualizados: repUpdate, desactivados: repDesactivar }, errores });
   } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
 });
 
