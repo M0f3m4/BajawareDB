@@ -1458,11 +1458,8 @@ function parseContratosExcel(buffer) {
     notas:     String(r.NOTAS || '').trim(),
   })).filter(r => r.clave && r.cliente && r.plataforma);
   const reportes = rawR.map(r => ({
-    contrato:  String(r.CLAVE_CONTRATO      || '').trim(),
-    rep:       String(r.CLAVE_REP           || '').trim(),
-    fechaQA:   String(r.FECHA_ESTIMADA_QA   || '').trim() || null,
-    fechaCert: String(r.FECHA_ESTIMADA_CERT || '').trim() || null,
-    fechaProd: String(r.FECHA_ESTIMADA_PROD || '').trim() || null,
+    contrato: String(r.CLAVE_CONTRATO || '').trim(),
+    rep:      String(r.CLAVE_REP      || '').trim(),
   })).filter(r => r.contrato && r.rep);
   return { contratos, reportes };
 }
@@ -1485,6 +1482,14 @@ router.post('/contratos/preview', requireAuth, upload.single('archivo'), async (
       const repsBDSet = new Set(repsBD.map(r => r.CLAVE_REP));
       const repsExcelSet = new Set(repsContrato.map(r => r.rep));
 
+      // Validar cuáles reportes existen en inventario para la plataforma
+      const repsValidos = [], repsInvalidos = [];
+      for (const r of repsContrato) {
+        const existe = await query(`SELECT 1 FROM ESTATUS_REPORTE WHERE CLAVE_REP_GENERAL=${esc(r.rep)} AND CLAVE_PLATAFORMA=${esc(c.plataforma)}`);
+        if (existe.length) repsValidos.push(r.rep);
+        else repsInvalidos.push(r.rep);
+      }
+
       preview.push({
         clave:        c.clave,
         nombre:       c.nombre,
@@ -1494,9 +1499,10 @@ router.post('/contratos/preview', requireAuth, upload.single('archivo'), async (
         plataforma:   c.plataforma,
         contratoNuevo:!contRow,
         totalReportes: repsContrato.length,
-        repsNuevos:   repsContrato.filter(r => !repsBDSet.has(r.rep)).map(r => r.rep),
+        repsNuevos:     repsValidos.filter(r => !repsBDSet.has(r)),
         repsDesactivar: [...repsBDSet].filter(r => !repsExcelSet.has(r)),
-        repsActualizar: repsContrato.filter(r => repsBDSet.has(r.rep)).map(r => r.rep),
+        repsActualizar: repsValidos.filter(r => repsBDSet.has(r)),
+        repsInvalidos,
       });
     }
     res.json({ ok: true, preview });
@@ -1542,20 +1548,18 @@ router.post('/contratos/upload', requireAuth, upload.single('archivo'), async (r
 
         for (const r of repsContrato) {
           if (!repsBDSet.has(r.rep)) {
-            // Asegurar que CLAVE_REP existe en CAT_REPORTES_GENERALES (FK requerida)
-            const existeRG = await query(`SELECT 1 FROM CAT_REPORTES_GENERALES WHERE CLAVE_REP_GENERAL=${esc(r.rep)}`);
-            if (!existeRG.length) await query(`INSERT INTO CAT_REPORTES_GENERALES (CLAVE_REP_GENERAL) VALUES (${esc(r.rep)})`);
-            // Auto-crear en ESTATUS_REPORTE si no existe para esta plataforma
+            // Validar que el reporte existe en el inventario para esta plataforma
             const existeER = await query(`SELECT 1 FROM ESTATUS_REPORTE WHERE CLAVE_REP_GENERAL=${esc(r.rep)} AND CLAVE_PLATAFORMA=${esc(c.plataforma)}`);
             if (!existeER.length) {
-              await query(`INSERT INTO ESTATUS_REPORTE (CLAVE_REP, CLAVE_REP_GENERAL, CLAVE_PLATAFORMA, VERSION, DOCUMENTADO, PROGRAMADO, CERTIFICADO, ESTATUS)
-                VALUES (${esc(r.rep)}, ${esc(r.rep)}, ${esc(c.plataforma)}, '00', 'NO', 'NO', 'NO', 'NO DOCUMENTADO')`);
+              errMsg = (errMsg ? errMsg + ', ' : '') + `${r.rep} no existe en inventario para ${c.plataforma}`;
+              errores++;
+              continue;
             }
-            await query(`INSERT INTO CONTRATOS_REPORTES (CLAVE_CONTRATO, CLAVE_REP, FECHA_ESTIMADA_QA, FECHA_ESTIMADA_CERT, FECHA_ESTIMADA_PROD, ACTIVO)
-              VALUES (${esc(c.clave)}, ${esc(r.rep)}, ${r.fechaQA ? esc(r.fechaQA) : 'NULL'}, ${r.fechaCert ? esc(r.fechaCert) : 'NULL'}, ${r.fechaProd ? esc(r.fechaProd) : 'NULL'}, 1)`);
+            await query(`INSERT INTO CONTRATOS_REPORTES (CLAVE_CONTRATO, CLAVE_REP, ACTIVO)
+              VALUES (${esc(c.clave)}, ${esc(r.rep)}, 1)`);
             repInsert++;
           } else {
-            await query(`UPDATE CONTRATOS_REPORTES SET FECHA_ESTIMADA_QA=${r.fechaQA ? esc(r.fechaQA) : 'NULL'}, FECHA_ESTIMADA_CERT=${r.fechaCert ? esc(r.fechaCert) : 'NULL'}, FECHA_ESTIMADA_PROD=${r.fechaProd ? esc(r.fechaProd) : 'NULL'}, ACTIVO=1
+            await query(`UPDATE CONTRATOS_REPORTES SET ACTIVO=1
               WHERE CLAVE_CONTRATO=${esc(c.clave)} AND CLAVE_REP=${esc(r.rep)}`);
             repUpdate++;
           }
