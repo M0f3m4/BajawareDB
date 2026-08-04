@@ -1517,7 +1517,7 @@ router.post('/contratos/upload', requireAuth, upload.single('archivo'), async (r
         // 1. CLIENTE — insertar si no existe
         const [cliRow] = await query(`SELECT 1 FROM CLIENTE WHERE CLAVE_CLIENTE=${esc(c.cliente)}`);
         if (!cliRow) {
-          await query(`INSERT INTO CLIENTE (CLAVE_CLIENTE, NOMBRE_CLIENTE, ACTIVO) VALUES (${esc(c.cliente)}, ${esc(c.nomCli || c.cliente)}, 1)`);
+          await query(`INSERT INTO CLIENTE (CLAVE_CLIENTE, NOMBRE_CLIENTE, CLAVE_PAIS, ACTIVO) VALUES (${esc(c.cliente)}, ${esc(c.nomCli || c.cliente)}, 'MX', 1)`);
           cliInsert++;
         }
 
