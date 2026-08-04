@@ -1431,13 +1431,23 @@ router.get('/inventario-validaciones/lista', requireAuth, async (req, res) => {
   } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
 });
 
+// ── helper: detectar fila de headers ─────────────────────
+function _detectHeaderRow(ws) {
+  const raw = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null });
+  for (let i = 0; i < Math.min(raw.length, 5); i++) {
+    const h = (raw[i] || []).map(v => (v || '').toString().toUpperCase().trim());
+    if (h.includes('CLAVE_CONTRATO') || h.includes('CLAVE_REP')) return i;
+  }
+  return 0;
+}
+
 // ── helpers para parsear Excel de contratos ───────────────
 function parseContratosExcel(buffer) {
   const wb = XLSX.read(buffer, { type: 'buffer' });
   const wsC = wb.Sheets['CONTRATO'] || wb.Sheets[wb.SheetNames[0]];
   const wsR = wb.Sheets['REPORTES'] || wb.Sheets[wb.SheetNames[1]];
-  const rawC = XLSX.utils.sheet_to_json(wsC, { defval: '' });
-  const rawR = wsR ? XLSX.utils.sheet_to_json(wsR, { defval: '' }) : [];
+  const rawC = XLSX.utils.sheet_to_json(wsC, { defval: '', range: _detectHeaderRow(wsC) });
+  const rawR = wsR ? XLSX.utils.sheet_to_json(wsR, { defval: '', range: _detectHeaderRow(wsR) }) : [];
   const contratos = rawC.map(r => ({
     clave:     String(r.CLAVE_CONTRATO   || '').trim(),
     nombre:    String(r.NOMBRE_CONTRATO  || '').trim(),
