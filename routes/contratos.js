@@ -1542,6 +1542,9 @@ router.post('/contratos/upload', requireAuth, upload.single('archivo'), async (r
 
         for (const r of repsContrato) {
           if (!repsBDSet.has(r.rep)) {
+            // Asegurar que CLAVE_REP existe en CAT_REPORTES_GENERALES (FK requerida)
+            const existeRG = await query(`SELECT 1 FROM CAT_REPORTES_GENERALES WHERE CLAVE_REP_GENERAL=${esc(r.rep)}`);
+            if (!existeRG.length) await query(`INSERT INTO CAT_REPORTES_GENERALES (CLAVE_REP_GENERAL) VALUES (${esc(r.rep)})`);
             await query(`INSERT INTO CONTRATOS_REPORTES (CLAVE_CONTRATO, CLAVE_REP, FECHA_ESTIMADA_QA, FECHA_ESTIMADA_CERT, FECHA_ESTIMADA_PROD, ACTIVO)
               VALUES (${esc(c.clave)}, ${esc(r.rep)}, ${r.fechaQA ? esc(r.fechaQA) : 'NULL'}, ${r.fechaCert ? esc(r.fechaCert) : 'NULL'}, ${r.fechaProd ? esc(r.fechaProd) : 'NULL'}, 1)`);
             repInsert++;
