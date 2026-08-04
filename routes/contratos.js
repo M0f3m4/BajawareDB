@@ -1510,7 +1510,7 @@ router.post('/contratos/upload', requireAuth, upload.single('archivo'), async (r
     const { contratos, reportes } = parseContratosExcel(req.file.buffer);
 
     let cliInsert = 0, contInsert = 0, contUpdate = 0;
-    let repInsert = 0, repUpdate = 0, repDesactivar = 0, errores = 0;
+    let repInsert = 0, repUpdate = 0, repDesactivar = 0, errores = 0, errMsg = null;
 
     for (const c of contratos) {
       try {
@@ -1561,11 +1561,11 @@ router.post('/contratos/upload', requireAuth, upload.single('archivo'), async (r
           contrato: c.clave, cliente: c.cliente, plataforma: c.plataforma,
           reportes_nuevos: repInsert, reportes_desactivados: repDesactivar
         });
-      } catch(e2) { console.error('[upload-contratos]', e2.message); errores++; }
+      } catch(e2) { console.error('[upload-contratos]', e2.message); errores++; errMsg = e2.message; }
     }
 
     res.json({ ok: true, clientes: { insertados: cliInsert }, contratos: { insertados: contInsert, actualizados: contUpdate },
-      reportes: { insertados: repInsert, actualizados: repUpdate, desactivados: repDesactivar }, errores });
+      reportes: { insertados: repInsert, actualizados: repUpdate, desactivados: repDesactivar }, errores, errMsg: errMsg || null });
   } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
 });
 

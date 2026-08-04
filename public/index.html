@@ -6926,7 +6926,8 @@
     try {
       const r = await fetch('/api/contratos/contratos/upload', { method: 'POST', body: fd }).then(x => x.json());
       if (r.ok) {
-        msg.innerHTML = `<span style="color:#27ae60;">✅ Clientes: ${r.clientes.insertados} nuevos · Contratos: ${r.contratos.insertados} nuevos, ${r.contratos.actualizados} actualizados · Reportes: ${r.reportes.insertados} nuevos, ${r.reportes.actualizados} actualizados, ${r.reportes.desactivados} desactivados</span>`;
+        const errTxt = r.errores > 0 ? ` · ⚠️ ${r.errores} error(es): ${r.errMsg || ''}` : '';
+        msg.innerHTML = `<span style="color:#27ae60;">✅ Clientes: ${r.clientes.insertados} nuevos · Contratos: ${r.contratos.insertados} nuevos, ${r.contratos.actualizados} actualizados · Reportes: ${r.reportes.insertados} nuevos, ${r.reportes.actualizados} actualizados, ${r.reportes.desactivados} desactivados${errTxt}</span>`;
         document.getElementById('bc-inv-cont-file').value = '';
       } else {
         msg.innerHTML = `<span style="color:#e74c3c;">❌ ${r.message}</span>`;
