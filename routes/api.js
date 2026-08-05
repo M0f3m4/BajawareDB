@@ -503,7 +503,7 @@ router.get('/inventario/reportes', requireAuth, async (req, res) => {
   try {
     const rows = await query(`
       SELECT TOP 200
-        ir.CLAVE_REP, ir.REPORTE, ir.CLAVE_ENTIDADREGULADA, ir.CLAVE_REG,
+        ir.CLAVE_REP, ir.CLAVE_REP_GENERAL, ir.REPORTE, ir.CLAVE_ENTIDADREGULADA, ir.CLAVE_REG,
         ir.CLAVE_GRUPO, ir.CLAVE_PERIODO, ir.CLAVE_VERSION_REPORTE,
         ir.DESCRIPCION_ESP, ir.VIGENTE, ir.FECHA_ACTUALIZADA,
         ir.VERSION_CARGA,
