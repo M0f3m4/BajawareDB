@@ -2594,52 +2594,162 @@
     }
   }
 
+  let _layDetalleVersiones = [];
+  let _layDetalleSeleccion = [];
+
   async function abrirDetalleLayout(clave_layout, clave_entidad, clave_pais, version) {
     document.getElementById('lay-detalle-titulo').textContent = clave_layout;
     document.getElementById('lay-detalle-sub').textContent =
-      [clave_entidad, clave_pais, version ? `v${version}` : ''].filter(Boolean).join(' · ');
-    document.getElementById('lay-detalle-body').innerHTML = '<div class="loading">Cargando campos...</div>';
+      [clave_entidad, clave_pais].filter(Boolean).join(' · ');
+    document.getElementById('lay-detalle-body').innerHTML = '<div class="loading">Cargando versiones...</div>';
     document.getElementById('lay-detalle-modal').style.display = 'flex';
+    _layDetalleVersiones = [];
+    _layDetalleSeleccion = [];
 
     try {
-      let url = `/api/inventario/layouts?layout=${encodeURIComponent(clave_layout)}`;
-      if (clave_entidad) url += `&entidad=${encodeURIComponent(clave_entidad)}`;
-      const r = await fetch(url).then(x => x.json());
-      if (!r.ok) throw new Error(r.message);
-      const campos = r.data || [];
-      const th = s => `<th style="padding:7px 10px;text-align:left;white-space:nowrap;background:#1a3558;color:#fff;position:sticky;top:0;font-size:11px;">${s}</th>`;
-      const td = (v, opts='') => `<td style="padding:5px 10px;font-size:11px;white-space:nowrap;${opts}">${v??''}</td>`;
-      document.getElementById('lay-detalle-body').innerHTML = `
-        <div style="margin-bottom:8px;font-size:12px;color:#888;">${campos.length} campos</div>
-        <div style="overflow:auto;max-height:70vh;">
-          <table style="border-collapse:collapse;font-size:12px;min-width:max-content;">
-            <thead><tr>
-              ${th('#')}${th('Campo')}${th('Layout CITI')}${th('Llave')}${th('Tipo')}${th('Formato')}${th('Obligatorio')}${th('Validación')}${th('Catálogo')}${th('Descripción ESP')}${th('Descripción ING')}${th('Observaciones')}${th('Validez Info')}${th('Fuente')}${th('Versión')}
-            </tr></thead>
-            <tbody>${campos.map((c,i) => `
-              <tr style="background:${i%2===0?'#fff':'#f8f9fa'}">
-                ${td(c.ORDEN,'text-align:center;color:#aaa;')}
-                ${td(`<strong>${c.NOMBRE_CAMPO??''}</strong>`)}
-                ${td(c.CLAVE_LAYOUT_CITI,'color:#888;')}
-                ${td((c.LLAVE||'').toUpperCase()==='SI'||c.LLAVE==='1'?'🔑':'','text-align:center;')}
-                ${td(c.TIPO_DATO?`<span style="background:#f0f2f5;padding:1px 6px;border-radius:4px;">${c.TIPO_DATO}</span>`:'')}
-                ${td(c.FORMATO,'color:#888;')}
-                ${td((c.OBLIGATORIO||'').toUpperCase()==='SI'||c.OBLIGATORIO==='1'?'✓':'','text-align:center;')}
-                ${td(c.VALIDACION??'','color:#888;max-width:180px;overflow:hidden;text-overflow:ellipsis;')}
-                ${td(c.CATALOGO??'','color:#888;')}
-                ${td(c.DESCRIPCION_ESP??'','max-width:220px;overflow:hidden;text-overflow:ellipsis;color:#555;')}
-                ${td(c.DESCRIPCION_ING??'','max-width:220px;overflow:hidden;text-overflow:ellipsis;color:#888;')}
-                ${td(c.OBSERVACIONES??'','max-width:160px;overflow:hidden;text-overflow:ellipsis;color:#888;')}
-                ${td(c.VALIDEZ_INFO??'','color:#888;')}
-                ${td(c.FUENTE??'','color:#888;')}
-                ${td(c.VERSION??'','color:#aaa;font-family:monospace;')}
-              </tr>`).join('')}
-            </tbody>
-          </table>
-        </div>`;
+      // Cargar versiones con snapshot
+      const verRes = await fetch(`/api/layouts/versiones?layout=${encodeURIComponent(clave_layout)}`).then(x => x.json());
+      const versiones = (verRes.ok ? verRes.data : []).filter(v => v.datos && v.datos.length);
+
+      if (!versiones.length) {
+        // Sin versiones con snapshot — mostrar campos actuales de BD
+        let url = `/api/inventario/layouts?layout=${encodeURIComponent(clave_layout)}`;
+        if (clave_entidad) url += `&entidad=${encodeURIComponent(clave_entidad)}`;
+        const r = await fetch(url).then(x => x.json());
+        if (!r.ok) throw new Error(r.message);
+        document.getElementById('lay-detalle-body').innerHTML =
+          `<p style="font-size:12px;color:#aaa;margin-bottom:12px;">Sin historial de versiones — mostrando estado actual.</p>` +
+          _layTablaHTML(r.data || [], '#fff');
+        return;
+      }
+
+      _layDetalleVersiones = versiones;
+      _layDetalleSeleccion = [versiones[0]];
+      _layRenderDetalle();
     } catch(e) {
       document.getElementById('lay-detalle-body').innerHTML = `<p style="color:#e74c3c;">Error: ${e.message}</p>`;
     }
+  }
+
+  function _layTablaHTML(campos, bgAlt) {
+    const th = s => `<th style="padding:6px 9px;text-align:left;white-space:nowrap;background:#1a3558;color:#fff;position:sticky;top:0;font-size:10px;">${s}</th>`;
+    const td = (v, extra='') => `<td style="padding:4px 9px;font-size:10px;white-space:nowrap;${extra}">${v??''}</td>`;
+    return `<div style="overflow:auto;max-height:60vh;border:1px solid #e0e6ed;border-radius:6px;">
+      <table style="border-collapse:collapse;font-size:10px;min-width:max-content;width:100%;">
+        <thead><tr>${th('#')}${th('Campo')}${th('Llave')}${th('Tipo')}${th('Formato')}${th('Oblig.')}${th('Validación')}${th('Catálogo')}${th('Descripción ESP')}</tr></thead>
+        <tbody>${campos.map((c,i) => `
+          <tr style="background:${c._bg||(i%2===0?'#fff':bgAlt||'#f8f9fa')}">
+            ${td(c.ORDEN,'text-align:center;color:#aaa;')}
+            ${td(`<strong>${c.NOMBRE_CAMPO??''}</strong>`)}
+            ${td((c.LLAVE||'').toUpperCase()==='SI'||c.LLAVE==='1'?'🔑':'','text-align:center;')}
+            ${td(c.TIPO_DATO?`<span style="background:#f0f2f5;padding:1px 5px;border-radius:3px;">${c.TIPO_DATO}</span>`:'')}
+            ${td(c.FORMATO,'color:#888;')}
+            ${td((c.OBLIGATORIO||'').toUpperCase()==='SI'||c.OBLIGATORIO==='1'?'✓':'','text-align:center;')}
+            ${td(c.VALIDACION??'','color:#888;max-width:150px;overflow:hidden;text-overflow:ellipsis;')}
+            ${td(c.CATALOGO??'','color:#888;')}
+            ${td(c.DESCRIPCION_ESP??'','max-width:200px;overflow:hidden;text-overflow:ellipsis;color:#555;')}
+          </tr>`).join('')}
+        </tbody>
+      </table></div>`;
+  }
+
+  function _layRenderDetalle() {
+    const body = document.getElementById('lay-detalle-body');
+    const versiones = _layDetalleVersiones;
+    const sel = _layDetalleSeleccion;
+
+    // Pills de versiones
+    const pills = versiones.map((v, i) => {
+      const isSelected = sel.includes(v);
+      const idx = sel.indexOf(v);
+      const color = idx === 0 ? '#1a3558' : '#27ae60';
+      return `<button onclick="_layToggleVersion(${i})"
+        style="padding:4px 12px;border-radius:20px;border:2px solid ${isSelected ? color : '#ddd'};
+        background:${isSelected ? color : '#fff'};color:${isSelected ? '#fff' : '#555'};
+        font-size:11px;font-weight:600;cursor:pointer;transition:all .15s;">
+        v${v.version || (v.VER_MAJOR !== undefined ? `${v.VER_MAJOR}.${v.VER_MINOR}.${v.VER_PATCH}` : '?')}
+        ${isSelected && sel.length === 2 ? (idx === 0 ? ' (A)' : ' (B)') : ''}
+      </button>`;
+    }).join('');
+
+    const hint = sel.length === 0 ? 'Selecciona una versión' :
+                 sel.length === 1 ? 'Selecciona otra versión para comparar lado a lado' :
+                 'Comparando A vs B';
+
+    let content = '';
+
+    if (sel.length === 1) {
+      // Una versión — tabla simple
+      const campos = sel[0].datos || [];
+      content = `<p style="font-size:11px;color:#888;margin-bottom:8px;">${campos.length} campos · v${sel[0].version||''} · ${sel[0].ARCHIVO_NOMBRE||''}</p>
+        ${_layTablaHTML(campos)}`;
+
+    } else if (sel.length === 2) {
+      // Dos versiones — lado a lado con highlights
+      const camposA = sel[0].datos || [];
+      const camposB = sel[1].datos || [];
+      const mapA = Object.fromEntries(camposA.map(c => [c.NOMBRE_CAMPO, c]));
+      const mapB = Object.fromEntries(camposB.map(c => [c.NOMBRE_CAMPO, c]));
+      const difCols = ['TIPO_DATO','FORMATO','OBLIGATORIO','LLAVE','VALIDACION','CATALOGO','DESCRIPCION_ESP'];
+
+      const markA = camposA.map(c => {
+        if (!mapB[c.NOMBRE_CAMPO]) return { ...c, _bg: '#fdecea' }; // eliminado
+        const diffs = difCols.some(col => (c[col]||'') !== (mapB[c.NOMBRE_CAMPO][col]||''));
+        return { ...c, _bg: diffs ? '#fffbe6' : undefined };
+      });
+      const markB = camposB.map(c => {
+        if (!mapA[c.NOMBRE_CAMPO]) return { ...c, _bg: '#e8f5e9' }; // nuevo
+        const diffs = difCols.some(col => (c[col]||'') !== (mapA[c.NOMBRE_CAMPO][col]||''));
+        return { ...c, _bg: diffs ? '#fffbe6' : undefined };
+      });
+
+      const vA = sel[0].version || '';
+      const vB = sel[1].version || '';
+      content = `
+        <div style="display:flex;gap:4px;margin-bottom:6px;font-size:10px;color:#888;">
+          <span style="background:#fdecea;padding:1px 8px;border-radius:4px;">🔴 Solo en A</span>
+          <span style="background:#e8f5e9;padding:1px 8px;border-radius:4px;">🟢 Solo en B</span>
+          <span style="background:#fffbe6;padding:1px 8px;border-radius:4px;">🟡 Modificado</span>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+          <div>
+            <div style="font-weight:600;color:#1a3558;font-size:12px;margin-bottom:6px;">
+              (A) v${vA} · ${camposA.length} campos
+            </div>
+            ${_layTablaHTML(markA)}
+          </div>
+          <div>
+            <div style="font-weight:600;color:#27ae60;font-size:12px;margin-bottom:6px;">
+              (B) v${vB} · ${camposB.length} campos
+            </div>
+            ${_layTablaHTML(markB)}
+          </div>
+        </div>`;
+    }
+
+    body.innerHTML = `
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;align-items:center;">
+        ${pills}
+        <span style="font-size:11px;color:#aaa;margin-left:4px;">${hint}</span>
+        ${sel.length > 0 ? `<button onclick="_layDetalleSeleccion=[];_layRenderDetalle()"
+          style="margin-left:auto;padding:3px 10px;background:#f0f2f5;border:1px solid #ddd;border-radius:4px;font-size:11px;cursor:pointer;">
+          Limpiar</button>` : ''}
+      </div>
+      ${content}`;
+  }
+
+  function _layToggleVersion(idx) {
+    const v = _layDetalleVersiones[idx];
+    const pos = _layDetalleSeleccion.indexOf(v);
+    if (pos !== -1) {
+      _layDetalleSeleccion.splice(pos, 1);
+    } else if (_layDetalleSeleccion.length < 2) {
+      _layDetalleSeleccion.push(v);
+    } else {
+      // reemplazar la segunda
+      _layDetalleSeleccion[1] = v;
+    }
+    _layRenderDetalle();
   }
 
   async function toggleLayoutDetalle(clave_layout, clave_entidad, headerEl) {
