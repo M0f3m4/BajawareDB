@@ -2631,26 +2631,31 @@
     }
   }
 
-  function _layTablaHTML(campos, bgAlt) {
+  function _layTablaInner(campos) {
     const th = s => `<th style="padding:6px 9px;text-align:left;white-space:nowrap;background:#1a3558;color:#fff;position:sticky;top:0;font-size:10px;">${s}</th>`;
     const td = (v, extra='') => `<td style="padding:4px 9px;font-size:10px;white-space:nowrap;${extra}">${v??''}</td>`;
+    return `<table style="border-collapse:collapse;font-size:10px;min-width:max-content;width:100%;">
+      <thead><tr>${th('#')}${th('Campo')}${th('Llave')}${th('Tipo')}${th('Formato')}${th('Oblig.')}${th('Validación')}${th('Catálogo')}${th('Descripción ESP')}</tr></thead>
+      <tbody>${campos.map((c,i) => `
+        <tr style="background:${c._bg||(i%2===0?'#fff':'#f8f9fa')}">
+          ${td(c.ORDEN,'text-align:center;color:#aaa;')}
+          ${td(`<strong>${c.NOMBRE_CAMPO??''}</strong>`)}
+          ${td((c.LLAVE||'').toUpperCase()==='SI'||c.LLAVE==='1'?'🔑':'','text-align:center;')}
+          ${td(c.TIPO_DATO?`<span style="background:#f0f2f5;padding:1px 5px;border-radius:3px;">${c.TIPO_DATO}</span>`:'')}
+          ${td(c.FORMATO,'color:#888;')}
+          ${td((c.OBLIGATORIO||'').toUpperCase()==='SI'||c.OBLIGATORIO==='1'?'✓':'','text-align:center;')}
+          ${td(c.VALIDACION??'','color:#888;max-width:150px;overflow:hidden;text-overflow:ellipsis;')}
+          ${td(c.CATALOGO??'','color:#888;')}
+          ${td(c.DESCRIPCION_ESP??'','max-width:200px;overflow:hidden;text-overflow:ellipsis;color:#555;')}
+        </tr>`).join('')}
+      </tbody>
+    </table>`;
+  }
+
+  function _layTablaHTML(campos) {
     return `<div style="overflow:auto;max-height:60vh;border:1px solid #e0e6ed;border-radius:6px;">
-      <table style="border-collapse:collapse;font-size:10px;min-width:max-content;width:100%;">
-        <thead><tr>${th('#')}${th('Campo')}${th('Llave')}${th('Tipo')}${th('Formato')}${th('Oblig.')}${th('Validación')}${th('Catálogo')}${th('Descripción ESP')}</tr></thead>
-        <tbody>${campos.map((c,i) => `
-          <tr style="background:${c._bg||(i%2===0?'#fff':bgAlt||'#f8f9fa')}">
-            ${td(c.ORDEN,'text-align:center;color:#aaa;')}
-            ${td(`<strong>${c.NOMBRE_CAMPO??''}</strong>`)}
-            ${td((c.LLAVE||'').toUpperCase()==='SI'||c.LLAVE==='1'?'🔑':'','text-align:center;')}
-            ${td(c.TIPO_DATO?`<span style="background:#f0f2f5;padding:1px 5px;border-radius:3px;">${c.TIPO_DATO}</span>`:'')}
-            ${td(c.FORMATO,'color:#888;')}
-            ${td((c.OBLIGATORIO||'').toUpperCase()==='SI'||c.OBLIGATORIO==='1'?'✓':'','text-align:center;')}
-            ${td(c.VALIDACION??'','color:#888;max-width:150px;overflow:hidden;text-overflow:ellipsis;')}
-            ${td(c.CATALOGO??'','color:#888;')}
-            ${td(c.DESCRIPCION_ESP??'','max-width:200px;overflow:hidden;text-overflow:ellipsis;color:#555;')}
-          </tr>`).join('')}
-        </tbody>
-      </table></div>`;
+      ${_layTablaInner(campos)}
+    </div>`;
   }
 
   function _layRenderDetalle() {
@@ -2706,23 +2711,23 @@
       const vA = sel[0].version || '';
       const vB = sel[1].version || '';
       content = `
-        <div style="display:flex;gap:4px;margin-bottom:6px;font-size:10px;color:#888;">
+        <div style="display:flex;gap:4px;margin-bottom:8px;font-size:10px;color:#888;">
           <span style="background:#fdecea;padding:1px 8px;border-radius:4px;">🔴 Solo en A</span>
           <span style="background:#e8f5e9;padding:1px 8px;border-radius:4px;">🟢 Solo en B</span>
           <span style="background:#fffbe6;padding:1px 8px;border-radius:4px;">🟡 Modificado</span>
         </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div style="display:flex;flex-direction:column;gap:16px;" id="lay-compare-wrap">
           <div>
-            <div style="font-weight:600;color:#1a3558;font-size:12px;margin-bottom:6px;">
-              (A) v${vA} · ${camposA.length} campos
+            <div style="font-weight:600;color:#1a3558;font-size:12px;margin-bottom:6px;">(A) v${vA} · ${camposA.length} campos</div>
+            <div class="lay-sync-scroll" style="overflow:auto;max-height:38vh;border:1px solid #e0e6ed;border-radius:6px;" onscroll="document.querySelectorAll('.lay-sync-scroll').forEach(el=>{ if(el!==this) el.scrollLeft=this.scrollLeft; })">
+              ${_layTablaInner(markA)}
             </div>
-            ${_layTablaHTML(markA)}
           </div>
           <div>
-            <div style="font-weight:600;color:#27ae60;font-size:12px;margin-bottom:6px;">
-              (B) v${vB} · ${camposB.length} campos
+            <div style="font-weight:600;color:#27ae60;font-size:12px;margin-bottom:6px;">(B) v${vB} · ${camposB.length} campos</div>
+            <div class="lay-sync-scroll" style="overflow:auto;max-height:38vh;border:1px solid #e0e6ed;border-radius:6px;" onscroll="document.querySelectorAll('.lay-sync-scroll').forEach(el=>{ if(el!==this) el.scrollLeft=this.scrollLeft; })">
+              ${_layTablaInner(markB)}
             </div>
-            ${_layTablaHTML(markB)}
           </div>
         </div>`;
     }
