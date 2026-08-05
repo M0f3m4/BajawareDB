@@ -2635,11 +2635,12 @@
     const th = s => `<th style="padding:6px 9px;text-align:left;white-space:nowrap;background:#1a3558;color:#fff;position:sticky;top:0;font-size:10px;">${s}</th>`;
     const td = (v, extra='') => `<td style="padding:4px 9px;font-size:10px;white-space:nowrap;${extra}">${v??''}</td>`;
     return `<table style="border-collapse:collapse;font-size:10px;min-width:max-content;width:100%;">
-      <thead><tr>${th('#')}${th('Campo')}${th('Llave')}${th('Tipo')}${th('Formato')}${th('Oblig.')}${th('Validación')}${th('Catálogo')}${th('Descripción ESP')}</tr></thead>
+      <thead><tr>${th('#')}${th('Campo')}${th('Layout CITI')}${th('Llave')}${th('Tipo')}${th('Formato')}${th('Oblig.')}${th('Validación')}${th('Catálogo')}${th('Descripción ESP')}${th('Descripción ING')}${th('Observaciones')}${th('Validez Info')}${th('Fuente')}</tr></thead>
       <tbody>${campos.map((c,i) => `
         <tr style="background:${c._bg||(i%2===0?'#fff':'#f8f9fa')}">
           ${td(c.ORDEN,'text-align:center;color:#aaa;')}
           ${td(`<strong>${c.NOMBRE_CAMPO??''}</strong>`)}
+          ${td(c.CLAVE_LAYOUT_CITI??'','color:#888;')}
           ${td((c.LLAVE||'').toUpperCase()==='SI'||c.LLAVE==='1'?'🔑':'','text-align:center;')}
           ${td(c.TIPO_DATO?`<span style="background:#f0f2f5;padding:1px 5px;border-radius:3px;">${c.TIPO_DATO}</span>`:'')}
           ${td(c.FORMATO,'color:#888;')}
@@ -2647,6 +2648,10 @@
           ${td(c.VALIDACION??'','color:#888;max-width:150px;overflow:hidden;text-overflow:ellipsis;')}
           ${td(c.CATALOGO??'','color:#888;')}
           ${td(c.DESCRIPCION_ESP??'','max-width:200px;overflow:hidden;text-overflow:ellipsis;color:#555;')}
+          ${td(c.DESCRIPCION_ING??'','max-width:200px;overflow:hidden;text-overflow:ellipsis;color:#888;')}
+          ${td(c.OBSERVACIONES??'','max-width:160px;overflow:hidden;text-overflow:ellipsis;color:#888;')}
+          ${td(c.VALIDEZ_INFO??'','color:#888;')}
+          ${td(c.FUENTE??'','color:#888;')}
         </tr>`).join('')}
       </tbody>
     </table>`;
