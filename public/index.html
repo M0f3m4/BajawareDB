@@ -1721,16 +1721,33 @@
 
         <!-- Tab: Contratos -->
         <div id="panel-inv-cont" style="display:none;">
-          <div style="background:#fff3cd;border:2px solid #f0a500;border-radius:10px;padding:24px 28px;margin-bottom:24px;text-align:center;">
-            <p style="font-size:13px;color:#666;margin-bottom:4px;">Excel con 2 hojas: <strong>CONTRATO</strong> y <strong>REPORTES</strong></p>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px;">
+            <div style="background:#f0f4f8;border-radius:8px;padding:14px 16px;">
+              <div style="font-size:11px;font-weight:700;color:#1a3558;margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px;">📄 Hoja CONTRATO</div>
+              <div style="font-size:11px;color:#555;font-family:monospace;line-height:1.7;">
+                CLAVE_CONTRATO<br>NOMBRE_CONTRATO<br>CLAVE_PAIS<br>CLAVE_CLIENTE<br>NOMBRE_CLIENTE<br>CLAVE_PLATAFORMA
+              </div>
+            </div>
+            <div style="background:#f0f4f8;border-radius:8px;padding:14px 16px;">
+              <div style="font-size:11px;font-weight:700;color:#1a3558;margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px;">📊 Hoja REPORTES</div>
+              <div style="font-size:11px;color:#555;font-family:monospace;line-height:1.7;">
+                CLAVE_CONTRATO<br>CLAVE_REP<br><span style="color:#aaa;font-style:italic;">(usar CLAVE_REP_GENERAL del inventario)</span>
+              </div>
+            </div>
+          </div>
           <div style="display:flex;gap:10px;align-items:center;margin-bottom:12px;">
-            <input id="bc-inv-cont-file" type="file" accept=".xlsx,.xls" style="font-size:13px;" onchange="previewContratos()">
+            <label style="display:flex;align-items:center;gap:8px;padding:8px 16px;border:1.5px dashed #c0cfe0;border-radius:8px;cursor:pointer;background:#fafbfc;font-size:13px;color:#555;transition:border-color .15s;"
+              onmouseover="this.style.borderColor='#1a3558'" onmouseout="this.style.borderColor='#c0cfe0'">
+              📎 Seleccionar archivo Excel
+              <input id="bc-inv-cont-file" type="file" accept=".xlsx,.xls" style="display:none;" onchange="previewContratos(); this.parentElement.querySelector('span') && (this.parentElement.querySelector('span').textContent = this.files[0]?.name || '')">
+              <span id="bc-inv-cont-filename" style="font-size:11px;color:#1a3558;font-weight:600;"></span>
+            </label>
             <a href="/template_contratos.xlsx" download
-              style="padding:6px 14px;background:#f0f4f8;color:#1a3558;border:1px solid #c0cfe0;border-radius:6px;font-size:12px;cursor:pointer;text-decoration:none;">
+              style="padding:7px 14px;background:#f0f4f8;color:#1a3558;border:1px solid #c0cfe0;border-radius:6px;font-size:12px;cursor:pointer;text-decoration:none;white-space:nowrap;">
               📥 Descargar Template
             </a>
           </div>
-          <div id="bc-inv-cont-msg" style="margin-top:4px;font-size:13px;"></div>
+          <div id="bc-inv-cont-msg" style="font-size:13px;"></div>
 
           <!-- Preview modal contratos -->
           <div id="cont-preview-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;align-items:flex-start;justify-content:center;padding:32px 16px;overflow-y:auto;">
@@ -6997,6 +7014,8 @@
     const file = document.getElementById('bc-inv-cont-file').files[0];
     const msg  = document.getElementById('bc-inv-cont-msg');
     if (!file) return;
+    const fn = document.getElementById('bc-inv-cont-filename');
+    if (fn) fn.textContent = file.name;
     msg.innerHTML = '<span style="color:#888;">Analizando archivo...</span>';
     const fd = new FormData(); fd.append('archivo', file);
     try {
