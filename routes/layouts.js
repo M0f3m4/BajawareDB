@@ -152,7 +152,30 @@ function parseExcel(buffer) {
     }
   }
 
-  return { rows, headerIdx, colMapping, catalogos };
+  // Buscar hoja REL_REPORTES
+  let relReportes = [];
+  const relSheetName = wb.SheetNames.find(n => n.toUpperCase().includes('REL_REPORTE'));
+  if (relSheetName) {
+    const relSheet = wb.Sheets[relSheetName];
+    const relRows  = XLSX.utils.sheet_to_json(relSheet, { header: 1, defval: null });
+    for (let i = 0; i < Math.min(relRows.length, 5); i++) {
+      const h = (relRows[i]||[]).map(v => (v||'').toString().toUpperCase().trim());
+      const iCampo = h.findIndex(v => v === 'NOMBRE_CAMPO');
+      const iUso   = h.findIndex(v => v === 'USO');
+      const iCol   = h.findIndex(v => v.includes('COLUMNA'));
+      if (iCampo >= 0 && iUso >= 0) {
+        for (const row of relRows.slice(i + 1)) {
+          const campo = row[iCampo] ? String(row[iCampo]).trim() : null;
+          const uso   = row[iUso]   ? String(row[iUso]).trim()   : null;
+          const col   = iCol >= 0 && row[iCol] ? parseInt(row[iCol]) : null;
+          if (campo && uso) relReportes.push({ campo, uso, columna: col });
+        }
+        break;
+      }
+    }
+  }
+
+  return { rows, headerIdx, colMapping, catalogos, relReportes };
 }
 
 const esc = v => v === null || v === undefined ? 'NULL' : `'${String(v).replace(/'/g,"''")}'`;
@@ -236,6 +259,7 @@ router.post('/preview', requireAuth, upload.single('archivo'), async (req, res) 
       rows,       // ya normalizados, sin fila de header
       colMapping: {},
       catalogos,
+      relReportes,
     };
 
     res.json({
@@ -495,9 +519,31 @@ router.post('/upload', requireAuth, async (req, res) => {
     } catch(e) { console.warn('[layouts-cat]', e.message); }
   }
 
+  // ── Guardar relaciones layout → reporte ──────────────────
+  const relReportes = session.relReportes || [];
+  let relInsertados = 0, relActualizados = 0;
+  for (const rel of relReportes) {
+    // Buscar CLAVE_PAIS y CLAVE_ENTIDADREGULADA del layout desde las filas procesadas
+    const layoutInfo = session.rows && session.rows.find(r => r.NOMBRE_CAMPO === rel.campo);
+    const clavePais   = layoutInfo ? layoutInfo.CLAVE_PAIS : null;
+    const claveEntidad = layoutInfo ? layoutInfo.CLAVE_ENTIDADREGULADA : null;
+    for (const [clave_layout] of Object.entries(req.body.mapeo || {})) {
+      try {
+        const existe = await query(`SELECT 1 FROM REL_LAYOUT_REPORTE WHERE CLAVE_LAYOUT=${esc(clave_layout)} AND NOMBRE_CAMPO=${esc(rel.campo)} AND USO=${esc(rel.uso)}`);
+        if (!existe.length) {
+          await query(`INSERT INTO REL_LAYOUT_REPORTE (CLAVE_PAIS, CLAVE_ENTIDADREGULADA, CLAVE_LAYOUT, NOMBRE_CAMPO, USO, COLUMNA_REPORTE_APLICA) VALUES (${esc(clavePais)}, ${esc(claveEntidad)}, ${esc(clave_layout)}, ${esc(rel.campo)}, ${esc(rel.uso)}, ${rel.columna != null ? rel.columna : 'NULL'})`);
+          relInsertados++;
+        } else {
+          await query(`UPDATE REL_LAYOUT_REPORTE SET COLUMNA_REPORTE_APLICA=${rel.columna != null ? rel.columna : 'NULL'} WHERE CLAVE_LAYOUT=${esc(clave_layout)} AND NOMBRE_CAMPO=${esc(rel.campo)} AND USO=${esc(rel.uso)}`);
+          relActualizados++;
+        }
+      } catch(e) { console.warn('[layouts-rel]', e.message); }
+    }
+  }
+
   delete req.session.layoutUpload;
 
-  res.json({ ok: true, jira_ticket: jiraTicket || null, resultados, catalogos: { insertados: catInsertados, actualizados: catOmitidos } });
+  res.json({ ok: true, jira_ticket: jiraTicket || null, resultados, catalogos: { insertados: catInsertados, actualizados: catOmitidos }, relReportes: { insertados: relInsertados, actualizados: relActualizados } });
 });
 
 // ─────────────────────────────────────────────────────────
