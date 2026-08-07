@@ -286,6 +286,20 @@ router.delete('/inventario/catalogos/:id', requireAuth, async (req, res) => {
   } catch (err) { res.status(500).json({ ok: false, message: err.message }); }
 });
 
+// ── GET /api/inventario/layouts/:clave/reportes — reportes que usan el layout ──
+router.get('/inventario/layouts/:clave/reportes', requireAuth, async (req, res) => {
+  try {
+    const rows = await query(`
+      SELECT DISTINCT USO AS CLAVE_REP
+      FROM REL_LAYOUT_REPORTE
+      WHERE CLAVE_LAYOUT = '${req.params.clave.replace(/'/g,"''")}'
+        AND USO != CLAVE_LAYOUT
+      ORDER BY USO
+    `);
+    res.json({ ok: true, data: rows.map(r => r.CLAVE_REP) });
+  } catch (err) { res.status(500).json({ ok: false, message: err.message }); }
+});
+
 // ── GET /api/inventario/layouts/resumen — lista agrupada ──
 router.get('/inventario/layouts/resumen', requireAuth, async (req, res) => {
   const { entidad, texto, pais } = req.query;
