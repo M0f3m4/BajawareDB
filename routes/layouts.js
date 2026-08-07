@@ -222,7 +222,7 @@ const CAMPOS_PATCH = ['DESCRIPCION_ESP','DESCRIPCION_ING','FORMATO','CATALOGO','
 router.post('/preview', requireAuth, upload.single('archivo'), async (req, res) => {
   if (!req.file) return res.status(400).json({ ok: false, message: 'No se recibió archivo' });
   try {
-    const { rows, catalogos } = parseExcel(req.file.buffer);
+    const { rows, catalogos, relReportes } = parseExcel(req.file.buffer);
     // rows ya son objetos normalizados con propiedades directas
     const get = (row, col) => row[col] ?? null;
     const dataRows = rows.filter(r => r.CLAVE_LAYOUT && r.NOMBRE_CAMPO);
