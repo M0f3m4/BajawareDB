@@ -11,7 +11,7 @@ const INTERVALO  = 5 * 60 * 1000; // 5 minutos
 // Proyectos QA y el estado que dispara la alerta en cada uno
 const STATUS_POR_PROYECTO = {
   CDL: 'Instalado en QA',
-  QD:  'Aprobado por QA',
+  QD:  'Solicitud de Revisión',
 };
 
 let estadoPrevio = {};   // { ID_PAQUETE: ESTATUS }
