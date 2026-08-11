@@ -98,21 +98,30 @@ async function detectarLayout(summary = '', description = '') {
   return null;
 }
 
-// ── Revisar tickets QD/CDL en "Instalados en QA" ──────────
+// Estados finales que cierran el ciclo
+// Flujo QD: Solicitud de Revisión → EN CORRECCIÓN → EN PRUEBAS → APROBADO POR QA
+//           → POR INSTALAR CON CLIENTE → ENVIADO AL CLIENTE → INSTALADO CON CLIENTE
+//           → INSTALADO EN SOPORTE → INSTALADO TEMPORAL
+const ESTADOS_PROCESADO = new Set([
+  'APROBADO POR QA',
+  'POR INSTALAR CON CLIENTE',
+  'ENVIADO AL CLIENTE',
+  'INSTALADO CON CLIENTE',
+  'INSTALADO EN SOPORTE',
+  'INSTALADO TEMPORAL',
+]);
+
+// ── Revisar tickets QD/CDL ────────────────────────────────
 async function revisarQA() {
   if (!JIRA_HOST || !JIRA_TOKEN) return;
 
-  // Construir JQL: estado trigger por proyecto + APROBADO POR QA de cualquier proyecto monitoreado
+  // JQL: todos los tickets de los proyectos monitoreados actualizados recientemente
   const proyectos = Object.keys(STATUS_POR_PROYECTO).join(', ');
-  const condicionesTrigger = Object.entries(STATUS_POR_PROYECTO)
-    .map(([proj, estado]) => `(project = ${proj} AND status = "${estado}")`)
-    .join(' OR ');
-  const jql = `((${condicionesTrigger}) OR (project in (${proyectos}) AND status = "APROBADO POR QA")) AND updated >= "-10m" ORDER BY updated DESC`;
-  const encJql = encodeURIComponent(jql);
+  const jql = `project in (${proyectos}) AND updated >= "-10m" ORDER BY updated DESC`;
 
   try {
     const { status, data } = await jiraGet(
-      `/rest/api/3/search?jql=${encJql}&fields=summary,status,assignee,updated,description&maxResults=20`
+      `/rest/api/3/search?jql=${encodeURIComponent(jql)}&fields=summary,status,assignee,updated,description&maxResults=50`
     );
 
     if (status !== 200 || !data.issues) return;
@@ -122,18 +131,24 @@ async function revisarQA() {
       const projectKey = ticketKey.split('-')[0];
       const summary    = issue.fields?.summary || '';
       const assignee   = issue.fields?.assignee?.displayName || null;
-      const jiraStatus = issue.fields?.status?.name || STATUS_POR_PROYECTO[projectKey] || '';
+      const jiraStatus = issue.fields?.status?.name || '';
       const updated    = issue.fields?.updated || null;
+      const updatedStr = updated ? `'${updated.slice(0,19).replace('T',' ')}'` : 'NULL';
       const desc       = issue.fields?.description?.content?.[0]?.content?.[0]?.text || '';
 
-      // ¿Ya existe en QA_ALERTAS?
       const [existeRec] = await query(`SELECT ID_ALERTA, ESTADO, JIRA_STATUS FROM QA_ALERTAS WHERE JIRA_TICKET=${esc(ticketKey)}`);
 
-      // Si el ticket pasó a "APROBADO POR QA" y ya existe la alerta → marcar PROCESADO automáticamente
       if (existeRec) {
-        if (jiraStatus === 'APROBADO POR QA' && existeRec.ESTADO === 'PENDIENTE') {
-          await query(`UPDATE QA_ALERTAS SET ESTADO='PROCESADO', FECHA_PROCESADO=GETDATE(), JIRA_STATUS=${esc(jiraStatus)} WHERE ID_ALERTA=${existeRec.ID_ALERTA}`);
-          console.log(`[Monitor QA] ✅ ${ticketKey} APROBADO POR QA → marcado PROCESADO automáticamente`);
+        // Actualizar estado si cambió
+        if (existeRec.JIRA_STATUS !== jiraStatus) {
+          const esProcessado = ESTADOS_PROCESADO.has(jiraStatus) && existeRec.ESTADO === 'PENDIENTE';
+          if (esProcessado) {
+            await query(`UPDATE QA_ALERTAS SET JIRA_STATUS=${esc(jiraStatus)}, JIRA_UPDATED=${updatedStr}, JIRA_ASSIGNEE=${esc(assignee)}, ESTADO='PROCESADO', FECHA_PROCESADO=GETDATE() WHERE ID_ALERTA=${existeRec.ID_ALERTA}`);
+            console.log(`[Monitor QA] ✅ ${ticketKey} → ${jiraStatus} → PROCESADO`);
+          } else {
+            await query(`UPDATE QA_ALERTAS SET JIRA_STATUS=${esc(jiraStatus)}, JIRA_UPDATED=${updatedStr}, JIRA_ASSIGNEE=${esc(assignee)} WHERE ID_ALERTA=${existeRec.ID_ALERTA}`);
+            console.log(`[Monitor QA] 🔄 ${ticketKey} → ${jiraStatus}`);
+          }
         }
         continue;
       }
@@ -141,23 +156,12 @@ async function revisarQA() {
       // Ticket nuevo — solo crear alerta si es el estado trigger del proyecto
       if (jiraStatus !== STATUS_POR_PROYECTO[projectKey]) continue;
 
-      // Intentar detectar el layout automáticamente
       const layoutDetectado = await detectarLayout(summary, desc);
-
-      // Insertar alerta
       await query(`
-        INSERT INTO QA_ALERTAS (
-          JIRA_TICKET, JIRA_PROJECT, JIRA_SUMMARY, JIRA_STATUS,
-          JIRA_UPDATED, JIRA_ASSIGNEE, CLAVE_LAYOUT_DETECTADO
-        ) VALUES (
-          ${esc(ticketKey)}, ${esc(projectKey)}, ${esc(summary)}, ${esc(jiraStatus)},
-          ${updated ? `'${updated.slice(0,19).replace('T',' ')}'` : 'NULL'},
-          ${esc(assignee)}, ${esc(layoutDetectado)}
-        )
+        INSERT INTO QA_ALERTAS (JIRA_TICKET, JIRA_PROJECT, JIRA_SUMMARY, JIRA_STATUS, JIRA_UPDATED, JIRA_ASSIGNEE, CLAVE_LAYOUT_DETECTADO)
+        VALUES (${esc(ticketKey)}, ${esc(projectKey)}, ${esc(summary)}, ${esc(jiraStatus)}, ${updatedStr}, ${esc(assignee)}, ${esc(layoutDetectado)})
       `);
-
       console.log(`[Monitor QA] 🚨 ${ticketKey} — "${summary}" → Layout: ${layoutDetectado || 'no detectado'}`);
-    }
   } catch (e) {
     console.error('[Monitor QA] Error revisando Jira:', e.message);
   }
