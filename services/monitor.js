@@ -102,11 +102,12 @@ async function detectarLayout(summary = '', description = '') {
 async function revisarQA() {
   if (!JIRA_HOST || !JIRA_TOKEN) return;
 
-  // Construir JQL dinámico: cada proyecto con su propio estado trigger
-  const condiciones = Object.entries(STATUS_POR_PROYECTO)
+  // Construir JQL: estado trigger por proyecto + APROBADO POR QA de cualquier proyecto monitoreado
+  const proyectos = Object.keys(STATUS_POR_PROYECTO).join(', ');
+  const condicionesTrigger = Object.entries(STATUS_POR_PROYECTO)
     .map(([proj, estado]) => `(project = ${proj} AND status = "${estado}")`)
     .join(' OR ');
-  const jql    = `(${condiciones}) AND updated >= "-10m" ORDER BY updated DESC`;
+  const jql = `((${condicionesTrigger}) OR (project in (${proyectos}) AND status = "APROBADO POR QA")) AND updated >= "-10m" ORDER BY updated DESC`;
   const encJql = encodeURIComponent(jql);
 
   try {
@@ -126,8 +127,19 @@ async function revisarQA() {
       const desc       = issue.fields?.description?.content?.[0]?.content?.[0]?.text || '';
 
       // ¿Ya existe en QA_ALERTAS?
-      const existe = await query(`SELECT 1 FROM QA_ALERTAS WHERE JIRA_TICKET=${esc(ticketKey)}`);
-      if (existe.length) continue; // ya registrado, no duplicar
+      const [existeRec] = await query(`SELECT ID_ALERTA, ESTADO, JIRA_STATUS FROM QA_ALERTAS WHERE JIRA_TICKET=${esc(ticketKey)}`);
+
+      // Si el ticket pasó a "APROBADO POR QA" y ya existe la alerta → marcar PROCESADO automáticamente
+      if (existeRec) {
+        if (jiraStatus === 'APROBADO POR QA' && existeRec.ESTADO === 'PENDIENTE') {
+          await query(`UPDATE QA_ALERTAS SET ESTADO='PROCESADO', FECHA_PROCESADO=GETDATE(), JIRA_STATUS=${esc(jiraStatus)} WHERE ID_ALERTA=${existeRec.ID_ALERTA}`);
+          console.log(`[Monitor QA] ✅ ${ticketKey} APROBADO POR QA → marcado PROCESADO automáticamente`);
+        }
+        continue;
+      }
+
+      // Ticket nuevo — solo crear alerta si es el estado trigger del proyecto
+      if (jiraStatus !== STATUS_POR_PROYECTO[projectKey]) continue;
 
       // Intentar detectar el layout automáticamente
       const layoutDetectado = await detectarLayout(summary, desc);
