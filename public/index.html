@@ -589,8 +589,8 @@
         <div class="sub-item" onclick="showSection('historial-versiones')">Historial Versiones</div>
       </div>
 
-      <!-- HIDDEN: QA Alertas -->
-      <div class="nav-item" onclick="showSection('qa-alertas')" id="nav-qa-alertas" style="display:none">
+      <!-- QA Alertas -->
+      <div class="nav-item" onclick="showSection('qa-alertas')" id="nav-qa-alertas">
         <div class="nav-item-left">
           <span class="nav-icon">🚨</span> QA Alertas
           <span id="qa-badge" style="display:none;margin-left:6px;background:#e74c3c;color:#fff;border-radius:10px;padding:1px 7px;font-size:11px;font-weight:700;"></span>
@@ -2141,9 +2141,9 @@
 
       <!-- QA Alertas -->
       <div class="content-section" id="sec-qa-alertas">
-        <h2 class="section-title">🚨 QA Alertas — Tickets en "Instalados en QA"</h2>
+        <h2 class="section-title">🚨 QA Alertas</h2>
         <p style="font-size:13px;color:#666;margin:0 0 14px;">
-          Tickets de los proyectos <strong>QD</strong> y <strong>CDL</strong> que llegaron a <em>Instalados en QA</em> y requieren subir un Excel de layout actualizado.
+          Tickets de <strong>QD</strong> en "Solicitud de Revisión" y <strong>CDL</strong> en "Instalado en QA" pendientes de procesar.
         </p>
         <div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap;">
           <button onclick="loadQaAlertas()"
