@@ -162,6 +162,7 @@ async function revisarQA() {
         VALUES (${esc(ticketKey)}, ${esc(projectKey)}, ${esc(summary)}, ${esc(jiraStatus)}, ${updatedStr}, ${esc(assignee)}, ${esc(layoutDetectado)})
       `);
       console.log(`[Monitor QA] 🚨 ${ticketKey} — "${summary}" → Layout: ${layoutDetectado || 'no detectado'}`);
+    }
   } catch (e) {
     console.error('[Monitor QA] Error revisando Jira:', e.message);
   }
