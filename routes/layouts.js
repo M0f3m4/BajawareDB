@@ -547,6 +547,27 @@ router.post('/upload', requireAuth, async (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────
+// GET /api/layouts/versiones/check?version=X&layouts=A,B,C
+// Verifica si alguno de esos layouts ya tiene esa versión registrada
+router.get('/versiones/check', requireAuth, async (req, res) => {
+  const { version, layouts } = req.query;
+  if (!version || !layouts) return res.json({ ok: true, conflictos: [] });
+  const lista = layouts.split(',').map(l => l.trim()).filter(Boolean);
+  if (!lista.length) return res.json({ ok: true, conflictos: [] });
+  try {
+    const inList = lista.map(l => esc(l)).join(',');
+    const vStr   = `${version}`.trim();
+    // Buscar por versión semántica o combinación de major.minor.patch
+    const rows = await query(`
+      SELECT DISTINCT CLAVE_LAYOUT FROM LAYOUT_VERSIONES
+      WHERE CLAVE_LAYOUT IN (${inList})
+        AND (VERSION_SEM = ${esc(vStr)}
+          OR CONCAT(VER_MAJOR,'.',VER_MINOR,'.',VER_PATCH) = ${esc(vStr)})
+    `);
+    res.json({ ok: true, conflictos: rows.map(r => r.CLAVE_LAYOUT) });
+  } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
+});
+
 // GET /api/layouts/versiones
 // ─────────────────────────────────────────────────────────
 router.get('/versiones', requireAuth, async (req, res) => {
