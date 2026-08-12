@@ -2761,12 +2761,20 @@
     }
 
     body.innerHTML = `
-      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;align-items:center;">
-        ${pills}
-        <span style="font-size:11px;color:#aaa;margin-left:4px;">${hint}</span>
-        ${sel.length > 0 ? `<button onclick="_layDetalleSeleccion=[];_layRenderDetalle()"
-          style="margin-left:auto;padding:3px 10px;background:#f0f2f5;border:1px solid #ddd;border-radius:4px;font-size:11px;cursor:pointer;">
-          Limpiar</button>` : ''}
+      <div style="margin-bottom:10px;">
+        <div style="display:flex;align-items:center;gap:6px;">
+          <button onclick="document.getElementById('lay-pills-scroll').scrollBy({left:-200,behavior:'smooth'})"
+            style="flex-shrink:0;padding:2px 8px;background:#f0f2f5;border:1px solid #ddd;border-radius:20px;font-size:14px;cursor:pointer;line-height:1;">‹</button>
+          <div id="lay-pills-scroll" style="display:flex;gap:6px;overflow-x:auto;scroll-behavior:smooth;scrollbar-width:none;-ms-overflow-style:none;padding:4px 2px;flex:1;">
+            ${pills}
+          </div>
+          <button onclick="document.getElementById('lay-pills-scroll').scrollBy({left:200,behavior:'smooth'})"
+            style="flex-shrink:0;padding:2px 8px;background:#f0f2f5;border:1px solid #ddd;border-radius:20px;font-size:14px;cursor:pointer;line-height:1;">›</button>
+          ${sel.length > 0 ? `<button onclick="_layDetalleSeleccion=[];_layRenderDetalle()"
+            style="flex-shrink:0;padding:3px 10px;background:#f0f2f5;border:1px solid #ddd;border-radius:4px;font-size:11px;cursor:pointer;">
+            Limpiar</button>` : ''}
+        </div>
+        <div style="font-size:11px;color:#aaa;margin-top:4px;">${hint}</div>
       </div>
       ${content}`;
   }
