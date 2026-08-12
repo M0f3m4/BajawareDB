@@ -447,18 +447,30 @@ router.post('/upload', requireAuth, async (req, res) => {
     `);
     const camposJson = JSON.stringify(camposActualesSnap.map(c => ({ ...c, CLAVE_LAYOUT: claveBD })));
 
-    await query(`
-      INSERT INTO LAYOUT_VERSIONES (
-        CLAVE_LAYOUT, VER_MAJOR, VER_MINOR, VER_PATCH, NIVEL_CAMBIO,
-        JIRA_TICKET, JIRA_STATUS, JIRA_SUMMARY,
-        ARCHIVO_NOMBRE, FILAS_PROCESADAS, CAMPOS_NUEVOS, CAMPOS_ACTUALIZADOS,
-        CAMPOS_ELIMINADOS, USUARIO, NOTAS, CAMPOS_JSON
-      ) VALUES (
-        ${esc(claveBD)}, ${vMajor}, ${vMinor}, ${vPatch}, ${esc(nivel)},
-        ${esc(jiraTicket||null)}, ${esc(jiraStatus)}, ${esc(jiraSummary)},
-        ${esc(filename)}, ${items.length}, ${camposNuevos}, ${camposActualizados},
-        ${cambios.eliminados}, ${esc(usuario)}, ${esc(notas)}, ${esc(camposJson)}
-      )`);
+    // Upsert: si ya existe esa versión para ese layout, actualizar en lugar de duplicar
+    const existeVer = await query(`SELECT ID_VERSION FROM LAYOUT_VERSIONES WHERE CLAVE_LAYOUT=${esc(claveBD)} AND VER_MAJOR=${vMajor} AND VER_MINOR=${vMinor} AND VER_PATCH=${vPatch}`);
+    if (existeVer.length) {
+      await query(`
+        UPDATE LAYOUT_VERSIONES SET
+          NIVEL_CAMBIO=${esc(nivel)}, JIRA_TICKET=${esc(jiraTicket||null)}, JIRA_STATUS=${esc(jiraStatus)}, JIRA_SUMMARY=${esc(jiraSummary)},
+          ARCHIVO_NOMBRE=${esc(filename)}, FILAS_PROCESADAS=${items.length}, CAMPOS_NUEVOS=${camposNuevos},
+          CAMPOS_ACTUALIZADOS=${camposActualizados}, CAMPOS_ELIMINADOS=${cambios.eliminados},
+          USUARIO=${esc(usuario)}, NOTAS=${esc(notas)}, CAMPOS_JSON=${esc(camposJson)}, FECHA_CARGA=GETDATE()
+        WHERE ID_VERSION=${existeVer[0].ID_VERSION}`);
+    } else {
+      await query(`
+        INSERT INTO LAYOUT_VERSIONES (
+          CLAVE_LAYOUT, VER_MAJOR, VER_MINOR, VER_PATCH, NIVEL_CAMBIO,
+          JIRA_TICKET, JIRA_STATUS, JIRA_SUMMARY,
+          ARCHIVO_NOMBRE, FILAS_PROCESADAS, CAMPOS_NUEVOS, CAMPOS_ACTUALIZADOS,
+          CAMPOS_ELIMINADOS, USUARIO, NOTAS, CAMPOS_JSON
+        ) VALUES (
+          ${esc(claveBD)}, ${vMajor}, ${vMinor}, ${vPatch}, ${esc(nivel)},
+          ${esc(jiraTicket||null)}, ${esc(jiraStatus)}, ${esc(jiraSummary)},
+          ${esc(filename)}, ${items.length}, ${camposNuevos}, ${camposActualizados},
+          ${cambios.eliminados}, ${esc(usuario)}, ${esc(notas)}, ${esc(camposJson)}
+        )`);
+    }
 
     // ── Registrar en INVENTARIO_VERSIONES ────────────────
     try {
