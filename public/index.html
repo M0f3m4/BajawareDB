@@ -4689,6 +4689,17 @@
         return `<span class="badge ${cls}" style="font-size:10px;">${v}</span>`;
       };
 
+      // Detectar registros legacy: versión no-semver (ej. "22" del esquema viejo con
+      // la versión embebida en la clave) cuando ya existe un registro semver (ej. "1.0.7")
+      // para el mismo reporte + plataforma
+      const esSemver = v => /^\d+\.\d+\.\d+$/.test(String(v ?? '').trim());
+      const tieneVersionNueva = {};
+      data.data.forEach(r => {
+        if (esSemver(r.VERSION)) tieneVersionNueva[`${r.CLAVE_REP}|${r.CLAVE_PLATAFORMA}`] = true;
+      });
+      const esLegacy = r => !esSemver(r.VERSION) && tieneVersionNueva[`${r.CLAVE_REP}|${r.CLAVE_PLATAFORMA}`];
+      const tagHistorico = '<span style="font-size:9px;background:#eceff3;color:#7a8699;padding:1px 6px;border-radius:8px;font-weight:600;letter-spacing:.5px;margin-left:6px;vertical-align:middle;" title="Registro del esquema anterior (versión embebida en la clave del reporte). Existe un registro más reciente con versionado nuevo.">HISTÓRICO</span>';
+
       wrap.innerHTML = `<table class="data-table">
         <thead><tr>
           <th>Reporte</th><th>Plataforma</th><th>Versión Est.</th><th>Versión Carga</th><th>Estatus</th>
@@ -4697,8 +4708,8 @@
           <th style="text-align:center;">CERT</th>
           <th>QA Alpha</th><th>QA Beta</th>
         </tr></thead>
-        <tbody>${data.data.map(r => `<tr>
-          <td><strong style="color:#1a3558;">${r.CLAVE_REP ?? '—'}</strong></td>
+        <tbody>${data.data.map(r => { const legacy = esLegacy(r); return `<tr${legacy ? ' style="opacity:.55;background:#fafbfc;"' : ''}>
+          <td><strong style="color:#1a3558;">${r.CLAVE_REP ?? '—'}</strong>${legacy ? tagHistorico : ''}</td>
           <td><span style="font-size:11px;background:#f0f2f5;padding:1px 6px;border-radius:4px;">${r.CLAVE_PLATAFORMA ?? '—'}</span></td>
           <td style="font-size:11px;color:#888;">${r.VERSION ?? '—'}</td>
           <td style="text-align:center;"><span style="font-size:11px;background:#f0f4ff;color:#1a3558;padding:2px 7px;border-radius:10px;font-family:monospace;">${r.VERSION_CARGA ?? '—'}</span></td>
@@ -4708,7 +4719,7 @@
           ${cell3(r.CERTIFICADO,  r.CERT_FECHA_ESTIMADA, r.CERT_FECHA_REAL,  r.USER_CERT)}
           <td style="font-size:11px;color:#888;">${r.QA_ALPHA ?? '—'}</td>
           <td style="font-size:11px;color:#888;">${r.QA_BETA ?? '—'}</td>
-        </tr>`).join('')}</tbody>
+        </tr>`; }).join('')}</tbody>
       </table>`;
       // Sync scroll arriba
       const scrollTop  = document.getElementById('est-scroll-top');
