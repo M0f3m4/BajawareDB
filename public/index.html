@@ -1479,6 +1479,17 @@
               </select>
             </div>
           </div>
+          <!-- Lista para actualizar varios reportes a la vez -->
+          <div style="margin-bottom:14px;">
+            <div style="display:flex;align-items:center;gap:10px;">
+              <button onclick="updRepAgregarLista()"
+                style="padding:5px 14px;background:#f0f4f8;color:#1a3558;border:1px solid #c5d0dc;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;">
+                ➕ Agregar a la lista
+              </button>
+              <span style="font-size:11px;color:#999;">para marcar varios reportes a la vez (pueden ser de series distintas)</span>
+            </div>
+            <div id="upd-rep-lista" style="display:none;flex-wrap:wrap;gap:6px;margin-top:10px;padding:10px;background:#f8fafc;border:1px dashed #c5d0dc;border-radius:8px;"></div>
+          </div>
           <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin-bottom:14px;">
             <div>
               <label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px;">Nueva Etapa</label>
@@ -5543,7 +5554,6 @@
       </tbody></table>`;
   }
 
-
   // ── Personalizaciones ─────────────────────────────────────
   let _persCurrent = {};
 
@@ -6233,6 +6243,50 @@
 
   const HITOS_REP = new Set(['DOCUMENTADO', 'PROGRAMADO', 'CERTIFICADO']);
 
+  // ── Lista para actualizar varios reportes a la vez ────────
+  let _updRepLista = [];
+
+  function updRepAgregarLista() {
+    const clave = document.getElementById('upd-rep-clave').value.trim();
+    const plat  = document.getElementById('upd-rep-plataforma').value.trim();
+    const ver   = document.getElementById('upd-rep-version').value.trim();
+    const id    = document.getElementById('upd-rep-clave').dataset.idEstatusRep || '';
+    const msg   = document.getElementById('upd-rep-msg');
+    if (!clave || !plat) { msg.innerHTML = '<span style="color:#e74c3c;">Escribe la clave y selecciona plataforma antes de agregar.</span>'; return; }
+    if (_updRepLista.some(x => x.clave === clave && x.plat === plat && x.ver === ver)) {
+      msg.innerHTML = '<span style="color:#f39c12;">Ese reporte + plataforma + versión ya está en la lista.</span>'; return;
+    }
+    // Cada reporte se agrega con SU versión seleccionada en ese momento
+    _updRepLista.push({ clave, plat, ver, id });
+    // Limpiar para buscar el siguiente
+    document.getElementById('upd-rep-clave').value = '';
+    document.getElementById('upd-rep-clave').dataset.idEstatusRep = '';
+    document.getElementById('upd-rep-buscar').value = '';
+    document.getElementById('upd-rep-resultados').innerHTML = '';
+    updRepCargarVersiones();
+    msg.innerHTML = '';
+    renderUpdRepLista();
+  }
+
+  function updRepQuitarLista(i) {
+    _updRepLista.splice(i, 1);
+    renderUpdRepLista();
+  }
+
+  function renderUpdRepLista() {
+    const wrap = document.getElementById('upd-rep-lista');
+    if (!_updRepLista.length) { wrap.style.display = 'none'; wrap.innerHTML = ''; return; }
+    wrap.style.display = 'flex';
+    wrap.innerHTML = _updRepLista.map((x, i) => `
+      <span style="display:inline-flex;align-items:center;gap:6px;background:#fff;border:1px solid #c5d0dc;border-radius:14px;padding:3px 10px;font-size:11px;">
+        <strong style="color:#1a3558;">${x.clave}</strong>
+        <span style="background:#f0f2f5;padding:1px 6px;border-radius:8px;color:#555;">${x.plat}</span>
+        <span style="background:#f0f4ff;padding:1px 6px;border-radius:8px;color:#1a3558;font-family:monospace;">${x.ver || 'Todas'}</span>
+        <span onclick="updRepQuitarLista(${i})" style="cursor:pointer;color:#e74c3c;font-weight:700;" title="Quitar de la lista">×</span>
+      </span>`).join('') +
+      `<span style="font-size:11px;color:#888;align-self:center;margin-left:4px;">${_updRepLista.length} reporte(s) — la etapa se aplicará a todos</span>`;
+  }
+
   function updRepEtapaChange() {
     const etapa = document.getElementById('upd-rep-etapa').value;
     const esHito = HITOS_REP.has(etapa);
@@ -6250,6 +6304,40 @@
     const fecha           = document.getElementById('upd-rep-fecha').value;
     const msg             = document.getElementById('upd-rep-msg');
     const esHito          = HITOS_REP.has(etapa);
+
+    // Si hay lista, aplicar a todos los reportes de la lista
+    if (_updRepLista.length) {
+      if (!confirm(`¿${desmarcar ? 'Desmarcar' : 'Marcar'} "${etapa}" en ${_updRepLista.length} reporte(s) de la lista?`)) return;
+      msg.innerHTML = 'Aplicando...';
+      let ok = 0, fail = 0; const errores = [];
+      for (const item of _updRepLista) {
+        try {
+          const endpoint = esHito ? '/api/contratos/estatus-reporte' : '/api/contratos/estatus-reporte/estatus';
+          // Cada reporte lleva su propia versión (capturada al agregarlo a la lista)
+          const body = esHito
+            ? { clave_rep: item.clave, clave_plataforma: item.plat, etapa, fecha, desmarcar, version: item.ver || null, id_estatus_rep: item.id ? parseInt(item.id) : null }
+            : { clave_rep: item.clave, clave_plataforma: item.plat, estatus: etapa, version: item.ver || null, id_estatus_rep: item.id ? parseInt(item.id) : null };
+          const r = await fetch(endpoint, {
+            method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body)
+          }).then(x => x.json());
+          if (r.ok) ok++; else { fail++; errores.push(`${item.clave}: ${r.message||'error'}`); }
+        } catch(e) { fail++; errores.push(`${item.clave}: ${e.message}`); }
+        msg.innerHTML = `Aplicando... ${ok + fail}/${_updRepLista.length}`;
+      }
+      msg.innerHTML = fail === 0
+        ? `<span style="color:#27ae60;">✅ ${etapa} ${desmarcar ? 'desmarcado' : 'aplicado'} en ${ok} reporte(s).</span>`
+        : `<span style="color:#e74c3c;">⚠️ ${ok} ok, ${fail} con error:<br><span style="font-size:11px;">${errores.join('<br>')}</span></span>`;
+      if (ok) {
+        _updRepLista = [];
+        renderUpdRepLista();
+        const contratoSel = document.getElementById('bc-rep-contrato');
+        if (contratoSel && contratoSel.value) loadReportesContrato();
+        const estWrap = document.getElementById('est-content');
+        if (estWrap && estWrap.innerHTML && !estWrap.innerHTML.includes('Cargando')) loadEstatus();
+      }
+      return;
+    }
+
     if (!clave_rep || !clave_plataforma) { msg.innerHTML = '<span style="color:#e74c3c;">Completa clave y plataforma.</span>'; return; }
     msg.innerHTML = 'Guardando...';
     try {
