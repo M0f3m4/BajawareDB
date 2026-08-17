@@ -1515,10 +1515,9 @@ router.post('/contratos/upload', requireAuth, upload.single('archivo'), async (r
   try {
     const usuario = req.session.user?.username || 'sistema';
     const { contratos, reportes } = parseContratosExcel(req.file.buffer);
-    const crearFaltantes = req.body.crear_faltantes === '1';
 
     let cliInsert = 0, contInsert = 0, contUpdate = 0;
-    let repInsert = 0, repUpdate = 0, repDesactivar = 0, repCreadosER = 0, errores = 0, errMsg = null;
+    let repInsert = 0, repUpdate = 0, repDesactivar = 0, errores = 0, errMsg = null;
 
     for (const c of contratos) {
       try {
@@ -1552,23 +1551,9 @@ router.post('/contratos/upload', requireAuth, upload.single('archivo'), async (r
             // Validar que el reporte existe en el inventario para esta plataforma
             const existeER = await query(`SELECT 1 FROM ESTATUS_REPORTE WHERE CLAVE_REP_GENERAL=${esc(r.rep)} AND CLAVE_PLATAFORMA=${esc(c.plataforma)}`);
             if (!existeER.length) {
-              if (!crearFaltantes) {
-                errMsg = (errMsg ? errMsg + ', ' : '') + `${r.rep} no existe en inventario para ${c.plataforma}`;
-                errores++;
-                continue;
-              }
-              // Crear el registro en ESTATUS_REPORTE (etapa IDENTIFICADO) para esta plataforma
-              const existeRepGen = await query(`SELECT 1 FROM CAT_REPORTES_GENERALES WHERE CLAVE_REP_GENERAL=${esc(r.rep)}`);
-              if (!existeRepGen.length) await query(`INSERT INTO CAT_REPORTES_GENERALES (CLAVE_REP_GENERAL) VALUES (${esc(r.rep)})`);
-              await query(`
-                INSERT INTO ESTATUS_REPORTE
-                  (CLAVE_REP, CLAVE_REP_GENERAL, CLAVE_PLATAFORMA, VERSION, VERSION_CARGA,
-                   DOCUMENTADO, PROGRAMADO, CERTIFICADO, ESTATUS, FECHA_ESTATUS, USER_ESTATUS)
-                VALUES
-                  (${esc(r.rep)}, ${esc(r.rep)}, ${esc(c.plataforma)}, '00', NULL,
-                   'NO', 'NO', 'NO', 'IDENTIFICADO', GETDATE(), ${esc(usuario)})
-              `);
-              repCreadosER++;
+              errMsg = (errMsg ? errMsg + ', ' : '') + `${r.rep} no existe en inventario para ${c.plataforma}`;
+              errores++;
+              continue;
             }
             await query(`INSERT INTO CONTRATOS_REPORTES (CLAVE_CONTRATO, CLAVE_REP, ACTIVO)
               VALUES (${esc(c.clave)}, ${esc(r.rep)}, 1)`);
@@ -1588,15 +1573,13 @@ router.post('/contratos/upload', requireAuth, upload.single('archivo'), async (r
 
         await auditLog(usuario, 'upload-contratos', 'UPLOAD', {
           contrato: c.clave, cliente: c.cliente, plataforma: c.plataforma,
-          reportes_nuevos: repInsert, reportes_desactivados: repDesactivar,
-          reportes_creados_estatus: repCreadosER
+          reportes_nuevos: repInsert, reportes_desactivados: repDesactivar
         });
       } catch(e2) { console.error('[upload-contratos]', e2.message); errores++; errMsg = e2.message; }
     }
 
     res.json({ ok: true, clientes: { insertados: cliInsert }, contratos: { insertados: contInsert, actualizados: contUpdate },
-      reportes: { insertados: repInsert, actualizados: repUpdate, desactivados: repDesactivar, creados_estatus: repCreadosER },
-      errores, errMsg: errMsg || null });
+      reportes: { insertados: repInsert, actualizados: repUpdate, desactivados: repDesactivar }, errores, errMsg: errMsg || null });
   } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
 });
 
