@@ -7188,11 +7188,21 @@
               <span style="color:#888;">↺ ${c.repsActualizar.length} a actualizar fechas</span>
             </div>` : ''}
             ${c.repsInvalidos && c.repsInvalidos.length ? `<div style="grid-column:1/-1;">
-              <span style="color:#e67e22;font-weight:600;">⚠️ ${c.repsInvalidos.length} no en inventario (se omitirán): </span>
+              <span style="color:#e67e22;font-weight:600;">⚠️ ${c.repsInvalidos.length} no existen en ESTATUS_REPORTE para ${c.plataforma}: </span>
               <span style="color:#888;">${c.repsInvalidos.join(', ')}</span>
             </div>` : ''}
           </div>
         </div>`).join('');
+      const totalInvalidos = r.preview.reduce((n, c) => n + ((c.repsInvalidos || []).length), 0);
+      if (totalInvalidos) {
+        body.innerHTML += `
+        <div style="border:1px solid #f0d9b5;background:#fdf6ec;border-radius:8px;padding:10px 16px;font-size:12px;display:flex;align-items:center;gap:8px;">
+          <input type="checkbox" id="cont-crear-faltantes-cb" style="width:15px;height:15px;cursor:pointer;">
+          <label for="cont-crear-faltantes-cb" style="cursor:pointer;color:#7a5a1e;">
+            <strong>Crear los ${totalInvalidos} reportes faltantes</strong> en ESTATUS_REPORTE para su plataforma (etapa IDENTIFICADO) al confirmar la carga. Si no se marca, se omitirán.
+          </label>
+        </div>`;
+      }
       document.getElementById('cont-preview-modal').style.display = 'flex';
     } catch(e) { msg.innerHTML = '<span style="color:#e74c3c;">Error: ' + e.message + '</span>'; }
   }
@@ -7200,14 +7210,16 @@
   async function confirmarCargaContratos() {
     const file = document.getElementById('bc-inv-cont-file').files[0];
     const msg  = document.getElementById('bc-inv-cont-msg');
+    const crearFaltantes = document.getElementById('cont-crear-faltantes-cb')?.checked ? '1' : '0';
     document.getElementById('cont-preview-modal').style.display = 'none';
     msg.innerHTML = '<span style="color:#888;">Cargando...</span>';
-    const fd = new FormData(); fd.append('archivo', file);
+    const fd = new FormData(); fd.append('archivo', file); fd.append('crear_faltantes', crearFaltantes);
     try {
       const r = await fetch('/api/contratos/contratos/upload', { method: 'POST', body: fd }).then(x => x.json());
       if (r.ok) {
         const errTxt = r.errores > 0 ? ` · ⚠️ ${r.errores} error(es): ${r.errMsg || ''}` : '';
-        msg.innerHTML = `<span style="color:#27ae60;">✅ Clientes: ${r.clientes.insertados} nuevos · Contratos: ${r.contratos.insertados} nuevos, ${r.contratos.actualizados} actualizados · Reportes: ${r.reportes.insertados} nuevos, ${r.reportes.actualizados} actualizados, ${r.reportes.desactivados} desactivados${errTxt}</span>`;
+        const creadosTxt = r.reportes.creados_estatus ? `, ${r.reportes.creados_estatus} creados en estatus` : '';
+        msg.innerHTML = `<span style="color:#27ae60;">✅ Clientes: ${r.clientes.insertados} nuevos · Contratos: ${r.contratos.insertados} nuevos, ${r.contratos.actualizados} actualizados · Reportes: ${r.reportes.insertados} nuevos, ${r.reportes.actualizados} actualizados, ${r.reportes.desactivados} desactivados${creadosTxt}${errTxt}</span>`;
         document.getElementById('bc-inv-cont-file').value = '';
       } else {
         msg.innerHTML = `<span style="color:#e74c3c;">❌ ${r.message}</span>`;
