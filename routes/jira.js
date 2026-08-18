@@ -446,6 +446,105 @@ router.get('/sprints/:sprintId/tickets', requireAuth, async (req, res) => {
   }
 });
 
+// ── GET /api/jira/boards ──────────────────────────────────
+// Todos los tableros (Kanban / Scrum) y a qué proyecto pertenecen
+router.get('/boards', requireAuth, async (req, res) => {
+  try {
+    const data = await jiraRequest('GET', '/rest/agile/1.0/board?maxResults=50');
+    const boards = (data.values || []).map(b => ({
+      id:       b.id,
+      nombre:   b.name,
+      tipo:     b.type,                       // scrum | kanban
+      proyecto: b.location?.projectName || '',
+      proyectoKey: b.location?.projectKey || ''
+    }));
+    res.json({ ok: true, data: boards });
+  } catch (e) {
+    res.status(500).json({ ok: false, message: e.message });
+  }
+});
+
+// ── GET /api/jira/usuarios ────────────────────────────────
+// Usuarios reales del sitio (excluye apps/bots)
+router.get('/usuarios', requireAuth, async (req, res) => {
+  try {
+    const data = await jiraRequest('GET', '/rest/api/3/users/search?maxResults=200');
+    const usuarios = (Array.isArray(data) ? data : [])
+      .filter(u => u.accountType === 'atlassian' && u.active)
+      .map(u => ({
+        id:     u.accountId,
+        nombre: u.displayName,
+        email:  u.emailAddress || '',
+        avatar: u.avatarUrls?.['24x24'] || ''
+      }));
+    res.json({ ok: true, data: usuarios });
+  } catch (e) {
+    res.status(500).json({ ok: false, message: e.message });
+  }
+});
+
+// ── GET /api/jira/tickets/:key/completo ───────────────────
+// TODO lo que expone Jira de un ticket: campos, comentarios,
+// worklogs, historial de cambios y transiciones disponibles
+router.get('/tickets/:key/completo', requireAuth, async (req, res) => {
+  try {
+    const fields = 'summary,description,status,assignee,reporter,priority,issuetype,labels,components,fixVersions,created,updated,duedate,resolutiondate,parent,project,comment,worklog,timetracking';
+    const [i, trans] = await Promise.all([
+      jiraRequest('GET', `/rest/api/3/issue/${req.params.key}?fields=${fields}&expand=changelog`),
+      jiraRequest('GET', `/rest/api/3/issue/${req.params.key}/transitions`).catch(() => ({ transitions: [] }))
+    ]);
+
+    const extraerTexto = doc => {
+      // El body de comentarios/descripción viene en formato ADF (árbol JSON)
+      const walk = n => !n ? '' : (n.text || '') + (n.content || []).map(walk).join('');
+      return walk(doc);
+    };
+
+    const comentarios = (i.fields.comment?.comments || []).map(c => ({
+      autor: c.author?.displayName, texto: extraerTexto(c.body), creado: c.created
+    }));
+
+    const worklogs = (i.fields.worklog?.worklogs || []).map(w => ({
+      autor: w.author?.displayName, tiempo: w.timeSpent, comentario: extraerTexto(w.comment), fecha: w.started
+    }));
+
+    const historial = (i.changelog?.histories || []).slice(0, 30).map(h => ({
+      autor: h.author?.displayName, fecha: h.created,
+      cambios: (h.items || []).map(it => ({ campo: it.field, de: it.fromString, a: it.toString }))
+    }));
+
+    res.json({
+      ok: true,
+      data: {
+        key:        i.key,
+        resumen:    i.fields.summary,
+        descripcion: extraerTexto(i.fields.description),
+        estado:     i.fields.status?.name,
+        tipo:       i.fields.issuetype?.name,
+        prioridad:  i.fields.priority?.name,
+        asignado:   i.fields.assignee?.displayName || 'Sin asignar',
+        reportero:  i.fields.reporter?.displayName || '',
+        proyecto:   i.fields.project?.name,
+        etiquetas:  i.fields.labels || [],
+        componentes:(i.fields.components || []).map(c => c.name),
+        versiones:  (i.fields.fixVersions || []).map(v => v.name),
+        padre:      i.fields.parent ? { key: i.fields.parent.key, resumen: i.fields.parent.fields?.summary } : null,
+        creado:     i.fields.created,
+        actualizado:i.fields.updated,
+        vence:      i.fields.duedate,
+        resuelto:   i.fields.resolutiondate,
+        tiempo:     i.fields.timetracking || {},
+        comentarios,
+        worklogs,
+        historial,
+        transiciones: (trans.transitions || []).map(t => ({ id: t.id, nombre: t.name }))
+      }
+    });
+  } catch (e) {
+    res.status(500).json({ ok: false, message: e.message });
+  }
+});
+
 // ── GET /api/jira/test-transiciones/:key ──────────────────
 router.get('/test-transiciones/:key', async (req, res) => {
   try {

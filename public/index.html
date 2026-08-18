@@ -404,6 +404,17 @@
     .badge-blue   { background: #e3f2fd; color: #1565c0; }
     .badge-purple { background: #f3e5f5; color: #6a1b9a; }
 
+    /* Jira Explorer */
+    .jx-tab { padding:7px 14px; border:1px solid #d5dbe3; border-radius:20px; background:#fff; color:#1a3558; font-size:12px; cursor:pointer; }
+    .jx-tab:hover { border-color:#1a3558; }
+    .jx-tab.active { background:#1a3558; color:#fff; border-color:#1a3558; }
+    .jx-card { border:1px solid #e0e6ed; border-radius:8px; padding:12px 14px; background:#fff; }
+    .jx-stat { border:1px solid #e0e6ed; border-radius:8px; padding:12px; text-align:center; background:#fff; }
+    .jx-stat .num { font-size:22px; font-weight:700; color:#1a3558; }
+    .jx-stat .lbl { font-size:11px; color:#888; }
+    .jx-key { color:#0052cc; font-weight:600; cursor:pointer; }
+    .jx-key:hover { text-decoration:underline; }
+
     /* Toolbar */
     .toolbar { display:flex; align-items:center; gap:10px; margin-bottom:14px; flex-wrap:wrap; }
     .toolbar select { padding:7px 10px; border:1px solid #ddd; border-radius:6px; font-size:13px; }
@@ -602,6 +613,10 @@
         <div class="sub-item" onclick="showSection('spr-activo')">Sprint Activo</div>
         <div class="sub-item" onclick="showSection('spr-historial')">Historial</div>
         <div class="sub-item" onclick="showSection('spr-tickets')">Tickets</div>
+      </div>
+
+      <div class="nav-item" onclick="showSection('jira-explorer')">
+        <div class="nav-item-left"><span class="nav-icon">🧭</span> Jira Explorer</div>
       </div>
 
       <!-- HIDDEN: Documentación -->
@@ -1268,6 +1283,44 @@
       <div class="content-section" id="sec-spr-historial">
         <h2 class="section-title">Sprints — Historial</h2>
         <div id="spr-hist-content"><div class="loading">Cargando historial...</div></div>
+      </div>
+
+      <!-- ── JIRA EXPLORER ─────────────────────────────────── -->
+      <div class="content-section" id="sec-jira-explorer">
+        <h2 class="section-title">🧭 Jira Explorer</h2>
+        <p style="margin:0 0 14px;font-size:12px;color:#888;">Todo lo que la API de Jira expone, en un solo lugar. Haz clic en una tarjeta para cargar sus datos.</p>
+
+        <!-- Resumen (stats) -->
+        <div id="jx-stats" style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px;"></div>
+
+        <!-- Tabs de categorías -->
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px;">
+          <button class="jx-tab" data-jx="proyectos" onclick="jxVer('proyectos')">📁 Proyectos</button>
+          <button class="jx-tab" data-jx="boards" onclick="jxVer('boards')">🗂 Tableros</button>
+          <button class="jx-tab" data-jx="sprints" onclick="jxVer('sprints')">⏱ Sprints activos</button>
+          <button class="jx-tab" data-jx="epics" onclick="jxVer('epics')">🎯 Epics</button>
+          <button class="jx-tab" data-jx="tickets" onclick="jxVer('tickets')">🎫 Tickets (JQL)</button>
+          <button class="jx-tab" data-jx="usuarios" onclick="jxVer('usuarios')">👥 Usuarios</button>
+        </div>
+
+        <!-- Barra JQL (solo visible en tickets) -->
+        <div id="jx-jql-bar" style="display:none;margin-bottom:12px;gap:8px;">
+          <input type="text" id="jx-jql" placeholder='JQL — ej: project = "BAJA" AND status != Done ORDER BY updated DESC'
+                 style="flex:1;padding:8px 10px;border:1px solid #d5dbe3;border-radius:6px;font-size:12px;font-family:monospace;"
+                 onkeydown="if(event.key==='Enter') jxBuscarTickets()">
+          <button onclick="jxBuscarTickets()" style="padding:8px 16px;border:none;border-radius:6px;background:#1a3558;color:#fff;font-size:12px;cursor:pointer;">Buscar</button>
+        </div>
+
+        <div id="jx-content"><div class="placeholder-card"><div class="icon">🧭</div>Selecciona una categoría arriba para explorar.</div></div>
+
+        <!-- Detalle de ticket -->
+        <div id="jx-detalle" style="display:none;margin-top:16px;border:1px solid #e0e6ed;border-radius:8px;overflow:hidden;">
+          <div style="background:#1a3558;color:#fff;padding:10px 16px;display:flex;align-items:center;gap:10px;">
+            <span id="jx-det-titulo" style="font-weight:700;"></span>
+            <button onclick="document.getElementById('jx-detalle').style.display='none'" style="margin-left:auto;background:none;border:none;color:#fff;font-size:16px;cursor:pointer;">✕</button>
+          </div>
+          <div id="jx-det-body" style="padding:14px 16px;font-size:12px;"></div>
+        </div>
       </div>
       <div class="content-section" id="sec-doc-lista"><h2 class="section-title">Documentación</h2><div class="placeholder-card"><div class="icon">📁</div>Próximamente</div></div>
       <div class="content-section" id="sec-doc-subir"><h2 class="section-title">Documentación — Subir</h2><div class="placeholder-card"><div class="icon">⬆️</div>Próximamente</div></div>
@@ -7473,6 +7526,176 @@
     }
   }
 
+  // ── JIRA EXPLORER ─────────────────────────────────────────
+  const _jxFecha = f => f ? new Date(f).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
+  function _jxLoad(msg) { document.getElementById('jx-content').innerHTML = `<div class="loading">${msg}</div>`; }
+  function _jxErr(m)    { document.getElementById('jx-content').innerHTML = `<div style="color:#e74c3c;font-size:12px;">❌ ${m}</div>`; }
+
+  async function jxInit() {
+    const el = document.getElementById('jx-stats');
+    el.innerHTML = '<div class="loading" style="grid-column:1/-1;">Cargando resumen...</div>';
+    try {
+      const r = await fetch('/api/jira/stats').then(x => x.json());
+      if (!r.ok) { el.innerHTML = `<div style="grid-column:1/-1;color:#e74c3c;font-size:12px;">❌ ${r.message}</div>`; return; }
+      const d = r.data;
+      el.innerHTML = `
+        <div class="jx-stat"><div class="num">${d.total}</div><div class="lbl">Tickets totales</div></div>
+        <div class="jx-stat"><div class="num" style="color:#e67e22;">${d.pendientes}</div><div class="lbl">Pendientes</div></div>
+        <div class="jx-stat"><div class="num" style="color:#2980b9;">${d.enProgreso}</div><div class="lbl">En progreso</div></div>
+        <div class="jx-stat"><div class="num" style="color:#27ae60;">${d.hechos}</div><div class="lbl">Hechos</div></div>`;
+    } catch (e) { el.innerHTML = `<div style="grid-column:1/-1;color:#e74c3c;font-size:12px;">Error: ${e.message}</div>`; }
+  }
+
+  function jxVer(cat) {
+    document.querySelectorAll('.jx-tab').forEach(b => b.classList.toggle('active', b.dataset.jx === cat));
+    document.getElementById('jx-jql-bar').style.display = cat === 'tickets' ? 'flex' : 'none';
+    document.getElementById('jx-detalle').style.display = 'none';
+    ({ proyectos: jxProyectos, boards: jxBoards, sprints: jxSprints, epics: jxEpics, tickets: jxBuscarTickets, usuarios: jxUsuarios })[cat]();
+  }
+
+  async function jxProyectos() {
+    _jxLoad('Cargando proyectos...');
+    try {
+      const r = await fetch('/api/jira/proyectos').then(x => x.json());
+      if (!r.ok) return _jxErr(r.message);
+      document.getElementById('jx-content').innerHTML = `
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;">
+          ${r.data.map(p => `
+            <div class="jx-card">
+              <div style="font-weight:700;color:#1a3558;">${p.name}</div>
+              <div style="font-size:11px;color:#888;margin-top:4px;">Clave: <strong>${p.key}</strong> · ${p.tipo}</div>
+            </div>`).join('')}
+        </div>`;
+    } catch (e) { _jxErr(e.message); }
+  }
+
+  async function jxBoards() {
+    _jxLoad('Cargando tableros...');
+    try {
+      const r = await fetch('/api/jira/boards').then(x => x.json());
+      if (!r.ok) return _jxErr(r.message);
+      document.getElementById('jx-content').innerHTML = r.data.length ? `
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:10px;">
+          ${r.data.map(b => `
+            <div class="jx-card">
+              <div style="font-weight:700;color:#1a3558;">${b.nombre}</div>
+              <div style="font-size:11px;color:#888;margin-top:4px;">${b.tipo === 'scrum' ? '🏃 Scrum' : '📋 Kanban'} · Proyecto: ${b.proyecto || b.proyectoKey || '—'}</div>
+            </div>`).join('')}
+        </div>` : '<div class="placeholder-card"><div class="icon">🗂</div>No hay tableros.</div>';
+    } catch (e) { _jxErr(e.message); }
+  }
+
+  async function jxSprints() {
+    _jxLoad('Cargando sprints activos...');
+    try {
+      const r = await fetch('/api/jira/sprints/activos').then(x => x.json());
+      if (!r.ok) return _jxErr(r.message);
+      document.getElementById('jx-content').innerHTML = r.data.length ? r.data.map(s => `
+        <div class="jx-card" style="margin-bottom:10px;">
+          <div style="font-weight:700;color:#1a3558;">${s.name}</div>
+          <div style="font-size:11px;color:#888;margin-top:4px;">
+            Tablero: ${s.boardName || '—'} · ${_jxFecha(s.startDate)} → ${_jxFecha(s.endDate)}
+            ${s.goal ? `<br>🎯 ${s.goal}` : ''}
+          </div>
+        </div>`).join('') : '<div class="placeholder-card"><div class="icon">⏱</div>No hay sprints activos.</div>';
+    } catch (e) { _jxErr(e.message); }
+  }
+
+  async function jxEpics() {
+    _jxLoad('Cargando epics...');
+    try {
+      const r = await fetch('/api/jira/epics').then(x => x.json());
+      if (!r.ok) return _jxErr(r.message);
+      document.getElementById('jx-content').innerHTML = r.data.length ? r.data.map(p => `
+        <div class="jx-card" style="margin-bottom:10px;">
+          <div style="font-weight:700;color:#1a3558;margin-bottom:6px;">📁 ${p.nombre}</div>
+          ${p.epics.map(e => `
+            <div style="display:flex;gap:8px;align-items:center;padding:4px 0;border-top:1px solid #f0f2f5;font-size:12px;">
+              <span class="jx-key" onclick="jxAbrirTicket('${e.key}')">${e.key}</span>
+              <span style="flex:1;">${e.resumen}</span>
+              <span style="font-size:10px;background:${e.categoria === 'Done' ? '#e8f8ef' : e.categoria === 'In Progress' ? '#e8f1fd' : '#f4f5f7'};color:#555;padding:2px 8px;border-radius:10px;">${e.estado || ''}</span>
+            </div>`).join('')}
+        </div>`).join('') : '<div class="placeholder-card"><div class="icon">🎯</div>No hay epics.</div>';
+    } catch (e) { _jxErr(e.message); }
+  }
+
+  async function jxBuscarTickets() {
+    _jxLoad('Buscando tickets...');
+    const jql = document.getElementById('jx-jql').value.trim();
+    const url = jql ? `/api/jira/tickets?max=100&jql=${encodeURIComponent(jql)}` : '/api/jira/tickets?max=100&jql=' + encodeURIComponent('ORDER BY updated DESC');
+    try {
+      const r = await fetch(url).then(x => x.json());
+      if (!r.ok) return _jxErr(r.message);
+      document.getElementById('jx-content').innerHTML = r.data.length ? `
+        <div style="font-size:11px;color:#888;margin-bottom:8px;">${r.data.length} tickets${r.total ? ` de ${r.total}` : ''} — clic en la clave para ver TODO el detalle</div>
+        <table class="data-table" style="width:100%;font-size:12px;">
+          <thead><tr><th>Clave</th><th>Resumen</th><th>Tipo</th><th>Estado</th><th>Asignado</th><th>Prioridad</th><th>Actualizado</th></tr></thead>
+          <tbody>${r.data.map(t => `
+            <tr>
+              <td><span class="jx-key" onclick="jxAbrirTicket('${t.key}')">${t.key}</span></td>
+              <td>${t.resumen}</td><td>${t.tipo || ''}</td><td>${t.estado || ''}</td>
+              <td>${t.asignado}</td><td>${t.prioridad || ''}</td><td>${_jxFecha(t.actualizado)}</td>
+            </tr>`).join('')}</tbody>
+        </table>` : '<div class="placeholder-card"><div class="icon">🎫</div>Sin resultados para ese JQL.</div>';
+    } catch (e) { _jxErr(e.message); }
+  }
+
+  async function jxUsuarios() {
+    _jxLoad('Cargando usuarios...');
+    try {
+      const r = await fetch('/api/jira/usuarios').then(x => x.json());
+      if (!r.ok) return _jxErr(r.message);
+      document.getElementById('jx-content').innerHTML = r.data.length ? `
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;">
+          ${r.data.map(u => `
+            <div class="jx-card" style="display:flex;gap:10px;align-items:center;">
+              ${u.avatar ? `<img src="${u.avatar}" style="width:28px;height:28px;border-radius:50%;">` : '👤'}
+              <div>
+                <div style="font-weight:600;color:#1a3558;font-size:12px;">${u.nombre}</div>
+                <div style="font-size:11px;color:#888;">${u.email || ''}</div>
+              </div>
+            </div>`).join('')}
+        </div>` : '<div class="placeholder-card"><div class="icon">👥</div>Sin usuarios.</div>';
+    } catch (e) { _jxErr(e.message); }
+  }
+
+  async function jxAbrirTicket(key) {
+    const det = document.getElementById('jx-detalle');
+    det.style.display = 'block';
+    document.getElementById('jx-det-titulo').textContent = key;
+    document.getElementById('jx-det-body').innerHTML = '<div class="loading">Cargando todo el detalle...</div>';
+    det.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    try {
+      const r = await fetch(`/api/jira/tickets/${key}/completo`).then(x => x.json());
+      if (!r.ok) { document.getElementById('jx-det-body').innerHTML = `<span style="color:#e74c3c;">❌ ${r.message}</span>`; return; }
+      const d = r.data;
+      document.getElementById('jx-det-titulo').textContent = `${d.key} — ${d.resumen}`;
+      document.getElementById('jx-det-body').innerHTML = `
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:12px;">
+          <div><span style="color:#888;">Proyecto:</span> <strong>${d.proyecto || '—'}</strong></div>
+          <div><span style="color:#888;">Tipo:</span> ${d.tipo || '—'}</div>
+          <div><span style="color:#888;">Estado:</span> <strong>${d.estado || '—'}</strong></div>
+          <div><span style="color:#888;">Asignado:</span> ${d.asignado}</div>
+          <div><span style="color:#888;">Reportó:</span> ${d.reportero || '—'}</div>
+          <div><span style="color:#888;">Prioridad:</span> ${d.prioridad || '—'}</div>
+          <div><span style="color:#888;">Creado:</span> ${_jxFecha(d.creado)}</div>
+          <div><span style="color:#888;">Actualizado:</span> ${_jxFecha(d.actualizado)}</div>
+          <div><span style="color:#888;">Vence:</span> ${_jxFecha(d.vence)}</div>
+          ${d.padre ? `<div style="grid-column:1/-1;"><span style="color:#888;">Epic/Padre:</span> <span class="jx-key" onclick="jxAbrirTicket('${d.padre.key}')">${d.padre.key}</span> ${d.padre.resumen || ''}</div>` : ''}
+          ${d.etiquetas.length ? `<div style="grid-column:1/-1;"><span style="color:#888;">Etiquetas:</span> ${d.etiquetas.join(', ')}</div>` : ''}
+        </div>
+        ${d.descripcion ? `<div style="background:#f8f9fb;border-radius:6px;padding:10px;margin-bottom:12px;white-space:pre-wrap;">${d.descripcion}</div>` : ''}
+        ${d.transiciones.length ? `<div style="margin-bottom:12px;"><strong>➡️ Transiciones posibles:</strong> ${d.transiciones.map(t => t.nombre).join(' · ')}</div>` : ''}
+        ${d.comentarios.length ? `<div style="margin-bottom:12px;"><strong>💬 Comentarios (${d.comentarios.length})</strong>
+          ${d.comentarios.map(c => `<div style="border-top:1px solid #f0f2f5;padding:6px 0;"><span style="color:#1a3558;font-weight:600;">${c.autor}</span> <span style="color:#aaa;font-size:10px;">${_jxFecha(c.creado)}</span><br>${c.texto}</div>`).join('')}</div>` : ''}
+        ${d.worklogs.length ? `<div style="margin-bottom:12px;"><strong>⏱ Worklogs (${d.worklogs.length})</strong>
+          ${d.worklogs.map(w => `<div style="border-top:1px solid #f0f2f5;padding:6px 0;">${w.autor} — <strong>${w.tiempo}</strong> <span style="color:#aaa;font-size:10px;">${_jxFecha(w.fecha)}</span>${w.comentario ? `<br>${w.comentario}` : ''}</div>`).join('')}</div>` : ''}
+        ${d.historial.length ? `<div><strong>📜 Historial de cambios (últimos ${d.historial.length})</strong>
+          ${d.historial.map(h => `<div style="border-top:1px solid #f0f2f5;padding:6px 0;"><span style="color:#1a3558;font-weight:600;">${h.autor}</span> <span style="color:#aaa;font-size:10px;">${_jxFecha(h.fecha)}</span><br>
+            ${h.cambios.map(c => `<span style="color:#888;">${c.campo}:</span> ${c.de || '—'} → <strong>${c.a || '—'}</strong>`).join(' · ')}</div>`).join('')}</div>` : ''}`;
+    } catch (e) { document.getElementById('jx-det-body').innerHTML = `<span style="color:#e74c3c;">Error: ${e.message}</span>`; }
+  }
+
   const lazyLoaders = {
     'inv-layouts':    loadLayoutsResumen,
     'inv-catalogos':  loadCatalogos,
@@ -7480,6 +7703,7 @@
     'inv-estatus':    initEstatus,
     'inv-estatus-val': initEstatusVal,
     'spr-activo':     loadSprintActivo,
+    'jira-explorer':  () => { jxInit(); jxVer('proyectos'); },
     'spr-historial':  loadSprHistorial,
     'spr-tickets':    loadJiraTickets,
     'usuarios':       loadUsuarios,
