@@ -6353,7 +6353,7 @@
                 <td style="padding:5px 12px;text-align:center;">
                   ${(()=>{
                     const ep = (_vcliEstatusProyectoGlobal||{})[v.CLAVE_VALIDACION+'|'+(v.CLAVE_PLATAFORMA||'')] || '';
-                    const opts = ['IDENTIFICADO','EN DOCUMENTACION','DOCUMENTADO','EN ANALISIS PROG','ANALIZADO','EN PROGRAMACION','PROGRAMADO','EN CERTIFICACION','CERTIFICADO'];
+                    const opts = ['NO INICIADO','LAYOUT','EXTRACCIONES','PRUEBAS BW','INSTALADO EN QA','PRUEBAS QA','CERTIFICADO QA','EN PRODUCCION','EN SOPORTE'];
                     return `<select onchange="actualizarEstatusProyectoVal('${v.CLAVE_VALIDACION}','${v.CLAVE_PLATAFORMA||''}',this.value,'${v.VERSION_CARGA||''}')"
                       style="font-size:11px;padding:2px 4px;border:1px solid #ddd;border-radius:4px;max-width:130px;">
                       <option value="">—</option>
