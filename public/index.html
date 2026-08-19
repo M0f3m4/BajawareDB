@@ -1170,7 +1170,7 @@
             <label style="font-size:11px;font-weight:600;color:#555;display:block;margin-bottom:4px;">Entidad regulada</label>
             <select id="invv-entidad" onchange="invvOnEntidadChange()"
               style="padding:7px 12px;border:1px solid #ddd;border-radius:6px;font-size:13px;min-width:180px;">
-              <option value="">— Selecciona entidad —</option>
+              <option value="">— Todas —</option>
             </select>
           </div>
           <div>
@@ -1183,7 +1183,7 @@
           </div>
           <div>
             <label style="font-size:11px;font-weight:600;color:#555;display:block;margin-bottom:4px;">Versión</label>
-            <select id="invv-version" onchange="invvFiltrar()"
+            <select id="invv-version" onchange="invvOnVersionChange()"
               style="padding:7px 12px;border:1px solid #ddd;border-radius:6px;font-size:13px;min-width:140px;">
               <option value="">— Todas —</option>
             </select>
@@ -1191,7 +1191,7 @@
           <div>
             <label style="font-size:11px;font-weight:600;color:#555;display:block;margin-bottom:4px;">Buscar validación</label>
             <input id="invv-buscar" type="text" placeholder="Clave o descripción..."
-              oninput="invvFiltrar()"
+              oninput="invvOnBuscar()"
               style="padding:7px 12px;border:1px solid #ddd;border-radius:6px;font-size:13px;min-width:220px;">
           </div>
           <span id="invv-badge" style="font-size:11px;background:#e8f0fe;color:#1a3558;padding:3px 10px;border-radius:10px;font-weight:600;display:none;"></span>
@@ -1200,7 +1200,7 @@
           </button>
         </div>
         <div id="invv-scroll-top" style="overflow-x:auto;overflow-y:hidden;height:16px;"><div id="invv-scroll-ghost" style="height:1px;"></div></div>
-        <div id="invv-content" style="max-height:60vh;overflow:auto;"><p style="color:#aaa;font-size:13px;">Selecciona una entidad.</p></div>
+        <div id="invv-content" style="max-height:60vh;overflow:auto;"><div class="loading">Cargando...</div></div>
       </div>
 
       <!-- Estatus de Validaciones -->
@@ -5787,119 +5787,78 @@
   // ── Inventario de Validaciones ────────────────────────────
   async function initInvValidaciones() {
     const sel = document.getElementById('invv-entidad');
-    if (sel.options.length > 1) return;
+    if (sel.options.length <= 1) {
+      try {
+        const r = await fetch('/api/contratos/inventario-validaciones/entidades').then(x => x.json());
+        if (r.ok) r.data.forEach(e => {
+          const o = document.createElement('option');
+          o.value = o.textContent = e;
+          sel.appendChild(o);
+        });
+      } catch(e) {}
+      invvCargarReportesDropdown();
+    }
+    invvVerReporte(null);
+  }
+
+  async function invvCargarReportesDropdown() {
+    const entidad = document.getElementById('invv-entidad').value;
+    const selRep  = document.getElementById('invv-rep');
+    selRep.innerHTML = '<option value="">— Resumen por reporte —</option><option value="*">Todas las validaciones</option>';
+    selRep.disabled = false;
     try {
-      const r = await fetch('/api/contratos/inventario-validaciones/entidades').then(x => x.json());
-      if (r.ok) r.data.forEach(e => {
+      const r = await fetch(`/api/contratos/inventario-validaciones/reportes-por-entidad?entidad=${encodeURIComponent(entidad)}`).then(x => x.json());
+      if (r.ok) r.data.forEach(rep => {
         const o = document.createElement('option');
-        o.value = o.textContent = e;
-        sel.appendChild(o);
+        o.value = o.textContent = rep;
+        selRep.appendChild(o);
       });
     } catch(e) {}
   }
 
-  async function invvOnEntidadChange() {
-    const entidad = document.getElementById('invv-entidad').value;
-    const selRep  = document.getElementById('invv-rep');
-    const wrap    = document.getElementById('invv-content');
-    const badge   = document.getElementById('invv-badge');
-    selRep.innerHTML = '<option value="">— Resumen por reporte —</option><option value="*">Todas las validaciones</option>';
-    selRep.disabled = true;
-    _invvVistaRep = null;
-    badge.style.display = 'none';
-    document.getElementById('invv-export-btn').style.display = 'none';
-    wrap.innerHTML = '<p style="color:#aaa;font-size:13px;">Selecciona una entidad.</p>';
-    if (!entidad) return;
-    try {
-      const r = await fetch(`/api/contratos/inventario-validaciones/reportes-por-entidad?entidad=${encodeURIComponent(entidad)}`).then(x => x.json());
-      if (r.ok) {
-        r.data.forEach(rep => {
-          const o = document.createElement('option');
-          o.value = o.textContent = rep;
-          selRep.appendChild(o);
-        });
-        selRep.disabled = false;
-      }
-    } catch(e) {}
-    invvCargar();
+  function invvOnEntidadChange() {
+    invvCargarReportesDropdown();
+    invvVerReporte(null);
   }
 
-  async function invvCargar() {
+  async function invvCargarResumen() {
     const entidad = document.getElementById('invv-entidad').value;
+    const q       = (document.getElementById('invv-buscar').value || '').trim();
     const wrap    = document.getElementById('invv-content');
-    const badge   = document.getElementById('invv-badge');
-    if (!entidad) return;
-    wrap.innerHTML = '<div style=""><div class="loading">Cargando...</div></div>';
-    badge.style.display = 'none';
+    wrap.innerHTML = '<div class="loading">Cargando...</div>';
     try {
-      const r = await fetch(`/api/contratos/inventario-validaciones/lista?entidad=${encodeURIComponent(entidad)}`).then(x => x.json());
-      if (!r.ok) { wrap.innerHTML = `<div style=""><p style="color:#e74c3c;">Error: ${r.message}</p></div>`; return; }
-      const data = r.data || [];
-      const mapaVal = {};
-      for (const row of data) {
-        const llave = `${row.CLAVE_VALIDACION}|${row.CLAVE_REP}`;
-        if (!mapaVal[llave]) {
-          mapaVal[llave] = { ...row, plataformas: [] };
-        }
-        if (row.CLAVE_PLATAFORMA && !mapaVal[llave].plataformas.includes(row.CLAVE_PLATAFORMA)) mapaVal[llave].plataformas.push(row.CLAVE_PLATAFORMA);
-      }
-      _invvAllVals = Object.values(mapaVal);
+      const r = await fetch(`/api/contratos/inventario-validaciones/resumen?entidad=${encodeURIComponent(entidad)}&q=${encodeURIComponent(q)}`).then(x => x.json());
+      if (!r.ok) { wrap.innerHTML = `<p style="color:#e74c3c;">Error: ${r.message}</p>`; return; }
+      _invvResumen = r.data || [];
 
-      // Poblar dropdown de versiones
+      // Poblar dropdown de versiones (conservando la selección si sigue existiendo)
       const selVer = document.getElementById('invv-version');
-      const versiones = [...new Set(_invvAllVals.map(v => v.VERSION_CARGA).filter(Boolean))].sort();
+      const actual = selVer.value;
+      const versiones = [...new Set(_invvResumen.map(v => v.VERSION_CARGA).filter(Boolean))].sort();
       selVer.innerHTML = '<option value="">— Todas —</option>' + versiones.map(v => `<option value="${v}">${v}</option>`).join('');
-      document.getElementById('invv-buscar').value = '';
-      invvFiltrar();
-
-    } catch(e) { wrap.innerHTML = `<div style=""><p style="color:#e74c3c;">Error: ${e.message}</p></div>`; }
+      if (versiones.includes(actual)) selVer.value = actual;
+      invvRenderResumen();
+    } catch(e) { wrap.innerHTML = `<p style="color:#e74c3c;">Error: ${e.message}</p>`; }
   }
 
-  let _invvAllVals = [];
-  let _invvVistaRep = null; // null = resumen por reporte, '*' = todas, otro valor = un reporte
-
-  function invvFiltrado() {
-    const q    = (document.getElementById('invv-buscar').value || '').toLowerCase();
-    const ver  = document.getElementById('invv-version').value;
-    const rep  = (_invvVistaRep && _invvVistaRep !== '*') ? _invvVistaRep : '';
-    return _invvAllVals.filter(v =>
-      (!rep || v.CLAVE_REP === rep) &&
-      (!ver || v.VERSION_CARGA === ver) &&
-      (!q   || (v.CLAVE_VALIDACION||'').toLowerCase().includes(q) || (v.DESCRIPCION_VALIDACION||'').toLowerCase().includes(q) || (v.CLAVE_REP||'').toLowerCase().includes(q))
-    );
-  }
-
-  function invvFiltrar() {
-    const filtrado = invvFiltrado();
-    if (_invvVistaRep === null) invvRenderOverview(filtrado);
-    else invvRenderVals(filtrado);
-  }
-
-  function invvRepChange() {
-    _invvVistaRep = document.getElementById('invv-rep').value || null;
-    invvFiltrar();
-  }
-
-  function invvVerReporte(clave) {
-    _invvVistaRep = clave;
-    document.getElementById('invv-rep').value = clave === null ? '' : clave;
-    invvFiltrar();
-  }
-
-  function invvRenderOverview(vals) {
+  function invvRenderResumen() {
     const wrap  = document.getElementById('invv-content');
     const badge = document.getElementById('invv-badge');
+    const ver   = document.getElementById('invv-version').value;
+    const filas = _invvResumen.filter(f => !ver || f.VERSION_CARGA === ver);
     const mapa = {};
-    for (const v of vals) {
-      const rep = v.CLAVE_REP || '(sin reporte)';
+    let totalVals = 0;
+    for (const f of filas) {
+      const rep = f.CLAVE_REP || '(sin reporte)';
       if (!mapa[rep]) mapa[rep] = { total: 0, versiones: new Set() };
-      mapa[rep].total++;
-      if (v.VERSION_CARGA) mapa[rep].versiones.add(v.VERSION_CARGA);
+      mapa[rep].total += f.TOTAL;
+      totalVals += f.TOTAL;
+      if (f.VERSION_CARGA) mapa[rep].versiones.add(f.VERSION_CARGA);
     }
     const reps = Object.keys(mapa).sort();
-    badge.textContent = `${reps.length} reportes · ${vals.length} validaciones`;
+    badge.textContent = `${reps.length} reportes · ${totalVals.toLocaleString()} validaciones`;
     badge.style.display = 'inline-block';
-    document.getElementById('invv-export-btn').style.display = vals.length ? 'inline-block' : 'none';
+    document.getElementById('invv-export-btn').style.display = reps.length ? 'inline-block' : 'none';
     if (!reps.length) { wrap.innerHTML = '<p style="color:#aaa;font-size:13px;">Sin validaciones.</p>'; return; }
     wrap.innerHTML = `
       <div class="data-table-wrap">
@@ -5924,7 +5883,96 @@
     if (scrollGhost) scrollGhost.style.width = '1px';
   }
 
+  let _invvResumen  = [];   // filas {CLAVE_REP, VERSION_CARGA, TOTAL} del resumen
+  let _invvAllVals  = [];   // detalle de validaciones del reporte abierto
+  let _invvVistaRep = null; // null = resumen por reporte, '*' = todas, otro valor = un reporte
+  let _invvBuscarTimer = null;
+
+  async function invvVerReporte(clave) {
+    _invvVistaRep = clave;
+    const selRep = document.getElementById('invv-rep');
+    if (clave === null) { selRep.value = ''; invvCargarResumen(); return; }
+    if ([...selRep.options].some(o => o.value === clave)) selRep.value = clave;
+    const entidad = document.getElementById('invv-entidad').value;
+    const rep     = clave === '*' ? '' : clave;
+    const wrap    = document.getElementById('invv-content');
+    wrap.innerHTML = '<div class="loading">Cargando...</div>';
+    try {
+      const r = await fetch(`/api/contratos/inventario-validaciones/lista?entidad=${encodeURIComponent(entidad)}&rep=${encodeURIComponent(rep)}`).then(x => x.json());
+      if (!r.ok) { wrap.innerHTML = `<p style="color:#e74c3c;">Error: ${r.message}</p>`; return; }
+      const data = r.data || [];
+      const mapaVal = {};
+      for (const row of data) {
+        const llave = `${row.CLAVE_VALIDACION}|${row.CLAVE_REP}`;
+        if (!mapaVal[llave]) mapaVal[llave] = { ...row, plataformas: [] };
+        if (row.CLAVE_PLATAFORMA && !mapaVal[llave].plataformas.includes(row.CLAVE_PLATAFORMA)) mapaVal[llave].plataformas.push(row.CLAVE_PLATAFORMA);
+      }
+      _invvAllVals = Object.values(mapaVal);
+
+      // Poblar dropdown de versiones del detalle (conservando la selección)
+      const selVer = document.getElementById('invv-version');
+      const actual = selVer.value;
+      const versiones = [...new Set(_invvAllVals.map(v => v.VERSION_CARGA).filter(Boolean))].sort();
+      selVer.innerHTML = '<option value="">— Todas —</option>' + versiones.map(v => `<option value="${v}">${v}</option>`).join('');
+      if (versiones.includes(actual)) selVer.value = actual;
+      invvFiltrar();
+    } catch(e) { wrap.innerHTML = `<p style="color:#e74c3c;">Error: ${e.message}</p>`; }
+  }
+
+  function invvRepChange() {
+    const v = document.getElementById('invv-rep').value;
+    invvVerReporte(v === '' ? null : v);
+  }
+
+  function invvOnVersionChange() {
+    if (_invvVistaRep === null) invvRenderResumen();
+    else invvFiltrar();
+  }
+
+  function invvOnBuscar() {
+    if (_invvVistaRep === null) {
+      clearTimeout(_invvBuscarTimer);
+      _invvBuscarTimer = setTimeout(invvCargarResumen, 400);
+    } else invvFiltrar();
+  }
+
+  function invvFiltrado() {
+    const q    = (document.getElementById('invv-buscar').value || '').toLowerCase();
+    const ver  = document.getElementById('invv-version').value;
+    return _invvAllVals.filter(v =>
+      (!ver || v.VERSION_CARGA === ver) &&
+      (!q   || (v.CLAVE_VALIDACION||'').toLowerCase().includes(q) || (v.DESCRIPCION_VALIDACION||'').toLowerCase().includes(q) || (v.CLAVE_REP||'').toLowerCase().includes(q))
+    );
+  }
+
+  function invvFiltrar() {
+    invvRenderVals(invvFiltrado());
+  }
+
   function invvExportarExcel() {
+    const entidad = document.getElementById('invv-entidad').value || 'todas';
+    const wb = XLSX.utils.book_new();
+    if (_invvVistaRep === null) {
+      // Exportar el resumen por reporte (con filtro de versión aplicado)
+      const ver   = document.getElementById('invv-version').value;
+      const filas = _invvResumen.filter(f => !ver || f.VERSION_CARGA === ver);
+      const mapa = {};
+      for (const f of filas) {
+        const rep = f.CLAVE_REP || '(sin reporte)';
+        if (!mapa[rep]) mapa[rep] = { total: 0, versiones: new Set() };
+        mapa[rep].total += f.TOTAL;
+        if (f.VERSION_CARGA) mapa[rep].versiones.add(f.VERSION_CARGA);
+      }
+      const rows = Object.keys(mapa).sort().map(rep => ({
+        CLAVE_REP: rep,
+        VALIDACIONES: mapa[rep].total,
+        VERSIONES: [...mapa[rep].versiones].sort().join(', ')
+      }));
+      if (!rows.length) { alert('No hay datos para exportar.'); return; }
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), 'Resumen');
+      XLSX.writeFile(wb, `inventario_validaciones_resumen_${entidad}.xlsx`);
+      return;
+    }
     const filtrado = invvFiltrado();
     if (!filtrado.length) { alert('No hay validaciones para exportar.'); return; }
     const rows = filtrado.map(v => ({
@@ -5935,10 +5983,7 @@
       VERSION_CARGA: v.VERSION_CARGA || '',
       PLATAFORMAS: v.plataformas.join(', ')
     }));
-    const wb = XLSX.utils.book_new();
-    const ws = XLSX.utils.json_to_sheet(rows);
-    XLSX.utils.book_append_sheet(wb, ws, 'Validaciones');
-    const entidad = document.getElementById('invv-entidad').value || 'todas';
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), 'Validaciones');
     const rep = (_invvVistaRep && _invvVistaRep !== '*') ? _invvVistaRep : '';
     XLSX.writeFile(wb, `inventario_validaciones_${entidad}${rep ? '_' + rep : ''}.xlsx`);
   }
