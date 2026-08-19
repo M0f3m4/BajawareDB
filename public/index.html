@@ -1175,9 +1175,10 @@
           </div>
           <div>
             <label style="font-size:11px;font-weight:600;color:#555;display:block;margin-bottom:4px;">Reporte</label>
-            <select id="invv-rep" onchange="invvCargar()" disabled
+            <select id="invv-rep" onchange="invvRepChange()" disabled
               style="padding:7px 12px;border:1px solid #ddd;border-radius:6px;font-size:13px;min-width:200px;">
-              <option value="">— Todos —</option>
+              <option value="">— Resumen por reporte —</option>
+              <option value="*">Todas las validaciones</option>
             </select>
           </div>
           <div>
@@ -5802,8 +5803,9 @@
     const selRep  = document.getElementById('invv-rep');
     const wrap    = document.getElementById('invv-content');
     const badge   = document.getElementById('invv-badge');
-    selRep.innerHTML = '<option value="">— Todos —</option>';
+    selRep.innerHTML = '<option value="">— Resumen por reporte —</option><option value="*">Todas las validaciones</option>';
     selRep.disabled = true;
+    _invvVistaRep = null;
     badge.style.display = 'none';
     document.getElementById('invv-export-btn').style.display = 'none';
     wrap.innerHTML = '<p style="color:#aaa;font-size:13px;">Selecciona una entidad.</p>';
@@ -5824,14 +5826,13 @@
 
   async function invvCargar() {
     const entidad = document.getElementById('invv-entidad').value;
-    const rep     = document.getElementById('invv-rep').value;
     const wrap    = document.getElementById('invv-content');
     const badge   = document.getElementById('invv-badge');
     if (!entidad) return;
     wrap.innerHTML = '<div style=""><div class="loading">Cargando...</div></div>';
     badge.style.display = 'none';
     try {
-      const r = await fetch(`/api/contratos/inventario-validaciones/lista?entidad=${encodeURIComponent(entidad)}&rep=${encodeURIComponent(rep)}`).then(x => x.json());
+      const r = await fetch(`/api/contratos/inventario-validaciones/lista?entidad=${encodeURIComponent(entidad)}`).then(x => x.json());
       if (!r.ok) { wrap.innerHTML = `<div style=""><p style="color:#e74c3c;">Error: ${r.message}</p></div>`; return; }
       const data = r.data || [];
       const mapaVal = {};
@@ -5855,24 +5856,76 @@
   }
 
   let _invvAllVals = [];
+  let _invvVistaRep = null; // null = resumen por reporte, '*' = todas, otro valor = un reporte
 
-  function invvFiltrar() {
+  function invvFiltrado() {
     const q    = (document.getElementById('invv-buscar').value || '').toLowerCase();
     const ver  = document.getElementById('invv-version').value;
-    const filtrado = _invvAllVals.filter(v =>
+    const rep  = (_invvVistaRep && _invvVistaRep !== '*') ? _invvVistaRep : '';
+    return _invvAllVals.filter(v =>
+      (!rep || v.CLAVE_REP === rep) &&
       (!ver || v.VERSION_CARGA === ver) &&
       (!q   || (v.CLAVE_VALIDACION||'').toLowerCase().includes(q) || (v.DESCRIPCION_VALIDACION||'').toLowerCase().includes(q) || (v.CLAVE_REP||'').toLowerCase().includes(q))
     );
-    invvRenderVals(filtrado);
+  }
+
+  function invvFiltrar() {
+    const filtrado = invvFiltrado();
+    if (_invvVistaRep === null) invvRenderOverview(filtrado);
+    else invvRenderVals(filtrado);
+  }
+
+  function invvRepChange() {
+    _invvVistaRep = document.getElementById('invv-rep').value || null;
+    invvFiltrar();
+  }
+
+  function invvVerReporte(clave) {
+    _invvVistaRep = clave;
+    document.getElementById('invv-rep').value = clave === null ? '' : clave;
+    invvFiltrar();
+  }
+
+  function invvRenderOverview(vals) {
+    const wrap  = document.getElementById('invv-content');
+    const badge = document.getElementById('invv-badge');
+    const mapa = {};
+    for (const v of vals) {
+      const rep = v.CLAVE_REP || '(sin reporte)';
+      if (!mapa[rep]) mapa[rep] = { total: 0, versiones: new Set() };
+      mapa[rep].total++;
+      if (v.VERSION_CARGA) mapa[rep].versiones.add(v.VERSION_CARGA);
+    }
+    const reps = Object.keys(mapa).sort();
+    badge.textContent = `${reps.length} reportes · ${vals.length} validaciones`;
+    badge.style.display = 'inline-block';
+    document.getElementById('invv-export-btn').style.display = vals.length ? 'inline-block' : 'none';
+    if (!reps.length) { wrap.innerHTML = '<p style="color:#aaa;font-size:13px;">Sin validaciones.</p>'; return; }
+    wrap.innerHTML = `
+      <div class="data-table-wrap">
+        <table class="data-table">
+          <thead><tr>
+            <th>Reporte</th>
+            <th style="text-align:center;"># Validaciones</th>
+            <th>Versiones</th>
+            <th></th>
+          </tr></thead>
+          <tbody>
+            ${reps.map(rep => `<tr style="cursor:pointer;" onclick="invvVerReporte('${rep.replace(/'/g, "\\'")}')">
+              <td style="font-family:monospace;font-size:12px;font-weight:600;color:#1a3558;">${rep}</td>
+              <td style="text-align:center;font-size:13px;font-weight:600;">${mapa[rep].total.toLocaleString()}</td>
+              <td style="font-size:11px;">${[...mapa[rep].versiones].sort().map(v => `<span style="background:#f0f4ff;color:#1a3558;padding:2px 7px;border-radius:10px;font-family:monospace;margin-right:3px;">${v}</span>`).join('') || '—'}</td>
+              <td style="text-align:right;"><span style="font-size:12px;color:#2560a7;font-weight:600;">Ver validaciones →</span></td>
+            </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>`;
+    const scrollGhost = document.getElementById('invv-scroll-ghost');
+    if (scrollGhost) scrollGhost.style.width = '1px';
   }
 
   function invvExportarExcel() {
-    const q    = (document.getElementById('invv-buscar').value || '').toLowerCase();
-    const ver  = document.getElementById('invv-version').value;
-    const filtrado = _invvAllVals.filter(v =>
-      (!ver || v.VERSION_CARGA === ver) &&
-      (!q   || (v.CLAVE_VALIDACION||'').toLowerCase().includes(q) || (v.DESCRIPCION_VALIDACION||'').toLowerCase().includes(q) || (v.CLAVE_REP||'').toLowerCase().includes(q))
-    );
+    const filtrado = invvFiltrado();
     if (!filtrado.length) { alert('No hay validaciones para exportar.'); return; }
     const rows = filtrado.map(v => ({
       CLAVE_VALIDACION: v.CLAVE_VALIDACION,
@@ -5886,7 +5939,7 @@
     const ws = XLSX.utils.json_to_sheet(rows);
     XLSX.utils.book_append_sheet(wb, ws, 'Validaciones');
     const entidad = document.getElementById('invv-entidad').value || 'todas';
-    const rep = document.getElementById('invv-rep').value;
+    const rep = (_invvVistaRep && _invvVistaRep !== '*') ? _invvVistaRep : '';
     XLSX.writeFile(wb, `inventario_validaciones_${entidad}${rep ? '_' + rep : ''}.xlsx`);
   }
 
@@ -5896,8 +5949,9 @@
     badge.textContent = `${vals.length} validaciones`;
     badge.style.display = 'inline-block';
     document.getElementById('invv-export-btn').style.display = vals.length ? 'inline-block' : 'none';
-    if (!vals.length) { wrap.innerHTML = '<p style="color:#aaa;font-size:13px;">Sin validaciones.</p>'; return; }
-    wrap.innerHTML = `
+    const volver = `<div style="margin-bottom:8px;"><a href="javascript:void(0)" onclick="invvVerReporte(null)" style="font-size:12px;color:#2560a7;font-weight:600;text-decoration:none;">← Volver al resumen por reporte</a>${(_invvVistaRep && _invvVistaRep !== '*') ? ` <span style="font-size:12px;color:#555;">· Reporte: <b style="font-family:monospace;">${_invvVistaRep}</b></span>` : ''}</div>`;
+    if (!vals.length) { wrap.innerHTML = volver + '<p style="color:#aaa;font-size:13px;">Sin validaciones.</p>'; return; }
+    wrap.innerHTML = volver + `
       <div class="data-table-wrap">
         <table class="data-table">
           <thead><tr>
