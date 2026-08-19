@@ -1177,7 +1177,7 @@
             <label style="font-size:11px;font-weight:600;color:#555;display:block;margin-bottom:4px;">Reporte</label>
             <select id="invv-rep" onchange="invvCargar()" disabled
               style="padding:7px 12px;border:1px solid #ddd;border-radius:6px;font-size:13px;min-width:200px;">
-              <option value="">— Selecciona reporte —</option>
+              <option value="">— Todos —</option>
             </select>
           </div>
           <div>
@@ -1194,9 +1194,12 @@
               style="padding:7px 12px;border:1px solid #ddd;border-radius:6px;font-size:13px;min-width:220px;">
           </div>
           <span id="invv-badge" style="font-size:11px;background:#e8f0fe;color:#1a3558;padding:3px 10px;border-radius:10px;font-weight:600;display:none;"></span>
+          <button id="invv-export-btn" onclick="invvExportarExcel()" style="display:none;padding:7px 14px;background:#27ae60;color:#fff;border:none;border-radius:6px;font-size:12px;cursor:pointer;margin-left:auto;">
+            📥 Descargar Excel
+          </button>
         </div>
         <div id="invv-scroll-top" style="overflow-x:auto;overflow-y:hidden;height:16px;"><div id="invv-scroll-ghost" style="height:1px;"></div></div>
-        <div id="invv-content" style="max-height:60vh;overflow:auto;"><p style="color:#aaa;font-size:13px;">Selecciona una entidad y un reporte.</p></div>
+        <div id="invv-content" style="max-height:60vh;overflow:auto;"><p style="color:#aaa;font-size:13px;">Selecciona una entidad.</p></div>
       </div>
 
       <!-- Estatus de Validaciones -->
@@ -5799,10 +5802,11 @@
     const selRep  = document.getElementById('invv-rep');
     const wrap    = document.getElementById('invv-content');
     const badge   = document.getElementById('invv-badge');
-    selRep.innerHTML = '<option value="">— Selecciona reporte —</option>';
+    selRep.innerHTML = '<option value="">— Todos —</option>';
     selRep.disabled = true;
     badge.style.display = 'none';
-    wrap.innerHTML = '<p style="color:#aaa;font-size:13px;">Selecciona un reporte.</p>';
+    document.getElementById('invv-export-btn').style.display = 'none';
+    wrap.innerHTML = '<p style="color:#aaa;font-size:13px;">Selecciona una entidad.</p>';
     if (!entidad) return;
     try {
       const r = await fetch(`/api/contratos/inventario-validaciones/reportes-por-entidad?entidad=${encodeURIComponent(entidad)}`).then(x => x.json());
@@ -5815,6 +5819,7 @@
         selRep.disabled = false;
       }
     } catch(e) {}
+    invvCargar();
   }
 
   async function invvCargar() {
@@ -5822,7 +5827,7 @@
     const rep     = document.getElementById('invv-rep').value;
     const wrap    = document.getElementById('invv-content');
     const badge   = document.getElementById('invv-badge');
-    if (!entidad || !rep) return;
+    if (!entidad) return;
     wrap.innerHTML = '<div style=""><div class="loading">Cargando...</div></div>';
     badge.style.display = 'none';
     try {
@@ -5831,10 +5836,11 @@
       const data = r.data || [];
       const mapaVal = {};
       for (const row of data) {
-        if (!mapaVal[row.CLAVE_VALIDACION]) {
-          mapaVal[row.CLAVE_VALIDACION] = { ...row, plataformas: [] };
+        const llave = `${row.CLAVE_VALIDACION}|${row.CLAVE_REP}`;
+        if (!mapaVal[llave]) {
+          mapaVal[llave] = { ...row, plataformas: [] };
         }
-        if (row.CLAVE_PLATAFORMA) mapaVal[row.CLAVE_VALIDACION].plataformas.push(row.CLAVE_PLATAFORMA);
+        if (row.CLAVE_PLATAFORMA && !mapaVal[llave].plataformas.includes(row.CLAVE_PLATAFORMA)) mapaVal[llave].plataformas.push(row.CLAVE_PLATAFORMA);
       }
       _invvAllVals = Object.values(mapaVal);
 
@@ -5843,6 +5849,7 @@
       const versiones = [...new Set(_invvAllVals.map(v => v.VERSION_CARGA).filter(Boolean))].sort();
       selVer.innerHTML = '<option value="">— Todas —</option>' + versiones.map(v => `<option value="${v}">${v}</option>`).join('');
       document.getElementById('invv-buscar').value = '';
+      invvFiltrar();
 
     } catch(e) { wrap.innerHTML = `<div style=""><p style="color:#e74c3c;">Error: ${e.message}</p></div>`; }
   }
@@ -5854,9 +5861,33 @@
     const ver  = document.getElementById('invv-version').value;
     const filtrado = _invvAllVals.filter(v =>
       (!ver || v.VERSION_CARGA === ver) &&
-      (!q   || (v.CLAVE_VALIDACION||'').toLowerCase().includes(q) || (v.DESCRIPCION_VALIDACION||'').toLowerCase().includes(q))
+      (!q   || (v.CLAVE_VALIDACION||'').toLowerCase().includes(q) || (v.DESCRIPCION_VALIDACION||'').toLowerCase().includes(q) || (v.CLAVE_REP||'').toLowerCase().includes(q))
     );
     invvRenderVals(filtrado);
+  }
+
+  function invvExportarExcel() {
+    const q    = (document.getElementById('invv-buscar').value || '').toLowerCase();
+    const ver  = document.getElementById('invv-version').value;
+    const filtrado = _invvAllVals.filter(v =>
+      (!ver || v.VERSION_CARGA === ver) &&
+      (!q   || (v.CLAVE_VALIDACION||'').toLowerCase().includes(q) || (v.DESCRIPCION_VALIDACION||'').toLowerCase().includes(q) || (v.CLAVE_REP||'').toLowerCase().includes(q))
+    );
+    if (!filtrado.length) { alert('No hay validaciones para exportar.'); return; }
+    const rows = filtrado.map(v => ({
+      CLAVE_VALIDACION: v.CLAVE_VALIDACION,
+      CLAVE_REP: v.CLAVE_REP || '',
+      DESCRIPCION_VALIDACION: v.DESCRIPCION_VALIDACION || '',
+      TIPO_VALIDACION: v.TIPO_VALIDACION || '',
+      VERSION_CARGA: v.VERSION_CARGA || '',
+      PLATAFORMAS: v.plataformas.join(', ')
+    }));
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.json_to_sheet(rows);
+    XLSX.utils.book_append_sheet(wb, ws, 'Validaciones');
+    const entidad = document.getElementById('invv-entidad').value || 'todas';
+    const rep = document.getElementById('invv-rep').value;
+    XLSX.writeFile(wb, `inventario_validaciones_${entidad}${rep ? '_' + rep : ''}.xlsx`);
   }
 
   function invvRenderVals(vals) {
@@ -5864,12 +5895,14 @@
     const badge = document.getElementById('invv-badge');
     badge.textContent = `${vals.length} validaciones`;
     badge.style.display = 'inline-block';
+    document.getElementById('invv-export-btn').style.display = vals.length ? 'inline-block' : 'none';
     if (!vals.length) { wrap.innerHTML = '<p style="color:#aaa;font-size:13px;">Sin validaciones.</p>'; return; }
     wrap.innerHTML = `
       <div class="data-table-wrap">
         <table class="data-table">
           <thead><tr>
             <th>Clave validación</th>
+            <th>Reporte</th>
             <th>Descripción</th>
             <th>Tipo</th>
             <th>Versión</th>
@@ -5878,6 +5911,7 @@
           <tbody>
             ${vals.map(v => `<tr>
               <td style="font-family:monospace;font-size:12px;font-weight:600;color:#1a3558;">${v.CLAVE_VALIDACION}</td>
+              <td style="font-family:monospace;font-size:12px;color:#1a3558;">${v.CLAVE_REP || '<span style="color:#bbb;">—</span>'}</td>
               <td style="font-size:12px;">${v.DESCRIPCION_VALIDACION || '<span style="color:#bbb;font-style:italic;">—</span>'}</td>
               <td style="font-size:12px;">${v.TIPO_VALIDACION || '—'}</td>
               <td style="text-align:center;"><span style="font-size:11px;background:#f0f4ff;color:#1a3558;padding:2px 7px;border-radius:10px;font-family:monospace;">${v.VERSION_CARGA || '—'}</span></td>
