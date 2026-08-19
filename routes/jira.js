@@ -2,6 +2,7 @@ const express = require('express');
 const router  = express.Router();
 const https   = require('https');
 const http    = require('http');
+const { query } = require('../db/connection');
 
 // ── Config ────────────────────────────────────────────────
 const JIRA_HOST  = process.env.JIRA_HOST  || '';
@@ -540,6 +541,138 @@ router.get('/tickets/:key/completo', requireAuth, async (req, res) => {
         transiciones: (trans.transitions || []).map(t => ({ id: t.id, nombre: t.name }))
       }
     });
+  } catch (e) {
+    res.status(500).json({ ok: false, message: e.message });
+  }
+});
+
+// ── Crosscheck Jira ↔ ESTATUS_REPORTE ─────────────────────
+// La llave de cruce es el campo custom "VersionBC" (= CLAVE_REP)
+
+const escSql = v => `'${String(v).replace(/'/g, "''")}'`;
+
+// Cache del id interno del campo VersionBC (customfield_XXXXX)
+let _versionBCField = null;
+async function getVersionBCField() {
+  if (_versionBCField) return _versionBCField;
+  const fields = await jiraRequest('GET', '/rest/api/3/field');
+  const f = (fields || []).find(x => (x.name || '').trim().toLowerCase() === 'versionbc');
+  if (!f) throw new Error('No se encontró el campo "VersionBC" en Jira');
+  _versionBCField = f.id; // ej. customfield_10123
+  return _versionBCField;
+}
+
+// ── GET /api/jira/campos?buscar= ──────────────────────────
+// Lista todos los campos de Jira (para descubrir ids de custom fields)
+router.get('/campos', requireAuth, async (req, res) => {
+  try {
+    const buscar = (req.query.buscar || '').toLowerCase();
+    const fields = await jiraRequest('GET', '/rest/api/3/field');
+    let lista = (fields || []).map(f => ({ id: f.id, nombre: f.name, custom: !!f.custom }));
+    if (buscar) lista = lista.filter(f => (f.nombre || '').toLowerCase().includes(buscar) || f.id.includes(buscar));
+    lista.sort((a, b) => (a.nombre || '').localeCompare(b.nombre || ''));
+    res.json({ ok: true, total: lista.length, data: lista });
+  } catch (e) {
+    res.status(500).json({ ok: false, message: e.message });
+  }
+});
+
+// ── GET /api/jira/tickets/:key/campos ─────────────────────
+// Devuelve TODOS los campos no vacíos de un ticket con su nombre legible
+// (sirve para descubrir si la plataforma viene en algún campo)
+router.get('/tickets/:key/campos', requireAuth, async (req, res) => {
+  try {
+    const [fieldDefs, issue] = await Promise.all([
+      jiraRequest('GET', '/rest/api/3/field'),
+      jiraRequest('GET', `/rest/api/3/issue/${req.params.key}`)
+    ]);
+    const nombres = {};
+    (fieldDefs || []).forEach(f => { nombres[f.id] = f.name; });
+
+    const resumir = v => {
+      if (v === null || v === undefined || v === '') return null;
+      if (Array.isArray(v)) {
+        if (!v.length) return null;
+        return v.map(x => (x && typeof x === 'object') ? (x.name || x.value || x.displayName || x.key || JSON.stringify(x)) : x).join(', ');
+      }
+      if (typeof v === 'object') {
+        return v.name || v.value || v.displayName || v.key || v.emailAddress || JSON.stringify(v).slice(0, 300);
+      }
+      return String(v);
+    };
+
+    const campos = [];
+    for (const [id, valor] of Object.entries(issue.fields || {})) {
+      const r = resumir(valor);
+      if (r !== null) campos.push({ id, nombre: nombres[id] || id, valor: r });
+    }
+    campos.sort((a, b) => (a.nombre || '').localeCompare(b.nombre || ''));
+    res.json({ ok: true, key: issue.key, total: campos.length, data: campos });
+  } catch (e) {
+    res.status(500).json({ ok: false, message: e.message });
+  }
+});
+
+// ── GET /api/jira/crosscheck?dias=30&project=QA_DEPLOYMENT ─
+// Cruza tickets con VersionBC contra ESTATUS_REPORTE por CLAVE_REP
+router.get('/crosscheck', requireAuth, async (req, res) => {
+  try {
+    const dias    = parseInt(req.query.dias, 10) || 30;
+    const project = req.query.project || 'QA_DEPLOYMENT';
+    const cfId    = await getVersionBCField();           // customfield_XXXXX
+    const cfNum   = cfId.replace('customfield_', '');
+
+    const jql = `project = "${project}" AND cf[${cfNum}] is not EMPTY AND updated >= -${dias}d ORDER BY updated DESC`;
+    const data = await jiraRequest(
+      'GET',
+      `/rest/api/3/search/jql?jql=${encodeURIComponent(jql)}&maxResults=100&fields=summary,status,assignee,updated,${cfId}`
+    );
+
+    const tickets = (data.issues || []).map(i => ({
+      key:         i.key,
+      resumen:     i.fields.summary,
+      estadoJira:  i.fields.status?.name,
+      asignado:    i.fields.assignee?.displayName || 'Sin asignar',
+      actualizado: i.fields.updated,
+      clave:       (typeof i.fields[cfId] === 'object' ? i.fields[cfId]?.value : i.fields[cfId]) || null
+    })).filter(t => t.clave);
+
+    // Una sola consulta a BD con todas las claves
+    let dbRows = [];
+    const claves = [...new Set(tickets.map(t => String(t.clave).trim()))];
+    if (claves.length) {
+      dbRows = await query(`
+        SELECT CLAVE_REP, CLAVE_REP_GENERAL, CLAVE_PLATAFORMA, DOCUMENTADO, PROGRAMADO, CERTIFICADO,
+               ESTATUS, FECHA_ESTATUS, USER_ESTATUS
+        FROM ESTATUS_REPORTE
+        WHERE CLAVE_REP IN (${claves.map(escSql).join(',')})
+           OR CLAVE_REP_GENERAL IN (${claves.map(escSql).join(',')})
+      `);
+    }
+
+    const porClave = {};
+    dbRows.forEach(r => {
+      const fila = {
+        plataforma:  r.CLAVE_PLATAFORMA,
+        documentado: r.DOCUMENTADO,
+        programado:  r.PROGRAMADO,
+        certificado: r.CERTIFICADO,
+        estatus:     r.ESTATUS,
+        fecha:       r.FECHA_ESTATUS,
+        usuario:     r.USER_ESTATUS,
+        claveRep:    r.CLAVE_REP
+      };
+      // Indexar tanto por CLAVE_REP (legacy con _22) como por CLAVE_REP_GENERAL
+      const llaves = new Set([(r.CLAVE_REP || '').trim(), (r.CLAVE_REP_GENERAL || '').trim()]);
+      llaves.forEach(k => { if (k) (porClave[k] = porClave[k] || []).push(fila); });
+    });
+
+    const resultado = tickets.map(t => ({
+      ...t,
+      enBD: porClave[String(t.clave).trim()] || []
+    }));
+
+    res.json({ ok: true, campo: cfId, jql, total: resultado.length, data: resultado });
   } catch (e) {
     res.status(500).json({ ok: false, message: e.message });
   }

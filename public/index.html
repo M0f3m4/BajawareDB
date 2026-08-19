@@ -1301,6 +1301,7 @@
           <button class="jx-tab" data-jx="epics" onclick="jxVer('epics')">🎯 Epics</button>
           <button class="jx-tab" data-jx="tickets" onclick="jxVer('tickets')">🎫 Tickets (JQL)</button>
           <button class="jx-tab" data-jx="usuarios" onclick="jxVer('usuarios')">👥 Usuarios</button>
+          <button class="jx-tab" data-jx="crosscheck" onclick="jxVer('crosscheck')">🔀 Crosscheck BD</button>
         </div>
 
         <!-- Barra JQL (solo visible en tickets) -->
@@ -7051,18 +7052,26 @@
       }
     }
 
-    document.getElementById('inv-plat-msg').innerHTML = 'Guardando...';
+    // Enviar en bloques para no exceder el límite de tamaño del servidor (10mb)
+    const LOTE = 2000;
+    const msg = document.getElementById('inv-plat-msg');
+    let creados = 0, omitidos = 0;
     try {
-      const r = await fetch('/api/contratos/inventario-validaciones/asignar-plataformas', {
-        method: 'POST', headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({ asignaciones, version: _invPlatVersion })
-      }).then(x => x.json());
-      if (r.ok) {
-        document.getElementById('inv-plat-msg').innerHTML = `<span style="color:#27ae60;">✅ ${r.creados} creadas, ${r.omitidos} ya existían.</span>`;
-      } else {
-        document.getElementById('inv-plat-msg').innerHTML = `<span style="color:#e74c3c;">❌ ${r.message}</span>`;
+      for (let i = 0; i < asignaciones.length; i += LOTE) {
+        msg.innerHTML = `Guardando... ${Math.min(i + LOTE, asignaciones.length).toLocaleString()} de ${asignaciones.length.toLocaleString()}`;
+        const r = await fetch('/api/contratos/inventario-validaciones/asignar-plataformas', {
+          method: 'POST', headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({ asignaciones: asignaciones.slice(i, i + LOTE), version: _invPlatVersion })
+        }).then(x => x.json());
+        if (!r.ok) {
+          msg.innerHTML = `<span style="color:#e74c3c;">❌ ${r.message} (se guardaron ${creados} antes del error)</span>`;
+          return;
+        }
+        creados  += r.creados  || 0;
+        omitidos += r.omitidos || 0;
       }
-    } catch(e) { document.getElementById('inv-plat-msg').innerHTML = '<span style="color:#e74c3c;">Error: ' + e.message + '</span>'; }
+      msg.innerHTML = `<span style="color:#27ae60;">✅ ${creados} creadas, ${omitidos} ya existían.</span>`;
+    } catch(e) { msg.innerHTML = '<span style="color:#e74c3c;">Error: ' + e.message + `</span> (se guardaron ${creados} antes del error)`; }
   }
 
   async function actualizarEstatusProyectoVal(clave_validacion, clave_plataforma, estatus, version_carga) {
@@ -7550,7 +7559,7 @@
     document.querySelectorAll('.jx-tab').forEach(b => b.classList.toggle('active', b.dataset.jx === cat));
     document.getElementById('jx-jql-bar').style.display = cat === 'tickets' ? 'flex' : 'none';
     document.getElementById('jx-detalle').style.display = 'none';
-    ({ proyectos: jxProyectos, boards: jxBoards, sprints: jxSprints, epics: jxEpics, tickets: jxBuscarTickets, usuarios: jxUsuarios })[cat]();
+    ({ proyectos: jxProyectos, boards: jxBoards, sprints: jxSprints, epics: jxEpics, tickets: jxBuscarTickets, usuarios: jxUsuarios, crosscheck: jxCrosscheck })[cat]();
   }
 
   async function jxProyectos() {
@@ -7621,8 +7630,8 @@
 
   async function jxBuscarTickets() {
     _jxLoad('Buscando tickets...');
-    const jql = document.getElementById('jx-jql').value.trim();
-    const url = jql ? `/api/jira/tickets?max=100&jql=${encodeURIComponent(jql)}` : '/api/jira/tickets?max=100&jql=' + encodeURIComponent('ORDER BY updated DESC');
+    const jql = document.getElementById('jx-jql').value.trim() || 'updated >= -30d ORDER BY updated DESC';
+    const url = `/api/jira/tickets?max=100&jql=${encodeURIComponent(jql)}`;
     try {
       const r = await fetch(url).then(x => x.json());
       if (!r.ok) return _jxErr(r.message);
@@ -7657,6 +7666,69 @@
             </div>`).join('')}
         </div>` : '<div class="placeholder-card"><div class="icon">👥</div>Sin usuarios.</div>';
     } catch (e) { _jxErr(e.message); }
+  }
+
+  // ── Crosscheck Jira ↔ ESTATUS_REPORTE (llave: campo VersionBC = CLAVE_REP) ──
+  async function jxCrosscheck() {
+    _jxLoad('Cruzando tickets de Jira (VersionBC) contra ESTATUS_REPORTE...');
+    try {
+      const r = await fetch('/api/jira/crosscheck?dias=30').then(x => x.json());
+      if (!r.ok) return _jxErr(r.message);
+      if (!r.data.length) {
+        document.getElementById('jx-content').innerHTML = '<div class="placeholder-card"><div class="icon">🔀</div>Ningún ticket con VersionBC en los últimos 30 días.</div>';
+        return;
+      }
+      const filaBD = t => {
+        if (!t.enBD.length) return '<span style="color:#e74c3c;font-weight:600;">✗ No existe en ESTATUS_REPORTE</span>';
+        return t.enBD.map(b => `
+          <div style="padding:2px 0;">
+            <strong>${b.plataforma}</strong> → ${b.estatus || '—'}
+            <span style="color:#888;">(${_jxFecha(b.fecha)} · ${b.usuario || '—'})</span>
+          </div>`).join('');
+      };
+      document.getElementById('jx-content').innerHTML = `
+        <div style="font-size:11px;color:#888;margin-bottom:8px;">
+          ${r.data.length} tickets con <strong>VersionBC</strong> (${r.campo}) en los últimos 30 días —
+          clic en la clave del ticket para ver el detalle, o en 🔍 para ver TODOS sus campos crudos.
+        </div>
+        <table class="data-table" style="width:100%;font-size:12px;">
+          <thead><tr><th>Ticket</th><th>Estado Jira</th><th>VersionBC (CLAVE_REP)</th><th>En base de datos</th><th>Asignado</th><th>Actualizado</th><th></th></tr></thead>
+          <tbody>${r.data.map(t => `
+            <tr>
+              <td><span class="jx-key" onclick="jxAbrirTicket('${t.key}')">${t.key}</span></td>
+              <td>${t.estadoJira || ''}</td>
+              <td style="font-family:monospace;font-size:11px;">${t.clave}</td>
+              <td>${filaBD(t)}</td>
+              <td>${t.asignado}</td>
+              <td>${_jxFecha(t.actualizado)}</td>
+              <td><span class="jx-key" title="Ver todos los campos del ticket" onclick="jxVerCampos('${t.key}')">🔍</span></td>
+            </tr>`).join('')}</tbody>
+        </table>`;
+    } catch (e) { _jxErr(e.message); }
+  }
+
+  // Todos los campos crudos de un ticket (para descubrir dónde viene la plataforma)
+  async function jxVerCampos(key) {
+    const det = document.getElementById('jx-detalle');
+    det.style.display = 'block';
+    document.getElementById('jx-det-titulo').textContent = `${key} — todos los campos`;
+    document.getElementById('jx-det-body').innerHTML = '<div class="loading">Cargando campos...</div>';
+    det.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    try {
+      const r = await fetch(`/api/jira/tickets/${key}/campos`).then(x => x.json());
+      if (!r.ok) { document.getElementById('jx-det-body').innerHTML = `<div style="color:#e74c3c;font-size:12px;">❌ ${r.message}</div>`; return; }
+      document.getElementById('jx-det-body').innerHTML = `
+        <div style="font-size:11px;color:#888;margin-bottom:8px;">${r.total} campos con valor</div>
+        <table class="data-table" style="width:100%;font-size:11px;">
+          <thead><tr><th>Campo</th><th>Id interno</th><th>Valor</th></tr></thead>
+          <tbody>${r.data.map(c => `
+            <tr><td style="font-weight:600;">${c.nombre}</td>
+                <td style="font-family:monospace;color:#888;">${c.id}</td>
+                <td style="word-break:break-word;">${String(c.valor).replace(/</g,'&lt;')}</td></tr>`).join('')}</tbody>
+        </table>`;
+    } catch (e) {
+      document.getElementById('jx-det-body').innerHTML = `<div style="color:#e74c3c;font-size:12px;">❌ ${e.message}</div>`;
+    }
   }
 
   async function jxAbrirTicket(key) {
