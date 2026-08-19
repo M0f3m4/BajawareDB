@@ -1085,6 +1085,12 @@
           <select id="invr-periodo" onchange="loadInvReportes()" style="min-width:140px;">
             <option value="">Todos los periodos</option>
           </select>
+          <select id="invr-version" onchange="loadInvReportes()" style="min-width:130px;">
+            <option value="">Todas las versiones</option>
+          </select>
+          <select id="invr-vigente" onchange="loadInvReportes()" style="min-width:120px;">
+            <option value="">Vigente: todos</option>
+          </select>
           <input type="text" id="invr-texto" placeholder="Buscar reporte..." oninput="loadInvReportesDebounced()" style="padding:7px 12px;border:1px solid #ddd;border-radius:6px;font-size:13px;min-width:200px;" />
           <button onclick="loadInvReportes()" style="padding:7px 16px;background:#1a3558;color:#fff;border:none;border-radius:6px;font-size:13px;cursor:pointer;">Buscar</button>
           <button id="invr-export-btn" onclick="invrExportarExcel()" style="display:none;padding:7px 14px;background:#27ae60;color:#fff;border:none;border-radius:6px;font-size:12px;cursor:pointer;margin-left:auto;">
@@ -1170,6 +1176,20 @@
         <h2 class="section-title">Inventario — Validaciones</h2>
         <div class="toolbar" style="flex-wrap:wrap;gap:10px;margin-bottom:16px;align-items:flex-end;">
           <div>
+            <label style="font-size:11px;font-weight:600;color:#555;display:block;margin-bottom:4px;">País</label>
+            <select id="invv-pais" onchange="invvOnFiltroChange()"
+              style="padding:7px 12px;border:1px solid #ddd;border-radius:6px;font-size:13px;min-width:110px;">
+              <option value="">— Todos —</option>
+            </select>
+          </div>
+          <div>
+            <label style="font-size:11px;font-weight:600;color:#555;display:block;margin-bottom:4px;">Regulador</label>
+            <select id="invv-regulador" onchange="invvOnFiltroChange()"
+              style="padding:7px 12px;border:1px solid #ddd;border-radius:6px;font-size:13px;min-width:130px;">
+              <option value="">— Todos —</option>
+            </select>
+          </div>
+          <div>
             <label style="font-size:11px;font-weight:600;color:#555;display:block;margin-bottom:4px;">Entidad regulada</label>
             <select id="invv-entidad" onchange="invvOnEntidadChange()"
               style="padding:7px 12px;border:1px solid #ddd;border-radius:6px;font-size:13px;min-width:180px;">
@@ -1182,6 +1202,13 @@
               style="padding:7px 12px;border:1px solid #ddd;border-radius:6px;font-size:13px;min-width:200px;">
               <option value="">— Resumen por reporte —</option>
               <option value="*">Todas las validaciones</option>
+            </select>
+          </div>
+          <div>
+            <label style="font-size:11px;font-weight:600;color:#555;display:block;margin-bottom:4px;">Tipo validación</label>
+            <select id="invv-tipo" onchange="invvOnFiltroChange()"
+              style="padding:7px 12px;border:1px solid #ddd;border-radius:6px;font-size:13px;min-width:140px;">
+              <option value="">— Todos —</option>
             </select>
           </div>
           <div>
@@ -4398,6 +4425,13 @@
         addOpts('invr-entidad', f.entidades  || [], 'CLAVE_ENTIDADREGULADA', 'ENTIDAD_REGULADA');
         addOpts('invr-grupo',   f.grupos     || [], null, null);   // ya son strings
         addOpts('invr-periodo', f.periodos   || [], 'CLAVE_PERIODO',       'PERIODO');
+        addOpts('invr-version', f.versiones  || [], null, null);   // strings
+        (f.vigentes || []).forEach(v => {
+          const s = document.getElementById('invr-vigente');
+          const o = document.createElement('option');
+          o.value = v; o.textContent = 'Vigente: ' + v;
+          s.appendChild(o);
+        });
       }
     } catch (_) {}
     loadInvReportes();
@@ -4413,6 +4447,8 @@
     const entidad = document.getElementById('invr-entidad').value;
     const grupo   = document.getElementById('invr-grupo').value;
     const periodo = document.getElementById('invr-periodo').value;
+    const version = document.getElementById('invr-version').value;
+    const vigente = document.getElementById('invr-vigente').value;
     const texto   = document.getElementById('invr-texto').value.trim();
 
     let url = '/api/inventario/reportes?x=1';
@@ -4421,6 +4457,8 @@
     if (entidad) url += '&entidad=' + encodeURIComponent(entidad);
     if (grupo)   url += '&grupo='   + encodeURIComponent(grupo);
     if (periodo) url += '&periodo=' + encodeURIComponent(periodo);
+    if (version) url += '&version=' + encodeURIComponent(version);
+    if (vigente) url += '&vigente=' + encodeURIComponent(vigente);
     if (texto)   url += '&texto='   + encodeURIComponent(texto);
 
     try {
@@ -5805,16 +5843,45 @@
     const sel = document.getElementById('invv-entidad');
     if (sel.options.length <= 1) {
       try {
-        const r = await fetch('/api/contratos/inventario-validaciones/entidades').then(x => x.json());
-        if (r.ok) r.data.forEach(e => {
+        const [rEnt, rFil] = await Promise.all([
+          fetch('/api/contratos/inventario-validaciones/entidades').then(x => x.json()),
+          fetch('/api/contratos/inventario-validaciones/filtros').then(x => x.json())
+        ]);
+        if (rEnt.ok) rEnt.data.forEach(e => {
           const o = document.createElement('option');
           o.value = o.textContent = e;
           sel.appendChild(o);
         });
+        if (rFil.ok) {
+          const llenar = (id, items) => {
+            const s = document.getElementById(id);
+            items.forEach(v => {
+              const o = document.createElement('option');
+              o.value = o.textContent = v;
+              s.appendChild(o);
+            });
+          };
+          llenar('invv-pais', rFil.data.paises || []);
+          llenar('invv-regulador', rFil.data.regs || []);
+          llenar('invv-tipo', rFil.data.tipos || []);
+        }
       } catch(e) {}
       invvCargarReportesDropdown();
     }
     invvVerReporte(null);
+  }
+
+  function invvParamsQS() {
+    const entidad = document.getElementById('invv-entidad').value;
+    const pais    = document.getElementById('invv-pais').value;
+    const reg     = document.getElementById('invv-regulador').value;
+    const tipo    = document.getElementById('invv-tipo').value;
+    return `entidad=${encodeURIComponent(entidad)}&pais=${encodeURIComponent(pais)}&reg=${encodeURIComponent(reg)}&tipo=${encodeURIComponent(tipo)}`;
+  }
+
+  function invvOnFiltroChange() {
+    if (_invvVistaRep === null) invvCargarResumen();
+    else invvVerReporte(_invvVistaRep);
   }
 
   async function invvCargarReportesDropdown() {
@@ -5838,12 +5905,11 @@
   }
 
   async function invvCargarResumen() {
-    const entidad = document.getElementById('invv-entidad').value;
     const q       = (document.getElementById('invv-buscar').value || '').trim();
     const wrap    = document.getElementById('invv-content');
     wrap.innerHTML = '<div class="loading">Cargando...</div>';
     try {
-      const r = await fetch(`/api/contratos/inventario-validaciones/resumen?entidad=${encodeURIComponent(entidad)}&q=${encodeURIComponent(q)}`).then(x => x.json());
+      const r = await fetch(`/api/contratos/inventario-validaciones/resumen?${invvParamsQS()}&q=${encodeURIComponent(q)}`).then(x => x.json());
       if (!r.ok) { wrap.innerHTML = `<p style="color:#e74c3c;">Error: ${r.message}</p>`; return; }
       _invvResumen = r.data || [];
 
@@ -5914,12 +5980,11 @@
     const selRep = document.getElementById('invv-rep');
     if (clave === null) { selRep.value = ''; invvCargarResumen(); return; }
     if ([...selRep.options].some(o => o.value === clave)) selRep.value = clave;
-    const entidad = document.getElementById('invv-entidad').value;
     const rep     = clave === '*' ? '' : clave;
     const wrap    = document.getElementById('invv-content');
     wrap.innerHTML = '<div class="loading">Cargando...</div>';
     try {
-      const r = await fetch(`/api/contratos/inventario-validaciones/lista?entidad=${encodeURIComponent(entidad)}&rep=${encodeURIComponent(rep)}`).then(x => x.json());
+      const r = await fetch(`/api/contratos/inventario-validaciones/lista?${invvParamsQS()}&rep=${encodeURIComponent(rep)}`).then(x => x.json());
       if (!r.ok) { wrap.innerHTML = `<p style="color:#e74c3c;">Error: ${r.message}</p>`; return; }
       const data = r.data || [];
       const mapaVal = {};

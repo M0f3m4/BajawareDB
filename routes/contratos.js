@@ -1434,18 +1434,40 @@ router.get('/inventario-validaciones/reportes-por-entidad', requireAuth, async (
   } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
 });
 
+// ── GET filtros del inventario de validaciones ─────────────
+router.get('/inventario-validaciones/filtros', requireAuth, async (req, res) => {
+  try {
+    const [paises, regs, tipos] = await Promise.all([
+      query(`SELECT DISTINCT CLAVE_PAIS FROM INVENTARIO_VALIDACIONES WHERE CLAVE_PAIS IS NOT NULL ORDER BY CLAVE_PAIS`),
+      query(`SELECT DISTINCT CLAVE_REG FROM INVENTARIO_VALIDACIONES WHERE CLAVE_REG IS NOT NULL ORDER BY CLAVE_REG`),
+      query(`SELECT DISTINCT TIPO_VALIDACION FROM INVENTARIO_VALIDACIONES WHERE TIPO_VALIDACION IS NOT NULL ORDER BY TIPO_VALIDACION`)
+    ]);
+    res.json({ ok: true, data: {
+      paises: paises.map(r => r.CLAVE_PAIS),
+      regs:   regs.map(r => r.CLAVE_REG),
+      tipos:  tipos.map(r => r.TIPO_VALIDACION)
+    } });
+  } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
+});
+
 // ── GET resumen del inventario: conteo de validaciones por reporte ─
 router.get('/inventario-validaciones/resumen', requireAuth, async (req, res) => {
   try {
     const entidad = (req.query.entidad || '').trim();
+    const pais    = (req.query.pais || '').trim();
+    const reg     = (req.query.reg || '').trim();
+    const tipo    = (req.query.tipo || '').trim();
     const q       = (req.query.q || '').trim();
     const pat     = q ? esc(`%${q}%`) : '';
     let rows;
-    if (q) {
-      // Con búsqueda de texto: solo reportes con validaciones que coincidan
+    if (q || tipo) {
+      // Con búsqueda de texto o tipo: solo reportes con validaciones que coincidan
       const w = [
         entidad ? `CLAVE_ENTIDADREGULADA=${esc(entidad)}` : '',
-        `(CLAVE_VALIDACION LIKE ${pat} OR DESCRIPCION_VALIDACION LIKE ${pat} OR CLAVE_REP LIKE ${pat})`
+        pais    ? `CLAVE_PAIS=${esc(pais)}` : '',
+        reg     ? `CLAVE_REG=${esc(reg)}` : '',
+        tipo    ? `TIPO_VALIDACION=${esc(tipo)}` : '',
+        q       ? `(CLAVE_VALIDACION LIKE ${pat} OR DESCRIPCION_VALIDACION LIKE ${pat} OR CLAVE_REP LIKE ${pat})` : ''
       ].filter(Boolean).join(' AND ');
       rows = await query(`
         SELECT CLAVE_REP, VERSION_CARGA, COUNT(*) AS TOTAL
@@ -1456,13 +1478,18 @@ router.get('/inventario-validaciones/resumen', requireAuth, async (req, res) => 
       `);
     } else {
       // Sin búsqueda: todos los reportes del inventario, con conteo 0 si no tienen validaciones
-      const wEnt = entidad ? `WHERE CLAVE_ENTIDADREGULADA=${esc(entidad)}` : '';
+      const conds = [
+        entidad ? `CLAVE_ENTIDADREGULADA=${esc(entidad)}` : '',
+        pais    ? `CLAVE_PAIS=${esc(pais)}` : '',
+        reg     ? `CLAVE_REG=${esc(reg)}` : ''
+      ].filter(Boolean).join(' AND ');
+      const wBase = conds ? `WHERE ${conds}` : '';
       rows = await query(`
         SELECT base.CLAVE_REP, iv.VERSION_CARGA, COUNT(iv.CLAVE_VALIDACION) AS TOTAL
         FROM (
-          SELECT CLAVE_REP FROM INVENTARIO_REPORTES ${wEnt}
+          SELECT CLAVE_REP FROM INVENTARIO_REPORTES ${wBase}
           UNION
-          SELECT CLAVE_REP FROM INVENTARIO_VALIDACIONES ${wEnt}
+          SELECT CLAVE_REP FROM INVENTARIO_VALIDACIONES ${wBase}
         ) base
         LEFT JOIN INVENTARIO_VALIDACIONES iv ON iv.CLAVE_REP = base.CLAVE_REP
         GROUP BY base.CLAVE_REP, iv.VERSION_CARGA
@@ -1478,9 +1505,15 @@ router.get('/inventario-validaciones/lista', requireAuth, async (req, res) => {
   try {
     const entidad = (req.query.entidad || '').trim();
     const rep     = (req.query.rep || '').trim();
+    const pais    = (req.query.pais || '').trim();
+    const reg     = (req.query.reg || '').trim();
+    const tipo    = (req.query.tipo || '').trim();
     const w = [
       entidad ? `iv.CLAVE_ENTIDADREGULADA=${esc(entidad)}` : '',
-      rep     ? `iv.CLAVE_REP=${esc(rep)}` : ''
+      rep     ? `iv.CLAVE_REP=${esc(rep)}` : '',
+      pais    ? `iv.CLAVE_PAIS=${esc(pais)}` : '',
+      reg     ? `iv.CLAVE_REG=${esc(reg)}` : '',
+      tipo    ? `iv.TIPO_VALIDACION=${esc(tipo)}` : ''
     ].filter(Boolean).join(' AND ');
     const rows = await query(`
       SELECT

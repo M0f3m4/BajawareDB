@@ -506,13 +506,15 @@ router.get('/soporte/cliente/:clave/fixes', requireAuth, async (req, res) => {
 
 // ── GET /api/inventario/reportes ─────────────────────────
 router.get('/inventario/reportes', requireAuth, async (req, res) => {
-  const { reg, entidad, grupo, periodo, pais, texto } = req.query;
+  const { reg, entidad, grupo, periodo, pais, texto, version, vigente } = req.query;
   let where = 'WHERE 1=1';
   if (reg)     where += ` AND ir.CLAVE_REG = '${reg.replace(/'/g,"''")}'`;
   if (entidad) where += ` AND ir.CLAVE_ENTIDADREGULADA = '${entidad.replace(/'/g,"''")}'`;
   if (grupo)   where += ` AND ir.CLAVE_GRUPO = '${grupo.replace(/'/g,"''")}'`;
   if (periodo) where += ` AND ir.CLAVE_PERIODO = '${periodo.replace(/'/g,"''")}'`;
   if (pais)    where += ` AND ir.CLAVE_PAIS = '${pais.replace(/'/g,"''")}'`;
+  if (version) where += ` AND ir.VERSION_CARGA = '${version.replace(/'/g,"''")}'`;
+  if (vigente) where += ` AND CAST(ir.VIGENTE AS VARCHAR(10)) = '${vigente.replace(/'/g,"''")}'`;
   if (texto)   where += ` AND (ir.CLAVE_REP LIKE '%${texto.replace(/'/g,"''")}%' OR ir.REPORTE LIKE '%${texto.replace(/'/g,"''")}%' OR ir.DESCRIPCION_ESP LIKE '%${texto.replace(/'/g,"''")}%')`;
   try {
     const rows = await query(`
@@ -536,14 +538,20 @@ router.get('/inventario/reportes', requireAuth, async (req, res) => {
 // ── GET /api/inventario/filtros ───────────────────────────
 router.get('/inventario/filtros', requireAuth, async (req, res) => {
   try {
-    const [regs, entidades, grupos, periodos, paises] = await Promise.all([
+    const [regs, entidades, grupos, periodos, paises, versiones, vigentes] = await Promise.all([
       query(`SELECT CLAVE_REG, REGULADOR FROM CAT_REGULADORES ORDER BY REGULADOR`),
       query(`SELECT CLAVE_ENTIDADREGULADA, ENTIDAD_REGULADA FROM CAT_ENTIDAD_REGULADA ORDER BY ENTIDAD_REGULADA`),
       query(`SELECT DISTINCT CLAVE_GRUPO FROM INVENTARIO_REPORTES WHERE CLAVE_GRUPO IS NOT NULL ORDER BY CLAVE_GRUPO`),
       query(`SELECT CLAVE_PERIODO, PERIODO FROM CAT_PERIODICIDAD ORDER BY PERIODO`),
-      query(`SELECT CLAVE_PAIS, PAIS FROM CAT_PAISES ORDER BY PAIS`)
+      query(`SELECT CLAVE_PAIS, PAIS FROM CAT_PAISES ORDER BY PAIS`),
+      query(`SELECT DISTINCT VERSION_CARGA FROM INVENTARIO_REPORTES WHERE VERSION_CARGA IS NOT NULL ORDER BY VERSION_CARGA DESC`),
+      query(`SELECT DISTINCT VIGENTE FROM INVENTARIO_REPORTES WHERE VIGENTE IS NOT NULL ORDER BY VIGENTE`)
     ]);
-    res.json({ ok: true, data: { regs, entidades, grupos: grupos.map(g => g.CLAVE_GRUPO), periodos, paises } });
+    res.json({ ok: true, data: {
+      regs, entidades, grupos: grupos.map(g => g.CLAVE_GRUPO), periodos, paises,
+      versiones: versiones.map(v => v.VERSION_CARGA),
+      vigentes: vigentes.map(v => String(v.VIGENTE))
+    } });
   } catch (err) {
     res.status(500).json({ ok: false, message: err.message });
   }
