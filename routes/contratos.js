@@ -504,6 +504,33 @@ router.get('/estatus-reporte/versiones', requireAuth, async (req, res) => {
   } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
 });
 
+// ── GET búsqueda por serie en ESTATUS_REPORTE ──────────────
+// Devuelve todas las combinaciones reporte+plataforma+versión que coincidan
+// con la serie/texto (ej. "ACLME") para agregarlas en bulk a la lista de marcado
+router.get('/estatus-reporte/buscar-serie', requireAuth, async (req, res) => {
+  try {
+    const q = (req.query.q || '').trim();
+    if (q.length < 2) return res.json({ ok: true, data: [] });
+    const pat = `%${q.replace(/'/g, "''")}%`;
+    const rows = await query(`
+      SELECT TOP 300
+        er.ID_ESTATUS_REP, er.CLAVE_REP, er.CLAVE_PLATAFORMA,
+        er.VERSION_CARGA, er.ESTATUS,
+        ir.DESCRIPCION_ESP
+      FROM ESTATUS_REPORTE er
+      OUTER APPLY (
+        SELECT TOP 1 DESCRIPCION_ESP FROM INVENTARIO_REPORTES i
+        WHERE i.CLAVE_REP = er.CLAVE_REP OR i.CLAVE_REP = er.CLAVE_REP_GENERAL
+      ) ir
+      WHERE er.CLAVE_REP LIKE '${pat}'
+         OR er.CLAVE_REP_GENERAL LIKE '${pat}'
+         OR ir.DESCRIPCION_ESP LIKE '${pat}'
+      ORDER BY er.CLAVE_REP, er.CLAVE_PLATAFORMA, er.VERSION_CARGA DESC
+    `);
+    res.json({ ok: true, data: rows });
+  } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
+});
+
 // ── GET versiones de carga para validaciones de un reporte ─
 router.get('/estatus-validacion/versiones', requireAuth, async (req, res) => {
   try {

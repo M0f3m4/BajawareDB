@@ -1597,13 +1597,20 @@
           <div id="upd-rep-msg" style="margin-top:12px;font-size:13px;"></div>
           <!-- Búsqueda rápida de reporte -->
           <hr style="margin:20px 0;border:none;border-top:1px solid #eee;">
-          <p style="font-size:12px;color:#888;margin-bottom:8px;">O busca un reporte del inventario:</p>
+          <p style="font-size:12px;color:#888;margin-bottom:8px;">O busca por serie (ej. ACLME) y agrega varios a la lista:</p>
           <div style="display:flex;gap:8px;">
-            <input id="upd-rep-buscar" type="text" placeholder="Buscar por clave o descripción..."
+            <input id="upd-rep-buscar" type="text" placeholder="Buscar por serie, clave o descripción..."
               style="flex:1;padding:7px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;"
               oninput="buscarReporteUpd()">
           </div>
-          <div id="upd-rep-resultados" style="margin-top:8px;max-height:200px;overflow-y:auto;font-size:12px;"></div>
+          <div id="upd-rep-resultados" style="margin-top:8px;max-height:320px;overflow-y:auto;font-size:12px;"></div>
+          <div id="upd-rep-res-acciones" style="display:none;margin-top:8px;gap:10px;align-items:center;">
+            <button onclick="updRepAgregarSeleccionados()"
+              style="padding:6px 16px;background:#1a3558;color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;">
+              ➕ Agregar seleccionados a la lista
+            </button>
+            <span id="upd-rep-res-count" style="font-size:11px;color:#888;"></span>
+          </div>
         </div>
       </div>
 
@@ -6666,22 +6673,83 @@
   }
 
   let updRepTimer;
+  let _updRepBusqueda = []; // resultados de la búsqueda por serie
+
   async function buscarReporteUpd() {
     clearTimeout(updRepTimer);
     updRepTimer = setTimeout(async () => {
       const q = document.getElementById('upd-rep-buscar').value.trim();
       const wrap = document.getElementById('upd-rep-resultados');
-      if (!q || q.length < 2) { wrap.innerHTML = ''; return; }
+      const acciones = document.getElementById('upd-rep-res-acciones');
+      if (!q || q.length < 2) { wrap.innerHTML = ''; acciones.style.display = 'none'; _updRepBusqueda = []; return; }
+      wrap.innerHTML = '<div style="color:#aaa;padding:5px;">Buscando...</div>';
       try {
-        const r = await fetch('/api/inventario/reportes?q=' + encodeURIComponent(q)).then(x => x.json());
-        const data = r.data || [];
-        wrap.innerHTML = data.slice(0,10).map(rep => `
-          <div onclick="document.getElementById('upd-rep-clave').value='${rep.CLAVE_REP}';updRepCargarVersiones();"
-            style="padding:5px 8px;cursor:pointer;border-bottom:1px solid #f0f0f0;hover:background:#f8f9fa;">
-            <strong>${rep.CLAVE_REP}</strong> — <span style="color:#888;">${rep.DESCRIPCION_ESP||''}</span>
-          </div>`).join('') || '<div style="color:#aaa;padding:5px;">Sin resultados.</div>';
-      } catch(e) {}
+        const r = await fetch('/api/contratos/estatus-reporte/buscar-serie?q=' + encodeURIComponent(q)).then(x => x.json());
+        _updRepBusqueda = r.data || [];
+        if (!_updRepBusqueda.length) {
+          wrap.innerHTML = '<div style="color:#aaa;padding:5px;">Sin resultados en estatus de reportes.</div>';
+          acciones.style.display = 'none';
+          return;
+        }
+        wrap.innerHTML = `
+          <table class="data-table" style="width:100%;font-size:11px;">
+            <thead><tr>
+              <th style="width:28px;"><input type="checkbox" id="upd-rep-res-todos" onchange="updRepResToggleTodos(this.checked)"></th>
+              <th>Clave</th><th>Plataforma</th><th>Versión</th><th>Estatus actual</th><th>Descripción</th>
+            </tr></thead>
+            <tbody>${_updRepBusqueda.map((x, i) => `
+              <tr>
+                <td><input type="checkbox" class="upd-rep-res-cb" value="${i}" onchange="updRepResCount()"></td>
+                <td style="font-family:monospace;">${x.CLAVE_REP}</td>
+                <td>${x.CLAVE_PLATAFORMA || ''}</td>
+                <td style="font-family:monospace;">${x.VERSION_CARGA || '—'}</td>
+                <td>${x.ESTATUS || ''}</td>
+                <td style="color:#888;">${x.DESCRIPCION_ESP || ''}</td>
+              </tr>`).join('')}</tbody>
+          </table>`;
+        acciones.style.display = 'flex';
+        updRepResCount();
+      } catch(e) {
+        wrap.innerHTML = '<div style="color:#e74c3c;padding:5px;">Error: ' + e.message + '</div>';
+        acciones.style.display = 'none';
+      }
     }, 300);
+  }
+
+  function updRepResToggleTodos(checked) {
+    document.querySelectorAll('.upd-rep-res-cb').forEach(cb => cb.checked = checked);
+    updRepResCount();
+  }
+
+  function updRepResCount() {
+    const n = document.querySelectorAll('.upd-rep-res-cb:checked').length;
+    document.getElementById('upd-rep-res-count').textContent =
+      `${n} de ${_updRepBusqueda.length} seleccionados`;
+  }
+
+  function updRepAgregarSeleccionados() {
+    const msg = document.getElementById('upd-rep-msg');
+    const seleccionados = [...document.querySelectorAll('.upd-rep-res-cb:checked')].map(cb => _updRepBusqueda[parseInt(cb.value)]);
+    if (!seleccionados.length) { msg.innerHTML = '<span style="color:#e67e22;">Selecciona al menos un reporte de la búsqueda.</span>'; return; }
+    let agregados = 0, repetidos = 0;
+    for (const x of seleccionados) {
+      const item = {
+        clave: x.CLAVE_REP,
+        plat:  x.CLAVE_PLATAFORMA || '',
+        ver:   x.VERSION_CARGA || '',
+        id:    x.ID_ESTATUS_REP ? String(x.ID_ESTATUS_REP) : ''
+      };
+      if (_updRepLista.some(y => y.clave === item.clave && y.plat === item.plat && y.ver === item.ver)) { repetidos++; continue; }
+      _updRepLista.push(item);
+      agregados++;
+    }
+    renderUpdRepLista();
+    // Limpiar búsqueda para la siguiente serie
+    document.getElementById('upd-rep-buscar').value = '';
+    document.getElementById('upd-rep-resultados').innerHTML = '';
+    document.getElementById('upd-rep-res-acciones').style.display = 'none';
+    _updRepBusqueda = [];
+    msg.innerHTML = `<span style="color:#27ae60;">✅ ${agregados} agregado(s) a la lista${repetidos ? ` (${repetidos} ya estaban)` : ''}.</span>`;
   }
 
   function switchTabInv(tab) {
