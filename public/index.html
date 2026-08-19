@@ -1087,6 +1087,9 @@
           </select>
           <input type="text" id="invr-texto" placeholder="Buscar reporte..." oninput="loadInvReportesDebounced()" style="padding:7px 12px;border:1px solid #ddd;border-radius:6px;font-size:13px;min-width:200px;" />
           <button onclick="loadInvReportes()" style="padding:7px 16px;background:#1a3558;color:#fff;border:none;border-radius:6px;font-size:13px;cursor:pointer;">Buscar</button>
+          <button id="invr-export-btn" onclick="invrExportarExcel()" style="display:none;padding:7px 14px;background:#27ae60;color:#fff;border:none;border-radius:6px;font-size:12px;cursor:pointer;margin-left:auto;">
+            📥 Descargar Excel
+          </button>
         </div>
         <div id="invr-count" style="font-size:12px;color:#888;margin-bottom:8px;"></div>
         <div id="invr-scroll-top" style="overflow-x:auto;overflow-y:hidden;height:16px;"><div id="invr-scroll-ghost" style="height:1px;"></div></div>
@@ -4426,6 +4429,8 @@
       if (!data.ok) throw new Error(data.message);
 
       count.textContent = data.data.length + ' reportes encontrados';
+      _invrData = data.data;
+      document.getElementById('invr-export-btn').style.display = data.data.length ? 'inline-block' : 'none';
 
       if (!data.data.length) {
         wrap.innerHTML = '<div class="loading">Sin resultados para esos filtros.</div>';
@@ -4445,8 +4450,19 @@
       wrap.onscroll      = () => { scrollTop.scrollLeft = wrap.scrollLeft; };
     } catch (e) {
       count.textContent = '';
+      document.getElementById('invr-export-btn').style.display = 'none';
       wrap.innerHTML = '<div class="loading">Error: ' + e.message + '</div>';
     }
+  }
+
+  let _invrData = [];
+
+  function invrExportarExcel() {
+    if (!_invrData.length) { alert('No hay reportes para exportar.'); return; }
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.json_to_sheet(_invrData);
+    XLSX.utils.book_append_sheet(wb, ws, 'Reportes');
+    XLSX.writeFile(wb, 'inventario_reportes.xlsx');
   }
 
   // ── ESTATUS DE REPORTES ───────────────────────────────────
@@ -5870,11 +5886,16 @@
             <th></th>
           </tr></thead>
           <tbody>
-            ${reps.map(rep => `<tr style="cursor:pointer;" onclick="invvVerReporte('${rep.replace(/'/g, "\\'")}')">
+            ${reps.map(rep => mapa[rep].total > 0 ? `<tr style="cursor:pointer;" onclick="invvVerReporte('${rep.replace(/'/g, "\\'")}')">
               <td style="font-family:monospace;font-size:12px;font-weight:600;color:#1a3558;">${rep}</td>
               <td style="text-align:center;font-size:13px;font-weight:600;">${mapa[rep].total.toLocaleString()}</td>
               <td style="font-size:11px;">${[...mapa[rep].versiones].sort().map(v => `<span style="background:#f0f4ff;color:#1a3558;padding:2px 7px;border-radius:10px;font-family:monospace;margin-right:3px;">${v}</span>`).join('') || '—'}</td>
               <td style="text-align:right;"><span style="font-size:12px;color:#2560a7;font-weight:600;">Ver validaciones →</span></td>
+            </tr>` : `<tr>
+              <td style="font-family:monospace;font-size:12px;color:#999;">${rep}</td>
+              <td style="text-align:center;font-size:13px;color:#999;">0</td>
+              <td style="font-size:11px;color:#bbb;">—</td>
+              <td style="text-align:right;"><span style="font-size:11px;color:#bbb;font-style:italic;">Sin validaciones</span></td>
             </tr>`).join('')}
           </tbody>
         </table>

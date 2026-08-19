@@ -1440,17 +1440,35 @@ router.get('/inventario-validaciones/resumen', requireAuth, async (req, res) => 
     const entidad = (req.query.entidad || '').trim();
     const q       = (req.query.q || '').trim();
     const pat     = q ? esc(`%${q}%`) : '';
-    const w = [
-      entidad ? `CLAVE_ENTIDADREGULADA=${esc(entidad)}` : '',
-      q ? `(CLAVE_VALIDACION LIKE ${pat} OR DESCRIPCION_VALIDACION LIKE ${pat} OR CLAVE_REP LIKE ${pat})` : ''
-    ].filter(Boolean).join(' AND ');
-    const rows = await query(`
-      SELECT CLAVE_REP, VERSION_CARGA, COUNT(*) AS TOTAL
-      FROM INVENTARIO_VALIDACIONES
-      ${w ? 'WHERE ' + w : ''}
-      GROUP BY CLAVE_REP, VERSION_CARGA
-      ORDER BY CLAVE_REP
-    `);
+    let rows;
+    if (q) {
+      // Con búsqueda de texto: solo reportes con validaciones que coincidan
+      const w = [
+        entidad ? `CLAVE_ENTIDADREGULADA=${esc(entidad)}` : '',
+        `(CLAVE_VALIDACION LIKE ${pat} OR DESCRIPCION_VALIDACION LIKE ${pat} OR CLAVE_REP LIKE ${pat})`
+      ].filter(Boolean).join(' AND ');
+      rows = await query(`
+        SELECT CLAVE_REP, VERSION_CARGA, COUNT(*) AS TOTAL
+        FROM INVENTARIO_VALIDACIONES
+        WHERE ${w}
+        GROUP BY CLAVE_REP, VERSION_CARGA
+        ORDER BY CLAVE_REP
+      `);
+    } else {
+      // Sin búsqueda: todos los reportes del inventario, con conteo 0 si no tienen validaciones
+      const wEnt = entidad ? `WHERE CLAVE_ENTIDADREGULADA=${esc(entidad)}` : '';
+      rows = await query(`
+        SELECT base.CLAVE_REP, iv.VERSION_CARGA, COUNT(iv.CLAVE_VALIDACION) AS TOTAL
+        FROM (
+          SELECT CLAVE_REP FROM INVENTARIO_REPORTES ${wEnt}
+          UNION
+          SELECT CLAVE_REP FROM INVENTARIO_VALIDACIONES ${wEnt}
+        ) base
+        LEFT JOIN INVENTARIO_VALIDACIONES iv ON iv.CLAVE_REP = base.CLAVE_REP
+        GROUP BY base.CLAVE_REP, iv.VERSION_CARGA
+        ORDER BY base.CLAVE_REP
+      `);
+    }
     res.json({ ok: true, data: rows });
   } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
 });
