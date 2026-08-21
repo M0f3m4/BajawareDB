@@ -506,7 +506,7 @@ router.get('/soporte/cliente/:clave/fixes', requireAuth, async (req, res) => {
 
 // ── GET /api/inventario/reportes ─────────────────────────
 router.get('/inventario/reportes', requireAuth, async (req, res) => {
-  const { reg, entidad, grupo, periodo, pais, texto, version, vigente } = req.query;
+  const { reg, entidad, grupo, periodo, pais, texto, version, vigente, todos } = req.query;
   let where = 'WHERE 1=1';
   if (reg)     where += ` AND ir.CLAVE_REG = '${reg.replace(/'/g,"''")}'`;
   if (entidad) where += ` AND ir.CLAVE_ENTIDADREGULADA = '${entidad.replace(/'/g,"''")}'`;
@@ -518,7 +518,7 @@ router.get('/inventario/reportes', requireAuth, async (req, res) => {
   if (texto)   where += ` AND (ir.CLAVE_REP LIKE '%${texto.replace(/'/g,"''")}%' OR ir.REPORTE LIKE '%${texto.replace(/'/g,"''")}%' OR ir.DESCRIPCION_ESP LIKE '%${texto.replace(/'/g,"''")}%')`;
   try {
     const rows = await query(`
-      SELECT TOP 200
+      SELECT ${todos ? '' : 'TOP 200'}
         ir.CLAVE_REP, ir.CLAVE_REP_GENERAL, ir.REPORTE, ir.CLAVE_ENTIDADREGULADA, ir.CLAVE_REG,
         ir.CLAVE_GRUPO, ir.CLAVE_PERIODO, ir.CLAVE_VERSION_REPORTE,
         ir.DESCRIPCION_ESP, ir.VIGENTE, ir.FECHA_ACTUALIZADA,

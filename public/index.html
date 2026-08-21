@@ -1096,6 +1096,9 @@
           <button id="invr-export-btn" onclick="invrExportarExcel()" style="display:none;padding:7px 14px;background:#27ae60;color:#fff;border:none;border-radius:6px;font-size:12px;cursor:pointer;margin-left:auto;">
             📥 Descargar Excel
           </button>
+          <button id="invr-export-todos-btn" onclick="invrExportarTodos()" style="padding:7px 14px;background:#1e8449;color:#fff;border:none;border-radius:6px;font-size:12px;cursor:pointer;">
+            📦 Descargar todos
+          </button>
         </div>
         <div id="invr-count" style="font-size:12px;color:#888;margin-bottom:8px;"></div>
         <div id="invr-scroll-top" style="overflow-x:auto;overflow-y:hidden;height:16px;"><div id="invr-scroll-ghost" style="height:1px;"></div></div>
@@ -4501,6 +4504,27 @@
     const ws = XLSX.utils.json_to_sheet(_invrData);
     XLSX.utils.book_append_sheet(wb, ws, 'Reportes');
     XLSX.writeFile(wb, 'inventario_reportes.xlsx');
+  }
+
+  async function invrExportarTodos() {
+    const btn = document.getElementById('invr-export-todos-btn');
+    const txtOriginal = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = 'Descargando...';
+    try {
+      const r = await fetch('/api/inventario/reportes?todos=1').then(x => x.json());
+      if (!r.ok) throw new Error(r.message);
+      if (!r.data.length) { alert('No hay reportes para exportar.'); return; }
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.json_to_sheet(r.data);
+      XLSX.utils.book_append_sheet(wb, ws, 'Reportes');
+      XLSX.writeFile(wb, 'inventario_reportes_completo.xlsx');
+    } catch(e) {
+      alert('Error al exportar: ' + e.message);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = txtOriginal;
+    }
   }
 
   // ── ESTATUS DE REPORTES ───────────────────────────────────
