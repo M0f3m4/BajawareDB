@@ -712,7 +712,7 @@
             <span class="dot dot-ok"></span>
             <span>Jira conectado · <strong>bajaware.atlassian.net</strong></span>
           </div>
-          <button onclick="loadDashboardStats()" style="padding:6px 14px;border:1px solid #ddd;border-radius:6px;background:#fff;font-size:12px;cursor:pointer;">↻ Actualizar</button>
+          <button onclick="loadDashboardStats();loadDashboardInventario();loadDashboardActividad();" style="padding:6px 14px;border:1px solid #ddd;border-radius:6px;background:#fff;font-size:12px;cursor:pointer;">↻ Actualizar</button>
         </div>
         <div class="dashboard-grid">
           <div class="dash-card"><div class="label">Tickets pendientes</div><div class="value" id="stat-pendientes">–</div></div>
@@ -727,6 +727,22 @@
           <div class="dash-card"><div class="label">Paquetes cerrados</div><div class="value" id="stat-paq-cerrados">–</div></div>
           <div class="dash-card"><div class="label">Clientes en soporte</div><div class="value" id="stat-sop-clientes">–</div></div>
           <div class="dash-card"><div class="label">Cambios hoy</div><div class="value" id="stat-cambios-hoy">–</div></div>
+        </div>
+        <!-- Inventario -->
+        <div style="background:#fff;border-radius:8px;border:1px solid #e8edf3;padding:16px 20px;margin-bottom:16px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+            <span style="font-size:13px;font-weight:600;color:#1a3558;">📊 Inventario</span>
+            <a onclick="showSection('inv-reportes')" style="font-size:12px;color:#1a3558;cursor:pointer;text-decoration:underline;">Ver inventario →</a>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:16px;">
+            <div class="dash-card"><div class="label">Reportes</div><div class="value" id="stat-inv-reportes">–</div></div>
+            <div class="dash-card"><div class="label">Reportes vigentes</div><div class="value" id="stat-inv-vigentes">–</div></div>
+            <div class="dash-card"><div class="label">Validaciones</div><div class="value" id="stat-inv-validaciones">–</div></div>
+            <div class="dash-card"><div class="label">Reportes con validaciones</div><div class="value" id="stat-inv-repval">–</div></div>
+          </div>
+          <div id="dash-inv-charts" style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+            <div class="loading">Cargando inventario...</div>
+          </div>
         </div>
         <!-- Actividad reciente mini -->
         <div style="background:#fff;border-radius:8px;border:1px solid #e8edf3;padding:16px 20px;margin-bottom:16px;">
@@ -2457,6 +2473,7 @@
     loadDashboardStats();
     loadProyectos();
     loadDashboardActividad();
+    loadDashboardInventario();
     // Verificar conexión BD en status bar
     fetch('/api/status').then(r => r.json()).then(d => {
       const dot = document.getElementById('db-dot');
@@ -5304,6 +5321,46 @@
       }
     } catch (e) {
       document.getElementById('dashboard-actividad').innerHTML = '<div style="font-size:12px;color:#aaa;">No disponible (¿VPN conectado?)</div>';
+    }
+  }
+
+  // ── DASHBOARD INVENTARIO ─────────────────────────────────
+  function dashBarChart(titulo, rows, color) {
+    if (!rows || !rows.length) return '';
+    const max = Math.max(...rows.map(r => r.T)) || 1;
+    return `<div style="border:1px solid #f0f3f7;border-radius:8px;padding:12px 14px;">
+      <div style="font-size:12px;font-weight:600;color:#1a3558;margin-bottom:10px;">${titulo}</div>
+      ${rows.map(r => `
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+          <span style="font-size:11px;color:#555;width:130px;text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${r.K || '—'}">${r.K || '—'}</span>
+          <div style="flex:1;background:#f0f3f7;border-radius:4px;height:16px;position:relative;">
+            <div style="width:${Math.max(2, Math.round(r.T / max * 100))}%;background:${color};height:16px;border-radius:4px;"></div>
+          </div>
+          <span style="font-size:11px;color:#888;width:44px;">${r.T.toLocaleString('es-MX')}</span>
+        </div>`).join('')}
+    </div>`;
+  }
+
+  async function loadDashboardInventario() {
+    const charts = document.getElementById('dash-inv-charts');
+    try {
+      const r = await fetch('/api/dashboard/inventario').then(x => x.json());
+      if (!r.ok) throw new Error(r.message);
+      const d = r.data;
+      document.getElementById('stat-inv-reportes').textContent      = d.totalReportes.toLocaleString('es-MX');
+      document.getElementById('stat-inv-validaciones').textContent  = d.totalValidaciones.toLocaleString('es-MX');
+      document.getElementById('stat-inv-repval').textContent        = d.reportesConValidaciones.toLocaleString('es-MX');
+      const vig = (d.vigentes || []).filter(v => ['1','true','si','sí','s'].includes(String(v.V).trim().toLowerCase()))
+                                    .reduce((a, v) => a + v.T, 0);
+      document.getElementById('stat-inv-vigentes').textContent = vig.toLocaleString('es-MX');
+      charts.innerHTML =
+        dashBarChart('Reportes por regulador (top 10)', d.porRegulador, '#1a3558') +
+        dashBarChart('Reportes por entidad regulada (top 10)', d.porEntidad, '#2980b9') +
+        dashBarChart('Validaciones por tipo', d.valPorTipo, '#27ae60') +
+        dashBarChart('Avance de proyectos por estatus', d.estatusProyecto, '#8e44ad');
+      if (!charts.innerHTML) charts.innerHTML = '<div style="font-size:12px;color:#aaa;">Sin datos de inventario.</div>';
+    } catch (e) {
+      charts.innerHTML = '<div style="font-size:12px;color:#aaa;">Inventario no disponible (¿VPN conectado?)</div>';
     }
   }
 

@@ -382,6 +382,38 @@ router.get('/dashboard/stats', requireAuth, async (req, res) => {
   }
 });
 
+// ── GET /api/dashboard/inventario ─────────────────────────
+// Resumen del inventario para el dashboard de inicio
+router.get('/dashboard/inventario', requireAuth, async (req, res) => {
+  try {
+    const [tot, totVal, repConVal, vigentes, porRegulador, porEntidad, valPorTipo, estatusProyecto] = await Promise.all([
+      query('SELECT COUNT(*) AS T FROM INVENTARIO_REPORTES'),
+      query('SELECT COUNT(*) AS T FROM INVENTARIO_VALIDACIONES'),
+      query('SELECT COUNT(DISTINCT CLAVE_REP) AS T FROM INVENTARIO_VALIDACIONES'),
+      query('SELECT CAST(VIGENTE AS VARCHAR(10)) AS V, COUNT(*) AS T FROM INVENTARIO_REPORTES GROUP BY CAST(VIGENTE AS VARCHAR(10))'),
+      query('SELECT TOP 10 CLAVE_REG AS K, COUNT(*) AS T FROM INVENTARIO_REPORTES GROUP BY CLAVE_REG ORDER BY COUNT(*) DESC'),
+      query('SELECT TOP 10 CLAVE_ENTIDADREGULADA AS K, COUNT(*) AS T FROM INVENTARIO_REPORTES GROUP BY CLAVE_ENTIDADREGULADA ORDER BY COUNT(*) DESC'),
+      query('SELECT TIPO_VALIDACION AS K, COUNT(*) AS T FROM INVENTARIO_VALIDACIONES GROUP BY TIPO_VALIDACION ORDER BY COUNT(*) DESC'),
+      query("SELECT ESTATUS_PROYECTO AS K, COUNT(*) AS T FROM CONTRATOS_VERSION_CLIENTE WHERE ESTATUS_PROYECTO IS NOT NULL AND ESTATUS_PROYECTO <> '' GROUP BY ESTATUS_PROYECTO ORDER BY COUNT(*) DESC")
+    ]);
+    res.json({
+      ok: true,
+      data: {
+        totalReportes: tot[0].T,
+        totalValidaciones: totVal[0].T,
+        reportesConValidaciones: repConVal[0].T,
+        vigentes,
+        porRegulador,
+        porEntidad,
+        valPorTipo,
+        estatusProyecto
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ ok: false, message: err.message });
+  }
+});
+
 // ── GET /api/soporte/clientes ─────────────────────────────
 router.get('/soporte/clientes', requireAuth, async (req, res) => {
   try {
