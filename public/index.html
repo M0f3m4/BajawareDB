@@ -6125,6 +6125,20 @@
     return n;
   }
 
+  // Compara versiones tipo "2.9.0" numéricamente y regresa la más alta
+  function invvVersionMasNueva(versiones) {
+    const lista = [...versiones].filter(Boolean);
+    if (!lista.length) return null;
+    return lista.sort((a, b) => {
+      const pa = String(a).split('.').map(n => parseInt(n, 10) || 0);
+      const pb = String(b).split('.').map(n => parseInt(n, 10) || 0);
+      for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+        if ((pa[i] || 0) !== (pb[i] || 0)) return (pb[i] || 0) - (pa[i] || 0);
+      }
+      return 0;
+    })[0];
+  }
+
   async function invvExportarExcel() {
     const entidad = document.getElementById('invv-entidad').value || 'todas';
     const wb = XLSX.utils.book_new();
@@ -6135,14 +6149,23 @@
       const mapa = {};
       for (const f of filas) {
         const rep = f.CLAVE_REP || '(sin reporte)';
-        if (!mapa[rep]) mapa[rep] = { total: 0, versiones: new Set() };
+        if (!mapa[rep]) mapa[rep] = { total: 0, versiones: new Set(), porVer: {} };
         mapa[rep].total += f.TOTAL;
-        if (f.VERSION_CARGA) mapa[rep].versiones.add(f.VERSION_CARGA);
+        if (f.VERSION_CARGA) {
+          mapa[rep].versiones.add(f.VERSION_CARGA);
+          mapa[rep].porVer[f.VERSION_CARGA] = (mapa[rep].porVer[f.VERSION_CARGA] || 0) + f.TOTAL;
+        }
+      }
+      // Solo la versión más nueva de cada reporte (o la seleccionada en el filtro)
+      for (const rep of Object.keys(mapa)) {
+        mapa[rep].verExport = ver || invvVersionMasNueva(mapa[rep].versiones);
+        mapa[rep].totalExport = mapa[rep].verExport ? (mapa[rep].porVer[mapa[rep].verExport] || 0) : mapa[rep].total;
       }
       const rows = Object.keys(mapa).sort().map(rep => ({
         CLAVE_REP: rep,
-        VALIDACIONES: mapa[rep].total,
-        VERSIONES: [...mapa[rep].versiones].sort().join(', ')
+        VALIDACIONES: mapa[rep].totalExport,
+        VERSION_EXPORTADA: mapa[rep].verExport || '',
+        VERSIONES_DISPONIBLES: [...mapa[rep].versiones].sort().join(', ')
       }));
       if (!rows.length) { alert('No hay datos para exportar.'); return; }
 
@@ -6175,9 +6198,10 @@
               if (!mapaVal[llave]) mapaVal[llave] = { ...row, plataformas: [] };
               if (row.CLAVE_PLATAFORMA && !mapaVal[llave].plataformas.includes(row.CLAVE_PLATAFORMA)) mapaVal[llave].plataformas.push(row.CLAVE_PLATAFORMA);
             }
-            // Mismos filtros que la pantalla: versión + texto de búsqueda
+            // Solo la versión más nueva del reporte (o la del filtro) + texto de búsqueda
+            const verRep = mapa[rep] ? mapa[rep].verExport : ver;
             const vals = Object.values(mapaVal).filter(v =>
-              (!ver || v.VERSION_CARGA === ver) &&
+              (!verRep || v.VERSION_CARGA === verRep) &&
               (!q   || (v.CLAVE_VALIDACION||'').toLowerCase().includes(q) || (v.DESCRIPCION_VALIDACION||'').toLowerCase().includes(q) || (v.CLAVE_REP||'').toLowerCase().includes(q))
             );
             if (vals.length) porRep[rep] = vals;
