@@ -6116,11 +6116,20 @@
     invvRenderVals(invvFiltrado());
   }
 
-  function invvExportarExcel() {
+  // Nombre de hoja válido para Excel: sin : \ / ? * [ ], máx 31 chars, sin duplicados
+  function invvNombreHoja(nombre, usados) {
+    let n = String(nombre).replace(/[:\\\/\?\*\[\]]/g, '_').substring(0, 31) || 'Hoja';
+    let base = n, i = 2;
+    while (usados.has(n)) { n = base.substring(0, 31 - String(i).length - 1) + '~' + i; i++; }
+    usados.add(n);
+    return n;
+  }
+
+  async function invvExportarExcel() {
     const entidad = document.getElementById('invv-entidad').value || 'todas';
     const wb = XLSX.utils.book_new();
     if (_invvVistaRep === null) {
-      // Exportar el resumen por reporte (con filtro de versión aplicado)
+      // Hoja 1: resumen por reporte (con filtro de versión aplicado)
       const ver   = document.getElementById('invv-version').value;
       const filas = _invvResumen.filter(f => !ver || f.VERSION_CARGA === ver);
       const mapa = {};
@@ -6136,8 +6145,56 @@
         VERSIONES: [...mapa[rep].versiones].sort().join(', ')
       }));
       if (!rows.length) { alert('No hay datos para exportar.'); return; }
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), 'Resumen');
-      XLSX.writeFile(wb, `inventario_validaciones_resumen_${entidad}.xlsx`);
+
+      const btn = document.getElementById('invv-export-btn');
+      const txtOriginal = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = 'Generando...';
+      try {
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), 'Resumen');
+
+        // Hojas siguientes: una por reporte con el desglose de sus validaciones
+        const r = await fetch(`/api/contratos/inventario-validaciones/lista?${invvParamsQS()}&rep=`).then(x => x.json());
+        if (!r.ok) throw new Error(r.message);
+        // Dedupe por validación juntando plataformas (igual que en la vista de detalle)
+        const mapaVal = {};
+        for (const row of (r.data || [])) {
+          const llave = `${row.CLAVE_VALIDACION}|${row.CLAVE_REP}`;
+          if (!mapaVal[llave]) mapaVal[llave] = { ...row, plataformas: [] };
+          if (row.CLAVE_PLATAFORMA && !mapaVal[llave].plataformas.includes(row.CLAVE_PLATAFORMA)) mapaVal[llave].plataformas.push(row.CLAVE_PLATAFORMA);
+        }
+        // Mismos filtros que la pantalla: versión + texto de búsqueda
+        const q = (document.getElementById('invv-buscar').value || '').toLowerCase();
+        const vals = Object.values(mapaVal).filter(v =>
+          (!ver || v.VERSION_CARGA === ver) &&
+          (!q   || (v.CLAVE_VALIDACION||'').toLowerCase().includes(q) || (v.DESCRIPCION_VALIDACION||'').toLowerCase().includes(q) || (v.CLAVE_REP||'').toLowerCase().includes(q))
+        );
+        // Agrupar por reporte y crear una hoja por cada uno (solo los que están en el resumen)
+        const porRep = {};
+        for (const v of vals) {
+          const rep = v.CLAVE_REP || '(sin reporte)';
+          if (!mapa[rep]) continue; // solo lo que está en pantalla
+          (porRep[rep] = porRep[rep] || []).push(v);
+        }
+        const hojas = new Set(['Resumen']);
+        for (const rep of Object.keys(porRep).sort()) {
+          const repRows = porRep[rep].map(v => ({
+            CLAVE_VALIDACION: v.CLAVE_VALIDACION,
+            CLAVE_REP: v.CLAVE_REP || '',
+            DESCRIPCION_VALIDACION: v.DESCRIPCION_VALIDACION || '',
+            TIPO_VALIDACION: v.TIPO_VALIDACION || '',
+            VERSION_CARGA: v.VERSION_CARGA || '',
+            PLATAFORMAS: v.plataformas.join(', ')
+          }));
+          XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(repRows), invvNombreHoja(rep, hojas));
+        }
+        XLSX.writeFile(wb, `inventario_validaciones_resumen_${entidad}.xlsx`);
+      } catch(e) {
+        alert('Error al exportar: ' + e.message);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = txtOriginal;
+      }
       return;
     }
     const filtrado = invvFiltrado();
