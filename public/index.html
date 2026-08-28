@@ -6001,6 +6001,7 @@
       selVer.innerHTML = '<option value="">— Todas —</option>' + versiones.map(v => `<option value="${v}">${v}</option>`).join('');
       if (versiones.includes(actual)) selVer.value = actual;
       invvRenderResumen();
+      invvCargarEstatusMinimo(); // en segundo plano; re-renderiza al llegar
     } catch(e) { wrap.innerHTML = `<p style="color:#e74c3c;">Error: ${e.message}</p>`; }
   }
 
@@ -6028,6 +6029,7 @@
         <table class="data-table">
           <thead><tr>
             <th>Reporte</th>
+            <th>Estatus</th>
             <th style="text-align:center;"># Validaciones</th>
             <th>Versiones</th>
             <th></th>
@@ -6035,11 +6037,13 @@
           <tbody>
             ${reps.map(rep => mapa[rep].total > 0 ? `<tr style="cursor:pointer;" onclick="invvVerReporte('${rep.replace(/'/g, "\\'")}')">
               <td style="font-family:monospace;font-size:12px;font-weight:600;color:#1a3558;">${rep}</td>
+              <td>${_invvEstMin === null ? invvBadgeEstatus(null) : invvBadgeEstatus(_invvEstMin[rep] ?? 0)}</td>
               <td style="text-align:center;font-size:13px;font-weight:600;">${mapa[rep].total.toLocaleString()}</td>
               <td style="font-size:11px;">${[...mapa[rep].versiones].sort().map(v => `<span style="background:#f0f4ff;color:#1a3558;padding:2px 7px;border-radius:10px;font-family:monospace;margin-right:3px;">${v}</span>`).join('') || '—'}</td>
               <td style="text-align:right;"><span style="font-size:12px;color:#2560a7;font-weight:600;">Ver validaciones →</span></td>
             </tr>` : `<tr>
               <td style="font-family:monospace;font-size:12px;color:#999;">${rep}</td>
+              <td style="font-size:11px;color:#bbb;">—</td>
               <td style="text-align:center;font-size:13px;color:#999;">0</td>
               <td style="font-size:11px;color:#bbb;">—</td>
               <td style="text-align:right;"><span style="font-size:11px;color:#bbb;font-style:italic;">Sin validaciones</span></td>
@@ -6055,6 +6059,30 @@
   let _invvAllVals  = [];   // detalle de validaciones del reporte abierto
   let _invvVistaRep = null; // null = resumen por reporte, '*' = todas, otro valor = un reporte
   let _invvBuscarTimer = null;
+  let _invvEstMin   = null; // {CLAVE_REP: rank} estatus mínimo por reporte (null = cargando)
+
+  // Estados de validación en orden de avance (rank 1..9; 0 = sin estatus)
+  const INVV_ESTADOS = ['SIN ESTATUS','IDENTIFICADO','EN DOCUMENTACION','DOCUMENTADO','EN ANALISIS PROG','ANALIZADO','EN PROGRAMACION','PROGRAMADO','EN CERTIFICACION','CERTIFICADO'];
+  const INVV_ESTADOS_COLOR = ['#95a5a6','#e74c3c','#e67e22','#8e44ad','#d35400','#f39c12','#2980b9','#16a085','#2ecc71','#27ae60'];
+
+  function invvBadgeEstatus(rank) {
+    if (rank === undefined || rank === null) return '<span style="font-size:11px;color:#bbb;">…</span>';
+    const label = INVV_ESTADOS[rank] || '—';
+    const color = INVV_ESTADOS_COLOR[rank] || '#95a5a6';
+    return `<span style="background:${color};color:#fff;padding:2px 9px;border-radius:10px;font-size:10px;font-weight:700;letter-spacing:.3px;white-space:nowrap;">${label}</span>`;
+  }
+
+  async function invvCargarEstatusMinimo() {
+    _invvEstMin = null;
+    const q = (document.getElementById('invv-buscar').value || '').trim();
+    try {
+      const r = await fetch(`/api/contratos/inventario-validaciones/estatus-minimo?${invvParamsQS()}&q=${encodeURIComponent(q)}`).then(x => x.json());
+      if (!r.ok) throw new Error(r.message);
+      _invvEstMin = {};
+      (r.data || []).forEach(f => { _invvEstMin[f.CLAVE_REP] = f.MIN_RANK; });
+    } catch(e) { _invvEstMin = {}; }
+    if (_invvVistaRep === null) invvRenderResumen();
+  }
 
   async function invvVerReporte(clave) {
     _invvVistaRep = clave;

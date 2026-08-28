@@ -1500,6 +1500,46 @@ router.get('/inventario-validaciones/resumen', requireAuth, async (req, res) => 
   } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
 });
 
+// ── GET estatus mínimo de validación por reporte ──────────
+// Regresa por CLAVE_REP el estatus más atrasado de sus validaciones
+// (orden: IDENTIFICADO=1 ... CERTIFICADO=9; sin estatus=0)
+router.get('/inventario-validaciones/estatus-minimo', requireAuth, async (req, res) => {
+  try {
+    const entidad = (req.query.entidad || '').trim();
+    const pais    = (req.query.pais || '').trim();
+    const reg     = (req.query.reg || '').trim();
+    const tipo    = (req.query.tipo || '').trim();
+    const q       = (req.query.q || '').trim();
+    const pat     = q ? esc(`%${q}%`) : '';
+    const w = [
+      entidad ? `iv.CLAVE_ENTIDADREGULADA=${esc(entidad)}` : '',
+      pais    ? `iv.CLAVE_PAIS=${esc(pais)}` : '',
+      reg     ? `iv.CLAVE_REG=${esc(reg)}` : '',
+      tipo    ? `iv.TIPO_VALIDACION=${esc(tipo)}` : '',
+      q       ? `(iv.CLAVE_VALIDACION LIKE ${pat} OR iv.DESCRIPCION_VALIDACION LIKE ${pat} OR iv.CLAVE_REP LIKE ${pat})` : ''
+    ].filter(Boolean).join(' AND ');
+    const rows = await query(`
+      SELECT iv.CLAVE_REP,
+        MIN(CASE UPPER(LTRIM(RTRIM(rv.ESTATUS)))
+          WHEN 'IDENTIFICADO'     THEN 1
+          WHEN 'EN DOCUMENTACION' THEN 2
+          WHEN 'DOCUMENTADO'      THEN 3
+          WHEN 'EN ANALISIS PROG' THEN 4
+          WHEN 'ANALIZADO'        THEN 5
+          WHEN 'EN PROGRAMACION'  THEN 6
+          WHEN 'PROGRAMADO'       THEN 7
+          WHEN 'EN CERTIFICACION' THEN 8
+          WHEN 'CERTIFICADO'      THEN 9
+          ELSE 0 END) AS MIN_RANK
+      FROM INVENTARIO_VALIDACIONES iv
+      LEFT JOIN REPORTE_VALIDACION rv ON rv.CLAVE_VALIDACION = iv.CLAVE_VALIDACION
+      ${w ? 'WHERE ' + w : ''}
+      GROUP BY iv.CLAVE_REP
+    `);
+    res.json({ ok: true, data: rows });
+  } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
+});
+
 // ── GET validaciones del inventario por entidad + reporte ─
 router.get('/inventario-validaciones/lista', requireAuth, async (req, res) => {
   try {
