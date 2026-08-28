@@ -6761,7 +6761,13 @@
         <span style="background:#f0f4ff;padding:1px 6px;border-radius:8px;color:#1a3558;font-family:monospace;">${x.ver || 'Todas'}</span>
         <span onclick="updRepQuitarLista(${i})" style="cursor:pointer;color:#e74c3c;font-weight:700;" title="Quitar de la lista">×</span>
       </span>`).join('') +
-      `<span style="font-size:11px;color:#888;align-self:center;margin-left:4px;">${_updRepLista.length} reporte(s) — la etapa se aplicará a todos</span>`;
+      `<span style="font-size:11px;color:#888;align-self:center;margin-left:4px;">${_updRepLista.length} reporte(s) — la etapa se aplicará a todos</span>` +
+      `<span onclick="updRepLimpiarLista()" style="font-size:11px;color:#e74c3c;align-self:center;margin-left:8px;cursor:pointer;text-decoration:underline;" title="Vaciar toda la lista">🗑 Limpiar lista</span>`;
+  }
+
+  function updRepLimpiarLista() {
+    _updRepLista = [];
+    renderUpdRepLista();
   }
 
   function updRepEtapaChange() {
@@ -6805,8 +6811,7 @@
         ? `<span style="color:#27ae60;">✅ ${etapa} ${desmarcar ? 'desmarcado' : 'aplicado'} en ${ok} reporte(s).</span>`
         : `<span style="color:#e74c3c;">⚠️ ${ok} ok, ${fail} con error:<br><span style="font-size:11px;">${errores.join('<br>')}</span></span>`;
       if (ok) {
-        _updRepLista = [];
-        renderUpdRepLista();
+        // La lista se conserva para poder marcar otra etapa sobre los mismos reportes
         const contratoSel = document.getElementById('bc-rep-contrato');
         if (contratoSel && contratoSel.value) loadReportesContrato();
         const estWrap = document.getElementById('est-content');
