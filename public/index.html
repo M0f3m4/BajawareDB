@@ -2351,6 +2351,7 @@
             <option value="estatus-reporte">Estatus Reporte</option>
             <option value="estatus-validacion">Estatus Validación</option>
             <option value="contratos">Contratos</option>
+            <option value="inventario-reportes">Carga Inv. Reportes</option>
             <option value="upload-contratos">Carga Contratos</option>
             <option value="upload-reportes">Carga Reportes</option>
             <option value="upload-validaciones">Carga Validaciones</option>
@@ -5227,6 +5228,7 @@
       const SECCION_LABEL = {
         'estatus-reporte': 'Estatus Reporte',
         'estatus-validacion': 'Estatus Validación',
+        'inventario-reportes': 'Carga Inv. Reportes',
         'upload-contratos': 'Carga Contratos',
         'upload-reportes': 'Carga Reportes',
         'upload-validaciones': 'Carga Validaciones',
@@ -5253,9 +5255,27 @@
               let detalle = row.DETALLE || '';
               try {
                 const obj = JSON.parse(detalle);
+                // Formatear valores anidados: arreglos → desplegable legible, objetos → pares k:v
+                const fmtV = v => {
+                  if (Array.isArray(v)) {
+                    const items = v.map(x => (x && typeof x === 'object')
+                      ? Object.values(x).filter(y => y !== null && y !== undefined && y !== '').join(' · ')
+                      : String(x));
+                    return `<details style="display:inline-block;vertical-align:top;">
+                      <summary style="cursor:pointer;color:#1a3558;">${v.length} elementos ▾</summary>
+                      <div style="font-family:monospace;font-size:11px;max-height:180px;overflow:auto;padding:4px 8px;background:#f8f9fa;border-radius:6px;margin-top:4px;">
+                        ${items.map(t => `<div>${t}</div>`).join('')}
+                      </div></details>`;
+                  }
+                  if (v && typeof v === 'object') {
+                    return Object.entries(v).filter(([,v2]) => v2 !== null && v2 !== undefined && v2 !== '')
+                      .map(([k2,v2]) => `${k2}: ${v2}`).join(', ');
+                  }
+                  return String(v);
+                };
                 detalle = Object.entries(obj)
                   .filter(([,v]) => v !== null && v !== undefined && v !== '')
-                  .map(([k,v]) => `<span style="color:#555;">${k}:</span> <b>${v}</b>`)
+                  .map(([k,v]) => `<span style="color:#555;">${k}:</span> <b>${fmtV(v)}</b>`)
                   .join(' &nbsp;·&nbsp; ');
               } catch(e) { /* no es JSON, usar como string */ }
               const color = ACCION_COLOR[row.ACCION] || '#555';
