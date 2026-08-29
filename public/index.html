@@ -7261,21 +7261,21 @@
       <div style="display:grid;grid-template-columns:${cols};gap:0;background:#e8edf3;padding:6px 14px;font-size:11px;font-weight:600;color:#555;border-radius:8px 8px 0 0;">
         <span>Clave Reporte</span>${hayPlat ? '<span>Plataforma</span>' : ''}<span>Versión</span><span>Tipo</span><span>Desc. Versión</span>
       </div>
-      ${_invVerRepRows.map(({clave, plataforma, versionExcel, descExcel, tipoExcel}) => `
+      ${_invVerRepRows.map(({clave, plataforma, vorig, versionExcel, descExcel, tipoExcel}) => `
       <div style="display:grid;grid-template-columns:${cols};gap:8px;align-items:center;padding:7px 14px;border-bottom:1px solid #f0f0f0;">
         <span style="font-family:monospace;font-size:11px;color:#1a3558;font-weight:600;">${clave}</span>
         ${hayPlat ? `<span style="font-family:monospace;font-size:11px;color:#555;">${plataforma || '—'}</span>` : ''}
-        <input class="inv-ver-rep-version-input" data-clave="${clave}" data-plataforma="${plataforma || ''}" type="text" value="${versionExcel}"
+        <input class="inv-ver-rep-version-input" data-clave="${clave}" data-plataforma="${plataforma || ''}" data-vorig="${vorig || ''}" type="text" value="${versionExcel}"
           placeholder="ej. 3.10.1"
           style="padding:5px 8px;border:1px solid #ddd;border-radius:6px;font-size:12px;width:100%;box-sizing:border-box;${versionExcel ? 'background:#f0fff0;' : ''}">
-        <select class="inv-ver-rep-tipo-input" data-clave="${clave}" data-plataforma="${plataforma || ''}"
+        <select class="inv-ver-rep-tipo-input" data-clave="${clave}" data-plataforma="${plataforma || ''}" data-vorig="${vorig || ''}"
           style="padding:5px 6px;border:1px solid #ddd;border-radius:6px;font-size:11px;width:100%;${tipoExcel ? 'background:#f0fff0;' : ''}">
           <option value="BASE" ${tipoExcel==='BASE'||!tipoExcel?'selected':''}>BASE</option>
           <option value="CAMBIO REG" ${tipoExcel==='CAMBIO REG'?'selected':''}>CAMBIO REG</option>
           <option value="FIX" ${tipoExcel==='FIX'?'selected':''}>FIX</option>
           <option value="CR" ${tipoExcel==='CR'?'selected':''}>CR</option>
         </select>
-        <input class="inv-ver-rep-desc-input" data-clave="${clave}" data-plataforma="${plataforma || ''}" type="text" value="${descExcel}"
+        <input class="inv-ver-rep-desc-input" data-clave="${clave}" data-plataforma="${plataforma || ''}" data-vorig="${vorig || ''}" type="text" value="${descExcel}"
           placeholder="ej. Enero 2027"
           style="padding:5px 8px;border:1px solid #ddd;border-radius:6px;font-size:12px;width:100%;box-sizing:border-box;${descExcel ? 'background:#f0fff0;' : ''}">
       </div>`).join('')}
@@ -7293,8 +7293,9 @@
 
   async function invVerSubirConVersiones() {
     const versiones = {}, tipos = {}, descripciones = {};
-    // Llave por combinación: "clave|plataforma" si la fila trae plataforma, si no la clave sola
-    const keyDe = el => el.dataset.plataforma ? `${el.dataset.clave}|${el.dataset.plataforma}` : el.dataset.clave;
+    // Llave por combinación completa: "clave|plataforma|versión original del Excel".
+    // Así dos filas del mismo reporte+plataforma con versión distinta no se pisan.
+    const keyDe = el => `${el.dataset.clave}|${el.dataset.plataforma || ''}|${el.dataset.vorig || ''}`;
     let vacio = false;
     document.querySelectorAll('.inv-ver-rep-version-input').forEach(inp => {
       const v = inp.value.trim();
@@ -7308,9 +7309,10 @@
     document.querySelectorAll('.inv-ver-rep-desc-input').forEach(inp => {
       if (inp.value.trim()) descripciones[keyDe(inp)] = inp.value.trim();
     });
-    // Persistir ediciones en _invVerRepRows para que "← Atrás" desde el preview no las pierda
+    // Persistir ediciones en _invVerRepRows para que "← Atrás" desde el preview no las pierda.
+    // Ojo: vorig NO se toca — es la identidad de la fila aunque se edite la versión.
     _invVerRepRows.forEach(row => {
-      const key = row.plataforma ? `${row.clave}|${row.plataforma}` : row.clave;
+      const key = `${row.clave}|${row.plataforma || ''}|${row.vorig || ''}`;
       if (versiones[key]) row.versionExcel = versiones[key];
       if (tipos[key]) row.tipoExcel = tipos[key];
       if (descripciones[key] !== undefined) row.descExcel = descripciones[key] || row.descExcel;
@@ -7327,7 +7329,7 @@
     const combos = _invVerRepRows.map(row => ({
       clave_rep: row.clave,
       plataforma: row.plataforma || '',
-      version: (versiones && (versiones[row.plataforma ? `${row.clave}|${row.plataforma}` : row.clave])) || row.versionExcel || ''
+      version: (versiones && versiones[`${row.clave}|${row.plataforma || ''}|${row.vorig || ''}`]) || row.versionExcel || ''
     }));
     document.getElementById('inv-ver-form-section').style.display = 'none';
     document.getElementById('inv-ver-check-section').style.display = 'none';
@@ -7382,7 +7384,7 @@
       </div>${filas}`;
     resumen.innerHTML = `
       <div style="background:#f0f8f4;border:1px solid #c8e6d4;border-radius:8px;padding:10px 14px;font-size:12px;color:#1a3558;">
-        ${combos.length} filas del Excel → <strong style="color:#27ae60;">${nuevas} combinaciones nuevas</strong>${existentes ? `, ${existentes} ya existen (se omiten)` : ''}${sinPlat ? `, ${sinPlat} sin plataforma (se pedirá en el modal)` : ''}.
+        ${combos.length} combinaciones únicas del Excel (clave+plataforma+versión) → <strong style="color:#27ae60;">${nuevas} nuevas</strong>${existentes ? `, ${existentes} ya existen (se omiten)` : ''}${sinPlat ? `, ${sinPlat} sin plataforma (se pedirá en el modal)` : ''}.
         ${prev && prev.ok ? '' : '<br><span style="color:#e67e22;">⚠️ No se pudo consultar el estado actual; la columna "Resultado" es estimada.</span>'}
       </div>`;
   }
@@ -7458,10 +7460,12 @@
           const dExcel = cd && cd.v != null ? String(cd.v).trim() : '';
           const tExcel = ct && ct.v != null ? String(ct.v).trim() : '';
           const plat   = cp && cp.v != null ? String(cp.v).trim() : '';
-          const comboKey = clave + '|' + plat;
+          // La llave incluye la VERSIÓN: mismo reporte + misma plataforma con
+          // versión distinta son combinaciones diferentes y NO se colapsan.
+          const comboKey = clave + '|' + plat + '|' + vExcel;
           if (!combosSeen.has(comboKey)) {
             combosSeen.add(comboKey);
-            combosRep.push({ clave, plataforma: plat, versionExcel: vExcel, descExcel: dExcel, tipoExcel: tExcel });
+            combosRep.push({ clave, plataforma: plat, vorig: vExcel, versionExcel: vExcel, descExcel: dExcel, tipoExcel: tExcel });
           }
           paresRep.push({ clave_rep: clave, version: vExcel || version });
         }

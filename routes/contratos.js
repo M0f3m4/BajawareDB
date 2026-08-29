@@ -957,11 +957,14 @@ router.post('/inventario-reportes/upload', requireAuth, upload.single('archivo')
       // fila del Excel, y al final la global. Así dos filas del mismo reporte con
       // versión/plataforma distinta NO se colapsan.
       const versionRowExcel = String(r.VERSION_CARGA || '').trim();
+      // Llaves de resolución: completa (clave|plataforma|versión original del Excel),
+      // luego clave|plataforma, luego clave sola (compatibilidad).
       const comboKey = `${clave}|${plataformaRow}`;
-      const version = (versionesMap && (versionesMap[comboKey] || versionesMap[clave]))
+      const comboKeyFull = `${comboKey}|${versionRowExcel}`;
+      const version = (versionesMap && (versionesMap[comboKeyFull] || versionesMap[comboKey] || versionesMap[clave]))
         || versionRowExcel || versionGlobal;
-      const tipo_ver_row = (tiposMap && (tiposMap[comboKey] || tiposMap[clave])) || tipo_version;
-      const descripcion_row = (descripcionesMap && (descripcionesMap[comboKey] || descripcionesMap[clave])) || descripcion;
+      const tipo_ver_row = (tiposMap && (tiposMap[comboKeyFull] || tiposMap[comboKey] || tiposMap[clave])) || tipo_version;
+      const descripcion_row = (descripcionesMap && (descripcionesMap[comboKeyFull] || descripcionesMap[comboKey] || descripcionesMap[clave])) || descripcion;
       try {
         const existeInv = await query(`
           SELECT CLAVE_PAIS, CLAVE_ENTIDADREGULADA, CLAVE_REG, CLAVE_SERIE, SUBSERIE,
