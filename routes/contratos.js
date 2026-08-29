@@ -692,13 +692,13 @@ router.put('/estatus-reporte', requireAuth, async (req, res) => {
         WHERE CLAVE_REP=${esc(clave_rep)} AND CLAVE_PLATAFORMA=${esc(clave_plataforma)}${versionFilter}
       `);
     } else if (existeGeneral.length) {
-      // Existe registro pero con diferente versión — actualizar y asignar nueva versión
-      await query(`
-        UPDATE ESTATUS_REPORTE SET
-          DOCUMENTADO=${docVal}, PROGRAMADO=${progVal}, CERTIFICADO=${certVal},
-          ESTATUS=${esc(nuevoEstatus)}, VERSION_CARGA=${esc(version)}
-        WHERE CLAVE_REP=${esc(clave_rep)} AND CLAVE_PLATAFORMA=${esc(clave_plataforma)}
-      `);
+      // La versión indicada NO existe para esa plataforma.
+      // Antes aquí se reasignaba VERSION_CARGA a todos los registros de la
+      // clave+plataforma (planchaba versiones de otras plataformas). Ahora se rechaza.
+      return res.status(400).json({
+        ok: false,
+        message: `La versión ${version} no existe para ${clave_rep} en ${clave_plataforma}. No se modificó nada.`
+      });
     } else {
       const invRow = await query(`SELECT CLAVE_REP_GENERAL FROM INVENTARIO_REPORTES WHERE CLAVE_REP=${esc(clave_rep)}`);
       const claveRepGeneral = invRow.length ? invRow[0].CLAVE_REP_GENERAL : clave_rep;
@@ -1348,6 +1348,32 @@ router.put('/estatus-reporte/estatus', requireAuth, async (req, res) => {
         UPDATE ESTATUS_REPORTE SET
           ESTATUS=${esc(estatus)}, FECHA_ESTATUS=GETDATE(), USER_ESTATUS=${esc(usuario)}
         WHERE CLAVE_REP=${esc(clave_rep)} AND CLAVE_PLATAFORMA=${esc(clave_plataforma)}${versionFilter}
+      `);
+    } else if (version) {
+      // La plataforma tiene registros pero NO con esa versión: rechazar en lugar
+      // de crear un registro fantasma con una versión que no le corresponde.
+      const existeGeneral = await query(`
+        SELECT 1 FROM ESTATUS_REPORTE
+        WHERE CLAVE_REP=${esc(clave_rep)} AND CLAVE_PLATAFORMA=${esc(clave_plataforma)}
+      `);
+      if (existeGeneral.length) {
+        return res.status(400).json({
+          ok: false,
+          message: `La versión ${version} no existe para ${clave_rep} en ${clave_plataforma}. No se modificó nada.`
+        });
+      }
+      // No hay ningún registro para esa clave+plataforma: alta nueva legítima
+      const invRowV = await query(`SELECT CLAVE_REP_GENERAL FROM INVENTARIO_REPORTES WHERE CLAVE_REP=${esc(clave_rep)}`);
+      const claveRepGeneralV = invRowV.length ? invRowV[0].CLAVE_REP_GENERAL : clave_rep;
+      const existeRepGenV = await query(`SELECT 1 FROM CAT_REPORTES_GENERALES WHERE CLAVE_REP_GENERAL=${esc(claveRepGeneralV)}`);
+      if (!existeRepGenV.length) await query(`INSERT INTO CAT_REPORTES_GENERALES (CLAVE_REP_GENERAL) VALUES (${esc(claveRepGeneralV)})`);
+      await query(`
+        INSERT INTO ESTATUS_REPORTE
+          (CLAVE_REP, CLAVE_REP_GENERAL, CLAVE_PLATAFORMA, VERSION, VERSION_CARGA,
+           DOCUMENTADO, PROGRAMADO, CERTIFICADO, ESTATUS, FECHA_ESTATUS, USER_ESTATUS)
+        VALUES
+          (${esc(clave_rep)}, ${esc(claveRepGeneralV)}, ${esc(clave_plataforma)}, '00', ${esc(version)},
+           'NO', 'NO', 'NO', ${esc(estatus)}, GETDATE(), ${esc(usuario)})
       `);
     } else {
       const invRow = await query(`SELECT CLAVE_REP_GENERAL FROM INVENTARIO_REPORTES WHERE CLAVE_REP=${esc(clave_rep)}`);
