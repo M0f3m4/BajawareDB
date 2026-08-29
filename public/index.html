@@ -2040,7 +2040,26 @@
               </button>
               <button onclick="invVerSubirConVersiones()"
                 style="padding:8px 24px;background:#1a3558;color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;">
-                📤 Cargar
+                👁 Vista previa
+              </button>
+            </div>
+          </div>
+
+          <div id="inv-ver-preview-section" style="display:none;">
+            <h3 style="margin:0 0 6px;font-size:15px;color:#1a3558;">👁 Vista previa de la carga</h3>
+            <p style="font-size:12px;color:#888;margin:0 0 12px;">
+              <strong>Nada se ha subido todavía.</strong> Así quedaría cada combinación. Revisa y confirma.
+            </p>
+            <div id="inv-ver-preview-resumen" style="margin-bottom:10px;"></div>
+            <div id="inv-ver-preview-body" style="max-height:320px;overflow-y:auto;border:1px solid #e0e6ed;border-radius:8px;"></div>
+            <div style="display:flex;gap:10px;margin-top:18px;justify-content:flex-end;">
+              <button onclick="invVerMostrarVersionesRep()"
+                style="padding:8px 20px;background:#f0f4f8;color:#555;border:1px solid #ddd;border-radius:6px;font-size:13px;cursor:pointer;">
+                ← Atrás
+              </button>
+              <button id="inv-ver-preview-btn" onclick="invVerPreviewConfirmar()"
+                style="padding:8px 24px;background:#27ae60;color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;">
+                ✅ Confirmar y cargar
               </button>
             </div>
           </div>
@@ -7219,6 +7238,7 @@
     document.getElementById('inv-ver-form-section').style.display = '';
     document.getElementById('inv-ver-check-section').style.display = 'none';
     document.getElementById('inv-ver-rep-versions-section').style.display = 'none';
+    document.getElementById('inv-ver-preview-section').style.display = 'none';
     document.getElementById('inv-ver-modal').querySelector('div').style.width = '440px';
   }
 
@@ -7229,29 +7249,33 @@
     document.getElementById('inv-ver-form-section').style.display = 'none';
     document.getElementById('inv-ver-check-section').style.display = 'none';
     document.getElementById('inv-ver-rep-versions-section').style.display = '';
+    document.getElementById('inv-ver-preview-section').style.display = 'none';
     document.getElementById('inv-ver-rep-todos').value = '';
     // Ensanchar modal para la tabla
     document.getElementById('inv-ver-modal').querySelector('div').style.width = '580px';
 
+    const hayPlat = _invVerRepRows.some(r => r.plataforma);
+    const cols = hayPlat ? '1fr 95px 100px 90px 1fr' : '1fr 100px 90px 1fr';
     const list = document.getElementById('inv-ver-rep-list');
     list.innerHTML = `
-      <div style="display:grid;grid-template-columns:1fr 100px 90px 1fr;gap:0;background:#e8edf3;padding:6px 14px;font-size:11px;font-weight:600;color:#555;border-radius:8px 8px 0 0;">
-        <span>Clave Reporte</span><span>Versión</span><span>Tipo</span><span>Desc. Versión</span>
+      <div style="display:grid;grid-template-columns:${cols};gap:0;background:#e8edf3;padding:6px 14px;font-size:11px;font-weight:600;color:#555;border-radius:8px 8px 0 0;">
+        <span>Clave Reporte</span>${hayPlat ? '<span>Plataforma</span>' : ''}<span>Versión</span><span>Tipo</span><span>Desc. Versión</span>
       </div>
-      ${_invVerRepRows.map(({clave, versionExcel, descExcel, tipoExcel}) => `
-      <div style="display:grid;grid-template-columns:1fr 100px 90px 1fr;gap:8px;align-items:center;padding:7px 14px;border-bottom:1px solid #f0f0f0;">
+      ${_invVerRepRows.map(({clave, plataforma, versionExcel, descExcel, tipoExcel}) => `
+      <div style="display:grid;grid-template-columns:${cols};gap:8px;align-items:center;padding:7px 14px;border-bottom:1px solid #f0f0f0;">
         <span style="font-family:monospace;font-size:11px;color:#1a3558;font-weight:600;">${clave}</span>
-        <input class="inv-ver-rep-version-input" data-clave="${clave}" type="text" value="${versionExcel}"
+        ${hayPlat ? `<span style="font-family:monospace;font-size:11px;color:#555;">${plataforma || '—'}</span>` : ''}
+        <input class="inv-ver-rep-version-input" data-clave="${clave}" data-plataforma="${plataforma || ''}" type="text" value="${versionExcel}"
           placeholder="ej. 3.10.1"
           style="padding:5px 8px;border:1px solid #ddd;border-radius:6px;font-size:12px;width:100%;box-sizing:border-box;${versionExcel ? 'background:#f0fff0;' : ''}">
-        <select class="inv-ver-rep-tipo-input" data-clave="${clave}"
+        <select class="inv-ver-rep-tipo-input" data-clave="${clave}" data-plataforma="${plataforma || ''}"
           style="padding:5px 6px;border:1px solid #ddd;border-radius:6px;font-size:11px;width:100%;${tipoExcel ? 'background:#f0fff0;' : ''}">
           <option value="BASE" ${tipoExcel==='BASE'||!tipoExcel?'selected':''}>BASE</option>
           <option value="CAMBIO REG" ${tipoExcel==='CAMBIO REG'?'selected':''}>CAMBIO REG</option>
           <option value="FIX" ${tipoExcel==='FIX'?'selected':''}>FIX</option>
           <option value="CR" ${tipoExcel==='CR'?'selected':''}>CR</option>
         </select>
-        <input class="inv-ver-rep-desc-input" data-clave="${clave}" type="text" value="${descExcel}"
+        <input class="inv-ver-rep-desc-input" data-clave="${clave}" data-plataforma="${plataforma || ''}" type="text" value="${descExcel}"
           placeholder="ej. Enero 2027"
           style="padding:5px 8px;border:1px solid #ddd;border-radius:6px;font-size:12px;width:100%;box-sizing:border-box;${descExcel ? 'background:#f0fff0;' : ''}">
       </div>`).join('')}
@@ -7269,20 +7293,106 @@
 
   async function invVerSubirConVersiones() {
     const versiones = {}, tipos = {}, descripciones = {};
+    // Llave por combinación: "clave|plataforma" si la fila trae plataforma, si no la clave sola
+    const keyDe = el => el.dataset.plataforma ? `${el.dataset.clave}|${el.dataset.plataforma}` : el.dataset.clave;
     let vacio = false;
     document.querySelectorAll('.inv-ver-rep-version-input').forEach(inp => {
       const v = inp.value.trim();
       if (!v) { inp.style.borderColor = '#e74c3c'; vacio = true; }
-      else { inp.style.borderColor = '#ddd'; versiones[inp.dataset.clave] = v; }
+      else { inp.style.borderColor = '#ddd'; versiones[keyDe(inp)] = v; }
     });
     if (vacio) { alert('Asigna una versión a todos los reportes antes de continuar.'); return; }
     document.querySelectorAll('.inv-ver-rep-tipo-input').forEach(sel => {
-      tipos[sel.dataset.clave] = sel.value;
+      tipos[keyDe(sel)] = sel.value;
     });
     document.querySelectorAll('.inv-ver-rep-desc-input').forEach(inp => {
-      if (inp.value.trim()) descripciones[inp.dataset.clave] = inp.value.trim();
+      if (inp.value.trim()) descripciones[keyDe(inp)] = inp.value.trim();
     });
-    const { regulacion, descripcion } = _invVerPending || {};
+    // Persistir ediciones en _invVerRepRows para que "← Atrás" desde el preview no las pierda
+    _invVerRepRows.forEach(row => {
+      const key = row.plataforma ? `${row.clave}|${row.plataforma}` : row.clave;
+      if (versiones[key]) row.versionExcel = versiones[key];
+      if (tipos[key]) row.tipoExcel = tipos[key];
+      if (descripciones[key] !== undefined) row.descExcel = descripciones[key] || row.descExcel;
+    });
+    _invVerPreviewData = { versiones, tipos, descripciones };
+    await invVerMostrarPreview();
+  }
+
+  let _invVerPreviewData = null;
+
+  // Página 4: vista previa — NO sube nada, solo consulta cómo quedaría
+  async function invVerMostrarPreview() {
+    const { versiones } = _invVerPreviewData || {};
+    const combos = _invVerRepRows.map(row => ({
+      clave_rep: row.clave,
+      plataforma: row.plataforma || '',
+      version: (versiones && (versiones[row.plataforma ? `${row.clave}|${row.plataforma}` : row.clave])) || row.versionExcel || ''
+    }));
+    document.getElementById('inv-ver-form-section').style.display = 'none';
+    document.getElementById('inv-ver-check-section').style.display = 'none';
+    document.getElementById('inv-ver-rep-versions-section').style.display = 'none';
+    document.getElementById('inv-ver-preview-section').style.display = '';
+    document.getElementById('inv-ver-modal').querySelector('div').style.width = '620px';
+    const body = document.getElementById('inv-ver-preview-body');
+    const resumen = document.getElementById('inv-ver-preview-resumen');
+    body.innerHTML = '<div style="padding:14px;font-size:12px;color:#888;">Consultando estado actual...</div>';
+    resumen.innerHTML = '';
+
+    let prev = null;
+    try {
+      prev = await fetch('/api/contratos/inventario-reportes/preview-combos', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ combos })
+      }).then(x => x.json());
+    } catch(e) {}
+    const existeMap = {};
+    const invMap = (prev && prev.ok && prev.inventario) || {};
+    if (prev && prev.ok) prev.combos.forEach(c => { existeMap[`${c.clave_rep}|${c.plataforma}|${c.version}`] = c.existe; });
+
+    let nuevas = 0, existentes = 0, sinPlat = 0;
+    const filas = combos.map(c => {
+      let accionHtml;
+      if (!c.plataforma) {
+        sinPlat++;
+        accionHtml = '<span style="color:#e67e22;">Plataforma se elegirá en el siguiente paso</span>';
+      } else if (existeMap[`${c.clave_rep}|${c.plataforma}|${c.version}`]) {
+        existentes++;
+        accionHtml = '<span style="color:#888;">Ya existe — se omite</span>';
+      } else {
+        nuevas++;
+        accionHtml = '<span style="color:#27ae60;font-weight:600;">Nueva combinación → NO DOCUMENTADO</span>';
+      }
+      const invActual = invMap[c.clave_rep];
+      const invHtml = invActual !== undefined
+        ? `${invActual ?? '—'} → <strong>${c.version || '—'}</strong>`
+        : `<span style="color:#27ae60;">nuevo</span> → <strong>${c.version || '—'}</strong>`;
+      return `
+      <div style="display:grid;grid-template-columns:1fr 90px 130px 1fr;gap:8px;align-items:center;padding:6px 14px;border-bottom:1px solid #f0f0f0;font-size:11px;">
+        <span style="font-family:monospace;color:#1a3558;font-weight:600;">${c.clave_rep}</span>
+        <span style="font-family:monospace;color:#555;">${c.plataforma || '—'}</span>
+        <span style="font-family:monospace;">${invHtml}</span>
+        ${accionHtml}
+      </div>`;
+    }).join('');
+
+    body.innerHTML = `
+      <div style="display:grid;grid-template-columns:1fr 90px 130px 1fr;gap:0;background:#e8edf3;padding:6px 14px;font-size:11px;font-weight:600;color:#555;">
+        <span>Clave Reporte</span><span>Plataforma</span><span>Versión (inv. → nueva)</span><span>Resultado en Estatus</span>
+      </div>${filas}`;
+    resumen.innerHTML = `
+      <div style="background:#f0f8f4;border:1px solid #c8e6d4;border-radius:8px;padding:10px 14px;font-size:12px;color:#1a3558;">
+        ${combos.length} filas del Excel → <strong style="color:#27ae60;">${nuevas} combinaciones nuevas</strong>${existentes ? `, ${existentes} ya existen (se omiten)` : ''}${sinPlat ? `, ${sinPlat} sin plataforma (se pedirá en el modal)` : ''}.
+        ${prev && prev.ok ? '' : '<br><span style="color:#e67e22;">⚠️ No se pudo consultar el estado actual; la columna "Resultado" es estimada.</span>'}
+      </div>`;
+  }
+
+  // Confirmación del preview — aquí sí se sube
+  async function invVerPreviewConfirmar() {
+    if (!_invVerPreviewData) return;
+    const { versiones, tipos, descripciones } = _invVerPreviewData;
+    _invVerPreviewData = null;
+    const { regulacion } = _invVerPending || {};
     document.getElementById('inv-ver-modal').style.display = 'none';
     invVerVolverForm();
     await _invVerSubirReal('', regulacion || '', 'BASE', '', false, versiones, tipos, descripciones);
@@ -7311,34 +7421,48 @@
     // Columnas a extraer según tipo
     const colEntidad = isRep ? 'CLAVE_ENTIDADREGULADA' : 'CLAVE_REP';
     const colObjeto  = isRep ? 'CLAVE_REP' : 'CLAVE_VALIDACION';
+    // Auto-detectar la fila de encabezados (soporta templates con títulos arriba)
+    let headerRow = ref.s.r;
+    outer:
+    for (let r = ref.s.r; r <= Math.min(ref.s.r + 4, ref.e.r); r++) {
+      for (let c = ref.s.c; c <= ref.e.c; c++) {
+        const cell = ws2[XLSX.utils.encode_cell({r, c})];
+        const v = cell && cell.v != null ? String(cell.v).trim() : '';
+        if (v === colObjeto || v === colEntidad) { headerRow = r; break outer; }
+      }
+    }
     const colIdxMap = {};
     for (let c = ref.s.c; c <= ref.e.c; c++) {
-      const hCell = ws2[XLSX.utils.encode_cell({r: ref.s.r, c})];
-      if (hCell && (hCell.v === colEntidad || hCell.v === colObjeto || hCell.v === 'VERSION_CARGA' || hCell.v === 'DESC_VERSION' || hCell.v === 'TIPO')) colIdxMap[hCell.v] = c;
+      const hCell = ws2[XLSX.utils.encode_cell({r: headerRow, c})];
+      if (hCell && (hCell.v === colEntidad || hCell.v === colObjeto || hCell.v === 'VERSION_CARGA' || hCell.v === 'DESC_VERSION' || hCell.v === 'TIPO' || hCell.v === 'PLATAFORMA' || hCell.v === 'CLAVE_PLATAFORMA')) colIdxMap[hCell.v] = c;
     }
     const clavesSet = new Set();
     const objetosSet = new Set();
     const paresRep = []; // pares {clave_rep, version} para reportes
-    const versionExcelMap = {}; // VERSION_CARGA del Excel por CLAVE_REP
-    const descExcelMap = {};    // DESC_VERSION del Excel por CLAVE_REP
-    const tipoExcelMap = {};    // TIPO del Excel por CLAVE_REP
-    for (let r = ref.s.r + 1; r <= ref.e.r; r++) {
+    const combosRep = []; // combinaciones únicas {clave, plataforma, versionExcel, tipoExcel, descExcel}
+    const combosSeen = new Set();
+    const idxPlat = colIdxMap['PLATAFORMA'] !== undefined ? colIdxMap['PLATAFORMA'] : colIdxMap['CLAVE_PLATAFORMA'];
+    for (let r = headerRow + 1; r <= ref.e.r; r++) {
       const ce  = colIdxMap[colEntidad]      !== undefined ? ws2[XLSX.utils.encode_cell({r, c: colIdxMap[colEntidad]})]      : null;
       const co  = colIdxMap[colObjeto]       !== undefined ? ws2[XLSX.utils.encode_cell({r, c: colIdxMap[colObjeto]})]       : null;
       const cv  = colIdxMap['VERSION_CARGA'] !== undefined ? ws2[XLSX.utils.encode_cell({r, c: colIdxMap['VERSION_CARGA']})] : null;
       const cd  = colIdxMap['DESC_VERSION']  !== undefined ? ws2[XLSX.utils.encode_cell({r, c: colIdxMap['DESC_VERSION']})]  : null;
       const ct  = colIdxMap['TIPO']          !== undefined ? ws2[XLSX.utils.encode_cell({r, c: colIdxMap['TIPO']})]          : null;
+      const cp  = idxPlat                    !== undefined ? ws2[XLSX.utils.encode_cell({r, c: idxPlat})]                    : null;
       if (ce && ce.v) clavesSet.add(String(ce.v).trim());
       if (co && co.v) {
         const clave = String(co.v).trim();
         objetosSet.add(clave);
         if (isRep) {
-          const vExcel = cv ? String(cv.v).trim() : '';
-          const dExcel = cd ? String(cd.v).trim() : '';
-          const tExcel = ct ? String(ct.v).trim() : '';
-          if (vExcel) versionExcelMap[clave] = vExcel;
-          if (dExcel) descExcelMap[clave] = dExcel;
-          if (tExcel) tipoExcelMap[clave] = tExcel;
+          const vExcel = cv && cv.v != null ? String(cv.v).trim() : '';
+          const dExcel = cd && cd.v != null ? String(cd.v).trim() : '';
+          const tExcel = ct && ct.v != null ? String(ct.v).trim() : '';
+          const plat   = cp && cp.v != null ? String(cp.v).trim() : '';
+          const comboKey = clave + '|' + plat;
+          if (!combosSeen.has(comboKey)) {
+            combosSeen.add(comboKey);
+            combosRep.push({ clave, plataforma: plat, versionExcel: vExcel, descExcel: dExcel, tipoExcel: tExcel });
+          }
           paresRep.push({ clave_rep: clave, version: vExcel || version });
         }
       }
@@ -7361,7 +7485,7 @@
         body: JSON.stringify(checkBody)
       }).then(x => x.json());
     } catch(e) {
-      if (isRep) { _invVerPending = { version, regulacion, tipo_ver, descripcion }; invVerMostrarVersionesRep(); return; }
+      if (isRep) { _invVerRepRows = combosRep; _invVerPending = { version, regulacion, tipo_ver, descripcion }; invVerMostrarVersionesRep(); return; }
       document.getElementById('inv-ver-modal').style.display = 'none';
       await _invVerSubirReal(version, regulacion, tipo_ver, descripcion, false);
       return;
@@ -7371,7 +7495,7 @@
 
     // Para reportes: siempre ir a página 3 (versiones por reporte)
     if (isRep) {
-      _invVerRepRows = [...objetosSet].map(c => ({ clave: c, versionExcel: versionExcelMap[c] || '', descExcel: descExcelMap[c] || '', tipoExcel: tipoExcelMap[c] || '' }));
+      _invVerRepRows = combosRep; // una fila por combinación clave+plataforma (no se colapsan duplicados)
       _invVerPending = { version, regulacion, tipo_ver, descripcion };
       if (!check.version_existe && !advertencias.length) {
         invVerMostrarVersionesRep();
@@ -7477,9 +7601,39 @@
         _invPlatVersion = version;
         await invPlatAbrir();
       }
-      // Para reportes: abrir modal de asignación de plataformas
-      if (isRep && r.reportes && r.reportes.length) {
+      // Para reportes: procesar combinaciones clave+plataforma+versión
+      if (isRep && r.combos && r.combos.length) {
+        const conPlat = r.combos.filter(c => c.PLATAFORMA);
+        const sinPlat = r.combos.filter(c => !c.PLATAFORMA);
+        // Las filas que traen PLATAFORMA en el Excel se insertan directo en ESTATUS_REPORTE
+        if (conPlat.length) {
+          try {
+            const asignaciones = conPlat.map(c => ({
+              clave_rep: c.CLAVE_REP, clave_rep_general: c.CLAVE_REP_GENERAL,
+              plataforma: c.PLATAFORMA, version: c.VERSION || version || '1.0.0'
+            }));
+            const ra = await fetch('/api/contratos/inventario-reportes/asignar-plataformas', {
+              method: 'POST', headers: {'Content-Type':'application/json'},
+              body: JSON.stringify({ asignaciones })
+            }).then(x => x.json());
+            if (ra.ok) msg.innerHTML += `<br><span style="color:#27ae60;">✅ Plataformas del Excel: ${ra.creados} combinaciones creadas, ${ra.omitidos} ya existían.</span>`;
+            else msg.innerHTML += `<br><span style="color:#e74c3c;">❌ Plataformas del Excel: ${ra.message}</span>`;
+          } catch(e) { msg.innerHTML += `<br><span style="color:#e74c3c;">❌ Plataformas del Excel: ${e.message}</span>`; }
+        }
+        // Las filas sin plataforma pasan por el modal de checkboxes como hoy
+        if (sinPlat.length) {
+          const vistas = new Set();
+          _invPlatReportes = sinPlat.filter(c => !vistas.has(c.CLAVE_REP) && vistas.add(c.CLAVE_REP))
+                                    .map(c => ({ CLAVE_REP: c.CLAVE_REP, CLAVE_REP_GENERAL: c.CLAVE_REP_GENERAL }));
+          _invPlatRepCombos = sinPlat;
+          _invPlatRepVersion = version;
+          _invPlatRepVersionesMap = null;
+          await invPlatRepAbrir();
+        }
+      } else if (isRep && r.reportes && r.reportes.length) {
+        // Compatibilidad con respuesta anterior (sin combos)
         _invPlatReportes = r.reportes;
+        _invPlatRepCombos = null;
         _invPlatRepVersion = version;
         _invPlatRepVersionesMap = versiones || null; // mapa por reporte si existe
         await invPlatRepAbrir();
@@ -7639,6 +7793,7 @@
   let _invPlatReportes = [];
   let _invPlatRepVersion = '1.0.0';
   let _invPlatRepVersionesMap = null;
+  let _invPlatRepCombos = null; // combinaciones {CLAVE_REP, CLAVE_REP_GENERAL, VERSION} sin plataforma (una por fila del Excel)
 
   async function invPlatRepAbrir() {
     try {
@@ -7676,12 +7831,21 @@
       return;
     }
     const asignaciones = [];
-    for (const rep of _invPlatReportes) {
-      const versionRep = _invPlatRepVersionesMap
-        ? (_invPlatRepVersionesMap[rep.CLAVE_REP] || _invPlatRepVersion || '1.0.0')
-        : (_invPlatRepVersion || '1.0.0');
-      for (const plat of checked) {
-        asignaciones.push({ clave_rep: rep.CLAVE_REP, clave_rep_general: rep.CLAVE_REP_GENERAL, plataforma: plat, version: versionRep });
+    if (_invPlatRepCombos && _invPlatRepCombos.length) {
+      // Una asignación por combinación del Excel (respeta versión distinta por fila)
+      for (const c of _invPlatRepCombos) {
+        for (const plat of checked) {
+          asignaciones.push({ clave_rep: c.CLAVE_REP, clave_rep_general: c.CLAVE_REP_GENERAL, plataforma: plat, version: c.VERSION || _invPlatRepVersion || '1.0.0' });
+        }
+      }
+    } else {
+      for (const rep of _invPlatReportes) {
+        const versionRep = _invPlatRepVersionesMap
+          ? (_invPlatRepVersionesMap[rep.CLAVE_REP] || _invPlatRepVersion || '1.0.0')
+          : (_invPlatRepVersion || '1.0.0');
+        for (const plat of checked) {
+          asignaciones.push({ clave_rep: rep.CLAVE_REP, clave_rep_general: rep.CLAVE_REP_GENERAL, plataforma: plat, version: versionRep });
+        }
       }
     }
     document.getElementById('inv-plat-rep-msg').innerHTML = 'Guardando...';

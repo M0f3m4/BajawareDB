@@ -944,14 +944,24 @@ router.post('/inventario-reportes/upload', requireAuth, upload.single('archivo')
 
     const wb   = XLSX.read(req.file.buffer, { type: 'buffer' });
     const ws   = wb.Sheets[wb.SheetNames[0]];
-    const rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
+    // Auto-detectar la fila de encabezados (soporta templates con títulos arriba)
+    const rows = XLSX.utils.sheet_to_json(ws, { defval: '', range: _detectHeaderRow(ws) });
     let insertados = 0, actualizados = 0, errores = 0;
+    const combos = []; // combinaciones {CLAVE_REP, CLAVE_REP_GENERAL, PLATAFORMA, VERSION} fila por fila
     for (const r of rows) {
       const clave = String(r.CLAVE_REP || '').trim();
       if (!clave) continue;
-      const version        = versionesMap    ? (versionesMap[clave]    || versionGlobal) : versionGlobal;
-      const tipo_ver_row   = tiposMap        ? (tiposMap[clave]        || tipo_version)  : tipo_version;
-      const descripcion_row = descripcionesMap ? (descripcionesMap[clave] || descripcion) : descripcion;
+      const plataformaRow = String(r.PLATAFORMA || r.CLAVE_PLATAFORMA || '').trim();
+      // Resolución de versión por fila: primero clave|plataforma (edición del modal
+      // por combinación), luego clave (compatibilidad), luego versión de la propia
+      // fila del Excel, y al final la global. Así dos filas del mismo reporte con
+      // versión/plataforma distinta NO se colapsan.
+      const versionRowExcel = String(r.VERSION_CARGA || '').trim();
+      const comboKey = `${clave}|${plataformaRow}`;
+      const version = (versionesMap && (versionesMap[comboKey] || versionesMap[clave]))
+        || versionRowExcel || versionGlobal;
+      const tipo_ver_row = (tiposMap && (tiposMap[comboKey] || tiposMap[clave])) || tipo_version;
+      const descripcion_row = (descripcionesMap && (descripcionesMap[comboKey] || descripcionesMap[clave])) || descripcion;
       try {
         const existeInv = await query(`
           SELECT CLAVE_PAIS, CLAVE_ENTIDADREGULADA, CLAVE_REG, CLAVE_SERIE, SUBSERIE,
@@ -1072,9 +1082,57 @@ router.post('/inventario-reportes/upload', requireAuth, upload.single('archivo')
             `);
           }
         } catch(e3) { console.warn('[inv-rep-hist] error:', e3.message); }
+        combos.push({
+          CLAVE_REP: clave,
+          CLAVE_REP_GENERAL: String(r.CLAVE_REP_GENERAL || '').trim(),
+          PLATAFORMA: plataformaRow,
+          VERSION: version
+        });
       } catch(e2) { console.error('[upload-rep] fila error:', e2.message); errores++; }
     }
-    res.json({ ok: true, insertados, actualizados, errores, reportes: rows.map(r => ({ CLAVE_REP: String(r.CLAVE_REP||'').trim(), CLAVE_REP_GENERAL: String(r.CLAVE_REP_GENERAL||'').trim() })).filter(r => r.CLAVE_REP) });
+    await auditLog(usuario, 'inventario-reportes', 'UPLOAD', {
+      archivo: req.file.originalname, insertados, actualizados, errores,
+      combos: combos.slice(0, 200).map(c => ({ clave_rep: c.CLAVE_REP, plataforma: c.PLATAFORMA || null, version: c.VERSION }))
+    });
+    res.json({ ok: true, insertados, actualizados, errores,
+      reportes: rows.map(r => ({ CLAVE_REP: String(r.CLAVE_REP||'').trim(), CLAVE_REP_GENERAL: String(r.CLAVE_REP_GENERAL||'').trim() })).filter(r => r.CLAVE_REP),
+      combos });
+  } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
+});
+
+// ── POST preview de combinaciones (solo consulta, NO inserta nada) ──
+router.post('/inventario-reportes/preview-combos', requireAuth, async (req, res) => {
+  try {
+    const { combos = [] } = req.body;
+    const resultado = [];
+    for (const c of combos) {
+      const clave_rep  = String(c.clave_rep || '').trim();
+      const plataforma = String(c.plataforma || '').trim();
+      const version    = String(c.version || '').trim();
+      let existe = false;
+      if (clave_rep && plataforma && version) {
+        const r = await query(`
+          SELECT 1 FROM ESTATUS_REPORTE
+          WHERE CLAVE_REP=${esc(clave_rep)} AND CLAVE_PLATAFORMA=${esc(plataforma)}
+            AND VERSION_CARGA=${esc(version)}
+        `);
+        existe = r.length > 0;
+      }
+      resultado.push({ clave_rep, plataforma, version, existe });
+    }
+    // Versión actual en INVENTARIO_REPORTES por clave (para mostrar el cambio)
+    const claves = [...new Set(resultado.map(c => c.clave_rep).filter(Boolean))];
+    const inventario = {};
+    if (claves.length) {
+      const vals = claves.map(c => `(${esc(c)})`).join(',');
+      const rows = await query(`
+        SELECT LTRIM(RTRIM(ir.CLAVE_REP)) AS CLAVE_REP, ir.VERSION_CARGA
+        FROM INVENTARIO_REPORTES ir
+        JOIN (VALUES ${vals}) AS t(c) ON LTRIM(RTRIM(ir.CLAVE_REP)) = LTRIM(RTRIM(t.c))
+      `);
+      rows.forEach(r => { inventario[r.CLAVE_REP] = r.VERSION_CARGA; });
+    }
+    res.json({ ok: true, combos: resultado, inventario });
   } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
 });
 
@@ -1109,6 +1167,11 @@ router.post('/inventario-reportes/asignar-plataformas', requireAuth, async (req,
       `);
       creados++;
     }
+    const usuario = req.session.user?.username || 'sistema';
+    await auditLog(usuario, 'estatus-reporte', 'CREAR_COMBINACIONES', {
+      creados, omitidos,
+      combos: asignaciones.slice(0, 200).map(a => ({ clave_rep: a.clave_rep, plataforma: a.plataforma, version: a.version || '1.0.0' }))
+    });
     res.json({ ok: true, creados, omitidos });
   } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
 });
