@@ -1,5 +1,13 @@
+/*
+ * db/connection.js
+ * Gestión de conexión a SQL Server.
+ * En producción: 192.168.94.43, BD: BajawaredB
+ * Pool singleton, métodos para queries parametrizadas (previene inyección SQL).
+ */
+
 const sql = require('mssql');
 
+// Configuración de conexión con SQL Server desde variables de entorno
 const config = {
   server:   process.env.DB_SERVER   || 'localhost',
   port:     parseInt(process.env.DB_PORT || '1433'),
@@ -13,6 +21,7 @@ const config = {
     cryptoCredentialsDetails: { minVersion: 'TLSv1' }
   },
   requestTimeout: 120000,   // 2 min por query (default era 15s)
+  // Pool de conexiones reutilizables: hasta 10 conexiones simultáneas
   pool: {
     max: 10,
     min: 0,
@@ -20,12 +29,14 @@ const config = {
   }
 };
 
+// Singleton pool: se crea una sola vez y se reutiliza en toda la app
 let pool = null;
 
 /**
  * Devuelve el pool de conexiones (singleton).
  * Si no existe, lo crea.
  */
+// Obtener o crear el pool singleton de conexiones a SQL Server
 async function getPool() {
   if (pool) return pool;
   try {
@@ -43,14 +54,20 @@ async function getPool() {
  * @param {string} query  - T-SQL a ejecutar
  * @param {object} params - { nombre: valor } para parametrizar
  */
+// Ejecutar query T-SQL con parámetros (safe contra inyección SQL)
 async function query(queryStr, params = {}) {
   const db = await getPool();
   const request = db.request();
+
+  // Parametrizar valores en la request (previene inyección SQL)
   for (const [key, value] of Object.entries(params)) {
     request.input(key, value);
   }
+
+  // Ejecutar query y retornar registros
   const result = await request.query(queryStr);
   return result.recordset;
 }
 
+// Exportar funciones y módulo mssql para uso en otros módulos
 module.exports = { getPool, query, sql };

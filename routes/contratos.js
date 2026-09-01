@@ -1,3 +1,20 @@
+// ──────────────────────────────────────────────────────────────────────────
+// Archivo: routes/contratos.js
+// Descripción: rutas Express de la API de gestión de reportes regulatorios (Bajaware).
+// Responsabilidades principales:
+//   1. Gestión de contratos (clientes, plataformas, reportes, validaciones)
+//   2. Control de estatus de reportes y validaciones (cascada de hitos: DOC→PROG→CERT)
+//   3. Carga masiva de inventarios (reportes y validaciones desde Excel)
+//   4. Bitácora de auditoría (registra cambios con "antes" y "después" en JSON)
+//   5. Candados y validaciones contra bugs históricos de truncamiento de versiones
+// Tablas principales que toca:
+//   - CONTRATOS, CLIENTE, CONTRATOS_REPORTES, CONTRATOS_VERSION_CLIENTE
+//   - ESTATUS_REPORTE (identidad de negocio: CLAVE_REP|CLAVE_PLATAFORMA|VERSION_CARGA)
+//   - REPORTE_VALIDACION, INVENTARIO_VALIDACIONES, INVENTARIO_VALIDACIONES_HIST
+//   - INVENTARIO_REPORTES, INVENTARIO_REPORTES_HIST, INVENTARIO_VERSIONES
+//   - AUDIT_LOG (bitácora de cambios)
+// ──────────────────────────────────────────────────────────────────────────
+
 const express = require('express');
 const router  = express.Router();
 const multer  = require('multer');
@@ -6,15 +23,26 @@ const path    = require('path');
 const { query } = require('../db/connection');
 const respaldos = require('../services/respaldos');
 
+// Middleware: valida que la sesión tenga usuario autenticado, en caso contrario retorna 401.
 function requireAuth(req, res, next) {
   if (!req.session.user) return res.status(401).json({ ok: false, message: 'No autenticado' });
   next();
 }
 
+// Configuración de multer: almacenamiento en memoria con límite de 20 MB para cargas de Excel.
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
+
+// Helper: escapa valores SQL para prevenir inyecciones. Convierte null/vacío a NULL SQL;
+// en otro caso, añade comillas simples y duplica comillas internas.
 const esc = v => (v === null || v === undefined || v === '') ? 'NULL' : `'${String(v).trim().replace(/'/g,"''")}'`;
 
-// ── GET historial de versiones ────────────────────────────
+// ── GET /historial-versiones
+// Descripción: devuelve historial de versiones de objetos (reportes, validaciones, etc.)
+// del inventario, con filtros opcionales por tipo, clave y reporte base.
+// Parámetros query: tipo (VALIDACION, REPORTE, etc.), clave (búsqueda parcial), rep (CLAVE_REP),
+// limit (máximo registros, default 200).
+// Tablas: INVENTARIO_VERSIONES (LEFT JOIN INVENTARIO_VALIDACIONES).
+// Sin bitácora (consulta de solo lectura).
 router.get('/historial-versiones', requireAuth, async (req, res) => {
   try {
     const { tipo, clave, rep, limit = 200 } = req.query;
@@ -37,7 +65,12 @@ router.get('/historial-versiones', requireAuth, async (req, res) => {
   } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
 });
 
-// ── POST migración masiva 1.0.0 ───────────────────────────
+// ── POST /historial-versiones/migrar-base
+// Descripción: carga inicial de versiones base (1.0.0) para todas las validaciones
+// que no tienen versión aún en INVENTARIO_VERSIONES. Esta ruta se ejecuta manualmente
+// para inicializar el historial de versiones.
+// Tablas: INSERT en INVENTARIO_VERSIONES; lee de INVENTARIO_VALIDACIONES.
+// Bitácora: registra resultado final (total de versiones creadas).
 router.post('/historial-versiones/migrar-base', requireAuth, async (req, res) => {
   try {
     console.log('[migrar-base] iniciando...');
@@ -59,11 +92,16 @@ router.post('/historial-versiones/migrar-base', requireAuth, async (req, res) =>
   }
 });
 
-// Cache del DISTINCT CLAVE_REP de REPORTE_VALIDACION (scan lento de 431k filas — se hace UNA vez)
+// ── Cache en memoria de claves de validaciones ──
+// Optimización: REPORTE_VALIDACION tiene ~431k filas. En lugar de hacer DISTINCT
+// repetidamente, se cachea en RAM con TTL de 10 minutos. Esto acelera filtros por
+// reporte base que usan quitar sufijo _AÑO (ej: "ACLME_2024" → "ACLME").
 let _rvClavesCache = null;
 let _rvCacheTime   = 0;
-const RV_TTL = 10 * 60 * 1000; // 10 minutos
+const RV_TTL = 10 * 60 * 1000; // 10 minutos (tiempo de vida del cache en milisegundos).
 
+// Helper: retorna array de CLAVE_REP únicas de REPORTE_VALIDACION.
+// Si el cache es válido (< 10 min), devuelve el cache; en otro caso consulta BD y refresca.
 async function getRVClaves() {
   if (_rvClavesCache && Date.now() - _rvCacheTime < RV_TTL) return _rvClavesCache;
   console.log('[cache] refrescando DISTINCT CLAVE_REP de REPORTE_VALIDACION...');
@@ -74,7 +112,10 @@ async function getRVClaves() {
   return _rvClavesCache;
 }
 
-// ── CLIENTES ──────────────────────────────────────────────
+// ── GET /clientes
+// Descripción: lista todos los clientes activos (ACTIVO=1) ordenados por nombre.
+// Tablas: CLIENTE.
+// Sin bitácora (consulta de solo lectura).
 router.get('/clientes', requireAuth, async (req, res) => {
   try {
     const rows = await query(`SELECT ID_CLIENTE, CLAVE_CLIENTE, NOMBRE_CLIENTE, CLAVE_PAIS, ACTIVO FROM CLIENTE WHERE ACTIVO=1 ORDER BY NOMBRE_CLIENTE`);
@@ -82,7 +123,11 @@ router.get('/clientes', requireAuth, async (req, res) => {
   } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
 });
 
-// ── CLIENTES que tienen contratos ─────────────────────────
+// ── GET /clientes-con-contratos
+// Descripción: devuelve solo los clientes que tienen al menos un contrato,
+// evitando clientes sin uso. Útil para dropdowns en interfaces de contratación.
+// Tablas: CONTRATOS (LEFT JOIN CLIENTE).
+// Sin bitácora (consulta de solo lectura).
 router.get('/clientes-con-contratos', requireAuth, async (req, res) => {
   try {
     const rows = await query(`
@@ -95,7 +140,11 @@ router.get('/clientes-con-contratos', requireAuth, async (req, res) => {
   } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
 });
 
-// ── GET lista de contratos con estatus ────────────────────
+// ── GET /contratos/lista
+// Descripción: lista de contratos con filtros opcionales por estatus y cliente.
+// Parámetros query: estatus (ACTIVO, INACTIVO, etc.), cliente (CLAVE_CLIENTE).
+// Tablas: CONTRATOS (LEFT JOIN CLIENTE).
+// Sin bitácora (consulta de solo lectura).
 router.get('/contratos/lista', requireAuth, async (req, res) => {
   try {
     const { estatus, cliente } = req.query;
@@ -114,7 +163,12 @@ router.get('/contratos/lista', requireAuth, async (req, res) => {
   } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
 });
 
-// ── PUT actualizar estatus y etapa de un contrato ─────────
+// ── PUT /contratos/:clave/estatus
+// Descripción: actualiza el estatus general y la etapa (fase) de un contrato.
+// Parámetros path: clave (CLAVE_CONTRATO).
+// Parámetros body: estatus, etapa (fases del ciclo de vida del contrato).
+// Tablas: UPDATE CONTRATOS; INSERT en AUDIT_LOG (bitácora).
+// Bitácora: registra clave_contrato, estatus, etapa.
 router.put('/contratos/:clave/estatus', requireAuth, async (req, res) => {
   try {
     const { estatus, etapa } = req.body;
@@ -128,7 +182,12 @@ router.put('/contratos/:clave/estatus', requireAuth, async (req, res) => {
   } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
 });
 
-// ── GET personalizaciones por estatus_reporte + contrato ──
+// ── GET /personalizaciones
+// Descripción: obtiene personalizaciones de una combinación estatus_reporte+contrato.
+// Parámetros query: estatus_reporte_id (ID_ESTATUS_REP), contrato_id (CLAVE_CONTRATO),
+// tipo (opcional, filtro adicional).
+// Tablas: PERSONALIZACIONES.
+// Sin bitácora (consulta de solo lectura).
 router.get('/personalizaciones', requireAuth, async (req, res) => {
   try {
     const { estatus_reporte_id, contrato_id } = req.query;
@@ -145,7 +204,11 @@ router.get('/personalizaciones', requireAuth, async (req, res) => {
   } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
 });
 
-// ── POST crear personalización ─────────────────────────────
+// ── POST /personalizaciones
+// Descripción: crea una personalización (configuración especial por contrato+reporte).
+// Parámetros body: estatus_reporte_id, contrato_id, subversion, estatus, tipo.
+// Tablas: INSERT en PERSONALIZACIONES; INSERT en AUDIT_LOG.
+// Bitácora: registra los parámetros recibidos.
 router.post('/personalizaciones', requireAuth, async (req, res) => {
   try {
     const { estatus_reporte_id, contrato_id, subversion, estatus, tipo } = req.body;
@@ -159,7 +222,12 @@ router.post('/personalizaciones', requireAuth, async (req, res) => {
   } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
 });
 
-// ── PUT editar personalización ─────────────────────────────
+// ── PUT /personalizaciones/:id
+// Descripción: edita subversion y estatus de una personalización.
+// Parámetros path: id (ID de PERSONALIZACIONES).
+// Parámetros body: subversion, estatus.
+// Tablas: UPDATE PERSONALIZACIONES; INSERT en AUDIT_LOG.
+// Bitácora: registra id, subversion, estatus.
 router.put('/personalizaciones/:id', requireAuth, async (req, res) => {
   try {
     const { subversion, estatus } = req.body;
@@ -170,7 +238,11 @@ router.put('/personalizaciones/:id', requireAuth, async (req, res) => {
   } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
 });
 
-// ── DELETE personalización ─────────────────────────────────
+// ── DELETE /personalizaciones/:id
+// Descripción: borra una personalización.
+// Parámetros path: id (ID de PERSONALIZACIONES).
+// Tablas: DELETE en PERSONALIZACIONES; INSERT en AUDIT_LOG.
+// Bitácora: registra id borrado.
 router.delete('/personalizaciones/:id', requireAuth, async (req, res) => {
   try {
     const usuario = req.session.user?.username || 'sistema';
@@ -180,7 +252,13 @@ router.delete('/personalizaciones/:id', requireAuth, async (req, res) => {
   } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
 });
 
-// ── PUT actualizar estatus de reporte en contrato ─────────
+// ── PUT /contratos/:contrato/reporte/:rep/estatus
+// Descripción: actualiza el estatus del proyecto (ESTATUS_PROYECTO) para una
+// combinación de contrato+reporte. Usa UPSERT (insert o update según exista).
+// Parámetros path: contrato (CLAVE_CONTRATO), rep (no se usa en esta versión).
+// Parámetros body: estatus, id_estatus_rep (ID_ESTATUS_REP).
+// Tablas: CONTRATOS_VERSION_CLIENTE (UPSERT); INSERT en AUDIT_LOG.
+// Bitácora: registra clave_contrato, id_estatus_rep, estatus.
 router.put('/contratos/:contrato/reporte/:rep/estatus', requireAuth, async (req, res) => {
   try {
     const { estatus, id_estatus_rep } = req.body;
@@ -199,7 +277,13 @@ router.put('/contratos/:contrato/reporte/:rep/estatus', requireAuth, async (req,
   } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
 });
 
-// ── GET/PUT estatus proyecto de validaciones por contrato ──
+// ── GET /contratos/:clave/validacion-estatus
+// Descripción: obtiene mapa de estatus de proyecto de validaciones
+// (ESTATUS_PROYECTO) para un contrato, agrupado por clave_validacion|clave_plataforma.
+// Parámetros path: clave (CLAVE_CONTRATO).
+// Parámetros query: clave_validacion, clave_plataforma, version_carga (filtros opcionales).
+// Tablas: CONTRATOS_VALIDACION_ESTATUS.
+// Sin bitácora (consulta de solo lectura).
 router.get('/contratos/:clave/validacion-estatus', requireAuth, async (req, res) => {
   try {
     const { clave_validacion, clave_plataforma, version_carga } = req.query;
@@ -214,6 +298,13 @@ router.get('/contratos/:clave/validacion-estatus', requireAuth, async (req, res)
   } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
 });
 
+// ── PUT /contratos/:clave/validacion-estatus
+// Descripción: actualiza el estatus del proyecto para una validación específica
+// dentro de un contrato (UPSERT: inserta si no existe, actualiza si existe).
+// Parámetros path: clave (CLAVE_CONTRATO).
+// Parámetros body: clave_validacion, clave_plataforma, version_carga, estatus_proyecto.
+// Tablas: CONTRATOS_VALIDACION_ESTATUS; INSERT en AUDIT_LOG.
+// Bitácora: registra todos los parámetros + acción (ESTATUS_PROYECTO_VAL).
 router.put('/contratos/:clave/validacion-estatus', requireAuth, async (req, res) => {
   try {
     const { clave_validacion, clave_plataforma, version_carga, estatus_proyecto } = req.body;
@@ -229,7 +320,13 @@ router.put('/contratos/:clave/validacion-estatus', requireAuth, async (req, res)
   } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
 });
 
-// ── GET versión de validaciones del cliente por contrato+rep
+// ── GET /contratos/:clave/validacion-cliente
+// Descripción: obtiene la VERSION_CARGA de validaciones marcadas como "del cliente"
+// para un contrato y reporte base.
+// Parámetros path: clave (CLAVE_CONTRATO).
+// Parámetros query: clave_rep (CLAVE_REP base del reporte).
+// Tablas: CONTRATOS_VALIDACION_CLIENTE.
+// Sin bitácora (consulta de solo lectura).
 router.get('/contratos/:clave/validacion-cliente', requireAuth, async (req, res) => {
   try {
     const { clave_rep } = req.query;
@@ -242,7 +339,13 @@ router.get('/contratos/:clave/validacion-cliente', requireAuth, async (req, res)
   } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
 });
 
-// ── PUT marcar versión de validaciones del cliente ─────────
+// ── PUT /contratos/:clave/validacion-cliente
+// Descripción: marca o desmarca una versión de validaciones como "del cliente"
+// (UPSERT si version_carga viene, DELETE si no viene).
+// Parámetros path: clave (CLAVE_CONTRATO).
+// Parámetros body: clave_rep (CLAVE_REP), version_carga (VERSION_CARGA o null para desmarcar).
+// Tablas: CONTRATOS_VALIDACION_CLIENTE (UPSERT o DELETE); INSERT en AUDIT_LOG.
+// Bitácora: registra clave_contrato, clave_rep, version_carga.
 router.put('/contratos/:clave/validacion-cliente', requireAuth, async (req, res) => {
   try {
     const { clave_rep, version_carga } = req.body;
@@ -262,7 +365,11 @@ router.put('/contratos/:clave/validacion-cliente', requireAuth, async (req, res)
   } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
 });
 
-// ── CONTRATOS por cliente ─────────────────────────────────
+// ── GET /clientes/:clave/contratos
+// Descripción: lista de contratos asociados a un cliente.
+// Parámetros path: clave (CLAVE_CLIENTE).
+// Tablas: CONTRATOS.
+// Sin bitácora (consulta de solo lectura).
 router.get('/clientes/:clave/contratos', requireAuth, async (req, res) => {
   try {
     const rows = await query(`
@@ -273,7 +380,16 @@ router.get('/clientes/:clave/contratos', requireAuth, async (req, res) => {
   } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
 });
 
-// ── REPORTES por contrato + estatus ──────────────────────
+// ── GET /contratos/:clave/reportes
+// Descripción: lista de reportes (CLAVE_REP) asignados a un contrato, con sus
+// estatus y hitos (DOCUMENTADO/PROGRAMADO/CERTIFICADO) de ESTATUS_REPORTE.
+// Parámetros path: clave (CLAVE_CONTRATO).
+// Parámetros query: version_cliente (opcional: filtrar por VERSION_CLIENTE 0 o 1).
+// Tablas: CONTRATOS_REPORTES, ESTATUS_REPORTE, INVENTARIO_REPORTES (LEFT JOIN),
+//         CONTRATOS_VERSION_CLIENTE (LEFT JOIN).
+// Validaciones: si version_cliente='1' solo reportes con VERSION_CLIENTE=1;
+//               si version_cliente='0' solo sin VERSION_CLIENTE.
+// Sin bitácora (consulta de solo lectura).
 router.get('/contratos/:clave/reportes', requireAuth, async (req, res) => {
   try {
     const { version_cliente } = req.query;
@@ -318,20 +434,31 @@ router.get('/contratos/:clave/reportes', requireAuth, async (req, res) => {
   } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
 });
 
-// ── VALIDACIONES por contrato ─────────────────────────────
+// ── GET /contratos/:clave/validaciones
+// Descripción: lista de validaciones de un contrato, deducidas de los reportes
+// asignados al contrato. Usa cache en memoria para optimizar búsqueda en 431k filas.
+// Lógica: (1) Obtiene CLAVE_REP base del contrato; (2) consulta cache de REPORTE_VALIDACION
+// para CLAVE_REP exactas O con sufijo _AÑO (ej: "ACLME_2024" → "ACLME"); (3) devuelve
+// validaciones que coinciden con esos reportes base.
+// Parámetros path: clave (CLAVE_CONTRATO).
+// Tablas: CONTRATOS_REPORTES, cache de REPORTE_VALIDACION.
+// Sin bitácora (consulta de solo lectura).
+// Paso 1: obtener CLAVE_REP base del contrato.
 router.get('/contratos/:clave/validaciones', requireAuth, async (req, res) => {
   try {
-    // Paso 1: CLAVE_REP base del contrato
     const claves = await query(`
       SELECT DISTINCT CLAVE_REP FROM CONTRATOS_REPORTES
       WHERE CLAVE_CONTRATO=${esc(req.params.clave)}
     `);
     if (!claves.length) return res.json({ ok: true, data: [] });
 
-    // Paso 2: todos los CLAVE_REP distintos de REPORTE_VALIDACION (usa cache en memoria)
+    // Paso 2: obtener todos los CLAVE_REP distintos de REPORTE_VALIDACION (cache en memoria).
+    // Evita scan lento de 431k filas cada vez.
     const todosRV = await getRVClaves();
 
-    // Paso 3: filtrar en JS cuáles versiones corresponden a las bases del contrato
+    // Paso 3: filtrar en JS cuáles CLAVE_REP de validaciones corresponden a los
+    // reportes base del contrato. Soporta sufijo _AÑO: si la base es "ACLME",
+    // también cuenta "ACLME_2024" porque quita el sufijo (_2024) y compara el prefijo.
     const baseSet = new Set(claves.map(r => r.CLAVE_REP));
     const matched = todosRV.filter(c => {
         if (baseSet.has(c)) return true;          // coincidencia exacta
@@ -341,7 +468,8 @@ router.get('/contratos/:clave/validaciones', requireAuth, async (req, res) => {
 
     if (!matched.length) return res.json({ ok: true, data: [] });
 
-    // Paso 4: IN con los claves exactos → rápido aunque no haya índice
+    // Paso 4: construir lista IN con los claves exactos y consultar validaciones.
+    // Rápido porque es IN directo, aunque no haya índice full-text.
     const inList = matched.map(c => `'${c.replace(/'/g, "''")}'`).join(',');
     const rows = await query(`
       SELECT
@@ -359,8 +487,11 @@ router.get('/contratos/:clave/validaciones', requireAuth, async (req, res) => {
   }
 });
 
-// ── VALIDACIONES por cliente (opcional: filtro por CLAVE_CLIENTE) ────────────
-// ── REPORTES (CLAVE_REP base) por cliente ────────────────
+// ── GET /clientes/:clave/reportes
+// Descripción: lista de reportes base (CLAVE_REP) contratados por un cliente.
+// Parámetros path: clave (CLAVE_CLIENTE).
+// Tablas: CONTRATOS_REPORTES, CONTRATOS.
+// Sin bitácora (consulta de solo lectura).
 router.get('/clientes/:clave/reportes', requireAuth, async (req, res) => {
   try {
     const rows = await query(`
@@ -374,20 +505,30 @@ router.get('/clientes/:clave/reportes', requireAuth, async (req, res) => {
   } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
 });
 
-// ── VALIDACIONES por cliente, filtradas por reporte ───────
-// ?rep=CLAVE_REP_BASE → solo ese reporte (recomendado, rápido)
-// sin ?rep            → todos los reportes del cliente (lento si hay muchos)
+// ── GET /clientes/:clave/validaciones
+// Descripción: lista de validaciones de un cliente, con filtros opcionales
+// por reporte base y versión de carga. Incluye nombre único para UI (cliente_validacion).
+// Parámetros path: clave (CLAVE_CLIENTE o 'todos' para todos los clientes).
+// Parámetros query: rep (CLAVE_REP base, recomendado para rapidez),
+//                   version_carga (filtro adicional por versión).
+// Tablas: CLIENTE, CONTRATOS, REPORTE_VALIDACION, INVENTARIO_VALIDACIONES (LEFT JOIN).
+// Cache: usa getRVClaves() para optimizar búsqueda de reportes con sufijo _AÑO.
+// Sin bitácora (consulta de solo lectura).
+// Lógica de ejecución:
+//   1. Si viene ?rep: consulta ese reporte exacto (rápido).
+//   2. Si no: obtiene todos los reportes del cliente (más lento si hay muchos).
+//   3. En ambos casos, aplica filtro de plataformas contratadas y versión_carga.
 router.get('/clientes/:clave/validaciones', requireAuth, async (req, res) => {
   try {
     const claveCliente = req.params.clave;
-    const repFiltro       = req.query.rep || null; // CLAVE_REP base opcional
-    const versionCargaFiltro = req.query.version_carga || null; // filtrar por VERSION_CARGA
-    const esTodos = claveCliente === 'todos';
+    const repFiltro       = req.query.rep || null; // CLAVE_REP base (opcional, mejora rendimiento).
+    const versionCargaFiltro = req.query.version_carga || null; // filtro adicional por VERSION_CARGA.
+    const esTodos = claveCliente === 'todos';  // verdadero si es búsqueda global sin cliente.
 
-    // -- Nombre del cliente + plataformas contratadas
+    // Obtener nombre del cliente y plataformas que ha contratado (para filtro en validaciones).
     let nombreCliente = '';
-    let platFilter = ''; // AND rv.CLAVE_PLATAFORMA IN (...)
-    if (!esTodos) {
+    let platFilter = ''; // Filtro SQL: AND rv.CLAVE_PLATAFORMA IN (...)
+    if (!esTodos) {  // Si no es búsqueda global, obtener datos específicos del cliente.
       const [cli] = await query(`SELECT NOMBRE_CLIENTE FROM CLIENTE WHERE CLAVE_CLIENTE=${esc(claveCliente)}`);
       if (!cli) return res.json({ ok: true, data: [], cliente: '' });
       nombreCliente = cli.NOMBRE_CLIENTE;
@@ -403,11 +544,13 @@ router.get('/clientes/:clave/validaciones', requireAuth, async (req, res) => {
       }
     }
 
-    // -- Si viene filtro por reporte, úsalo directo (evita cache + IN grande)
+    // Rama 1: si viene ?rep (filtro por reporte base), consultar solo ese reporte.
+    // Ventaja: rápido, evita IN gigante. Desventaja: usuario debe saber la clave.
     let rows;
     if (repFiltro) {
       const base = repFiltro.replace(/'/g, "''");
       const todosRV = await getRVClaves();
+      // Buscar CLAVE_REP exactas Y con sufijo _AÑO (ej: "ACLME" y "ACLME_2024").
       const matched = todosRV.filter(c =>
         c === base || (c.lastIndexOf('_') > 0 && c.slice(0, c.lastIndexOf('_')) === base)
       );
@@ -427,8 +570,8 @@ router.get('/clientes/:clave/validaciones', requireAuth, async (req, res) => {
         ORDER BY rv.CLAVE_REP, rv.CLAVE_VALIDACION
       `);
     } else {
-      // -- Sin filtro: todos los reportes del cliente (puede ser lento)
-      const clavesBQ = esTodos
+      // Rama 2: sin ?rep. Obtener todos los reportes del cliente o globales (más lento si hay muchos).
+      const clavesBQ = esTodos  // Si es búsqueda global, traer todos los reportes; si no, solo los del cliente.
         ? await query(`SELECT DISTINCT CLAVE_REP FROM CONTRATOS_REPORTES`)
         : await query(`
             SELECT DISTINCT cr.CLAVE_REP
@@ -465,7 +608,9 @@ router.get('/clientes/:clave/validaciones', requireAuth, async (req, res) => {
       `);
     }
 
-    // -- Agregar CLAVE_UNICA solo cuando hay cliente seleccionado
+    // Formatear resultado: agregar CLAVE_UNICA (nombre único para UI).
+    // Si es búsqueda global (esTodos), usa solo CLAVE_VALIDACION;
+    // si es cliente específico, prefija cliente + validación para evitar colisiones.
     const data = rows.map(r => ({
       ...r,
       CLAVE_UNICA: esTodos ? r.CLAVE_VALIDACION : `${nombreCliente}_${r.CLAVE_VALIDACION}`
@@ -478,7 +623,13 @@ router.get('/clientes/:clave/validaciones', requireAuth, async (req, res) => {
   }
 });
 
-// ── GET versiones de carga para un reporte (para dropdown) ─
+// ── GET /estatus-reporte/versiones
+// Descripción: lista de versiones de carga (VERSION_CARGA) para un reporte,
+// usada en dropdowns para seleccionar qué versión actualizar.
+// Parámetros query: clave_rep (CLAVE_REP, requerido), clave_plataforma (opcional).
+// Tablas: INVENTARIO_REPORTES_HIST, ESTATUS_REPORTE, INVENTARIO_REPORTES (UNION).
+// Lógica: combina versiones de tres tablas para cobertura completa.
+// Sin bitácora (consulta de solo lectura).
 router.get('/estatus-reporte/versiones', requireAuth, async (req, res) => {
   try {
     const clave = (req.query.clave_rep || '').trim();
@@ -505,9 +656,15 @@ router.get('/estatus-reporte/versiones', requireAuth, async (req, res) => {
   } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
 });
 
-// ── GET búsqueda por serie en ESTATUS_REPORTE ──────────────
-// Devuelve todas las combinaciones reporte+plataforma+versión que coincidan
-// con la serie/texto (ej. "ACLME") para agregarlas en bulk a la lista de marcado
+// ── GET /estatus-reporte/buscar-serie
+// Descripción: búsqueda por serie/texto (ej. "ACLME") en ESTATUS_REPORTE,
+// devolviendo todas las combinaciones reporte+plataforma+versión que coincidan.
+// Útil para marcar/desmarcar en bulk todos los reportes de una serie regulatoria.
+// Parámetros query: q (texto de búsqueda, mín 2 caracteres).
+// Tablas: ESTATUS_REPORTE, INVENTARIO_REPORTES (LEFT JOIN OUTER APPLY).
+// Búsqueda: LIKE en CLAVE_REP, CLAVE_REP_GENERAL, DESCRIPCION_ESP.
+// Límite: TOP 300 resultados.
+// Sin bitácora (consulta de solo lectura).
 router.get('/estatus-reporte/buscar-serie', requireAuth, async (req, res) => {
   try {
     const q = (req.query.q || '').trim();
@@ -532,7 +689,13 @@ router.get('/estatus-reporte/buscar-serie', requireAuth, async (req, res) => {
   } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
 });
 
-// ── GET versiones de carga para validaciones de un reporte ─
+// ── GET /estatus-validacion/versiones
+// Descripción: lista de versiones de carga (VERSION_CARGA) para validaciones
+// de un reporte base.
+// Parámetros query: clave_rep (CLAVE_REP, requerido).
+// Tablas: REPORTE_VALIDACION (con sufijo _AÑO soportado).
+// Lógica: obtiene CLAVE_REP exactas y con sufijo _AÑO (ej: "ACLME_2024" si busca "ACLME").
+// Sin bitácora (consulta de solo lectura).
 router.get('/estatus-validacion/versiones', requireAuth, async (req, res) => {
   try {
     const clave = (req.query.clave_rep || '').trim();
@@ -553,7 +716,11 @@ router.get('/estatus-validacion/versiones', requireAuth, async (req, res) => {
   } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
 });
 
-// ── GET estatus de un reporte ─────────────────────────────
+// ── GET /estatus-reporte/:clave
+// Descripción: obtiene todos los registros de ESTATUS_REPORTE para una CLAVE_REP.
+// Parámetros path: clave (CLAVE_REP).
+// Tablas: ESTATUS_REPORTE.
+// Sin bitácora (consulta de solo lectura).
 router.get('/estatus-reporte/:clave', requireAuth, async (req, res) => {
   try {
     const rows = await query(`
@@ -563,7 +730,15 @@ router.get('/estatus-reporte/:clave', requireAuth, async (req, res) => {
   } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
 });
 
-// ── Helper: insertar en AUDIT_LOG ────────────────────────
+// ── Helper: auditLog(usuario, seccion, accion, detalle)
+// Propósito: registra cambios en la tabla AUDIT_LOG para trazabilidad.
+// Parámetros:
+//   - usuario: nombre de usuario que hace el cambio.
+//   - seccion: área/módulo (ej: 'estatus-reporte', 'contratos', 'inventario-reportes').
+//   - accion: tipo de cambio (ej: 'MARCAR', 'DESMARCAR', 'UPLOAD', 'ESTATUS').
+//   - detalle: objeto JS con datos del cambio (se convierte a JSON).
+// Nota: los cambios críticos incluyen 'antes' y 'despues' para auditoría completa.
+// Excepción: si AUDIT_LOG falla, no bloquea el flujo (silencio, pero registra en console).
 async function auditLog(usuario, seccion, accion, detalle) {
   try {
     const det = typeof detalle === 'object' ? JSON.stringify(detalle) : String(detalle);
@@ -574,7 +749,11 @@ async function auditLog(usuario, seccion, accion, detalle) {
   } catch(e) { /* no bloquear el flujo principal si audit falla */ }
 }
 
-// ── CLIENTES que tienen un reporte contratado ─────────────
+// ── GET /reporte/:clave/clientes
+// Descripción: lista de clientes que tienen contratado un reporte específico.
+// Parámetros path: clave (CLAVE_REP base del reporte).
+// Tablas: CONTRATOS_REPORTES, CONTRATOS, CLIENTE.
+// Sin bitácora (consulta de solo lectura).
 router.get('/reporte/:clave/clientes', requireAuth, async (req, res) => {
   try {
     const rows = await query(`
@@ -596,7 +775,12 @@ router.get('/reporte/:clave/clientes', requireAuth, async (req, res) => {
   } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
 });
 
-// ── Autocomplete de CLAVE_REP en CONTRATOS_REPORTES ──────
+// ── GET /reportes/search
+// Descripción: autocompletar CLAVE_REP de reportes asignados a contratos.
+// Parámetros query: q (texto de búsqueda).
+// Tablas: CONTRATOS_REPORTES, INVENTARIO_REPORTES (LEFT JOIN).
+// Límite: TOP 20 resultados.
+// Sin bitácora (consulta de solo lectura).
 router.get('/reportes/search', requireAuth, async (req, res) => {
   try {
     const q = (req.query.q || '').replace(/'/g, "''");
@@ -611,7 +795,13 @@ router.get('/reportes/search', requireAuth, async (req, res) => {
   } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
 });
 
-// ── GET bitácora de movimientos ───────────────────────────
+// ── GET /bitacora
+// Descripción: lista de cambios registrados en AUDIT_LOG con filtros opcionales.
+// Parámetros query: usuario, seccion, desde (fecha inicio), hasta (fecha fin),
+//                   limit (máximo registros, default 100).
+// Tablas: AUDIT_LOG.
+// Respuesta incluye: registros + lista de usuarios únicos (para filtros dinámicos).
+// Sin bitácora (consulta de solo lectura, aunque lee la bitácora).
 router.get('/bitacora', requireAuth, async (req, res) => {
   try {
     const { usuario, seccion, desde, hasta, limit = 100 } = req.query;
@@ -635,9 +825,28 @@ router.get('/bitacora', requireAuth, async (req, res) => {
   } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
 });
 
-// ── PUT actualizar estatus de reporte ─────────────────────
-// Body: { clave_rep, clave_plataforma, etapa, fecha }
-// etapa: 'DOCUMENTADO' | 'PROGRAMADO' | 'CERTIFICADO'
+// ── PUT /estatus-reporte
+// Descripción: actualiza los hitos (DOCUMENTADO/PROGRAMADO/CERTIFICADO) de un reporte,
+// con cascada automática (marcar CERTIFICADO = marcar DOC+PROG+CERT;
+// desmarcar DOC = desmarcar los 3). Implementa dos candados contra bugs históricos:
+//   1. Candado 404: si viene ID y el registro ya no existe, retorna error en lugar de silencio.
+//   2. Candado 409: si actualiza por clave+plataforma sin versión y hay varias versiones,
+//      pide confirmación (confirmar_todas:true) para evitar planchar versiones históricas.
+// Parámetros body:
+//   - clave_rep, clave_plataforma: identifican el reporte.
+//   - etapa: 'DOCUMENTADO'|'PROGRAMADO'|'CERTIFICADO' (hito a marcar/desmarcar).
+//   - desmarcar: true para desmarcar (en lugar de marcar).
+//   - version: VERSION_CARGA para actualizar solo esa versión (recomendado).
+//   - id_estatus_rep: ID_ESTATUS_REP (si viene, actualiza directamente por ID).
+//   - confirmar_todas: true para forzar UPDATE en todas las versiones (peligro: solicitar confirmación primero).
+// Tablas: ESTATUS_REPORTE, INVENTARIO_REPORTES, CAT_REPORTES_GENERALES, AUDIT_LOG.
+// Validaciones críticas:
+//   - Si id_estatus_rep: foto "antes" de esa fila, UPDATE directo, bitácora con antes/después.
+//   - Si sin id pero existe el par (clave_rep+plataforma):
+//     * Si hay varias versiones y sin confirmar_todas → 409 con lista de versiones.
+//     * Si confirmado o versión especificada → UPDATE todas/la especificada.
+//   - Si no existe nada → INSERT alta nueva (también en INVENTARIO_VERSIONES si es la primera).
+// Bitácora: registra antes/después (foto de filas), filas_afectadas, version, confirmación si aplica.
 router.put('/estatus-reporte', requireAuth, async (req, res) => {
   try {
     const { clave_rep, clave_plataforma, etapa, fecha, desmarcar, version, id_estatus_rep } = req.body;
@@ -645,8 +854,15 @@ router.put('/estatus-reporte', requireAuth, async (req, res) => {
     const fechaVal      = fecha ? esc(fecha) : 'GETDATE()';
     const versionFilter = version ? ` AND VERSION_CARGA=${esc(version)}` : '';
 
-    // Cascada MARCAR:    CERT→doc+prog+cert | PROG→doc+prog | DOC→doc
-    // Cascada DESMARCAR: DOC→los3           | PROG→prog+cert | CERT→cert
+    // ── Cascada de hitos (regla de negocio) ──
+    // MARCAR (desmarcar=false):
+    //   - Si DOC:  DOCUMENTADO=SI, PROGRAMADO=NO, CERTIFICADO=NO, ESTATUS='DOCUMENTADO'.
+    //   - Si PROG: DOCUMENTADO=SI, PROGRAMADO=SI, CERTIFICADO=NO, ESTATUS='PROGRAMADO'.
+    //   - Si CERT: DOCUMENTADO=SI, PROGRAMADO=SI, CERTIFICADO=SI, ESTATUS='CERTIFICADO'.
+    // DESMARCAR (desmarcar=true):
+    //   - Si DOC:  limpia todo (los 3 pasan a NO).
+    //   - Si PROG: desactiva PROG+CERT (quedan en NO), DOCUMENTADO=SI, ESTATUS='DOCUMENTADO'.
+    //   - Si CERT: desactiva CERT (pasa a NO), resto=SI, ESTATUS='PROGRAMADO'.
     let docVal, progVal, certVal, nuevoEstatus;
     if (desmarcar) {
       docVal       = etapa === 'DOCUMENTADO' ? "'NO'" : "'SI'";
@@ -667,13 +883,16 @@ router.put('/estatus-reporte', requireAuth, async (req, res) => {
       CERTIFICADO: certVal.replace(/'/g, ''), ESTATUS: nuevoEstatus
     };
 
-    // Si viene ID, actualizar directamente por ID (evita crear duplicados)
+    // Rama 1: si viene ID_ESTATUS_REP, actualizar directamente por ID (seguro, evita duplicados).
+    // Ventaja: rápido y preciso. Desventaja: requiere que el cliente sepa el ID.
     if (id_estatus_rep) {
+      // Foto "antes" de la fila que se va a tocar (para bitácora).
       const antesRows = await query(`
         SELECT ID_ESTATUS_REP, VERSION_CARGA, DOCUMENTADO, PROGRAMADO, CERTIFICADO, ESTATUS
         FROM ESTATUS_REPORTE WHERE ID_ESTATUS_REP=${parseInt(id_estatus_rep)}
       `);
-      // Candado: si el ID ya no existe, avisar en lugar de regresar un falso éxito
+      // Candado 404: si el ID ya no existe (ej: borrado por otro usuario),
+      // retorna error en lugar de silencio (esto evita confusión sobre qué pasó).
       if (!antesRows.length) {
         return res.status(404).json({
           ok: false,
@@ -694,6 +913,9 @@ router.put('/estatus-reporte', requireAuth, async (req, res) => {
       return res.json({ ok: true });
     }
 
+    // Rama 2: sin ID, buscar por clave_rep+plataforma (y opcionalmente version).
+    // Primero verificar si existe exactamente con la versión indicada, y además
+    // si existen otras versiones de ese par (para candado de confirmación).
     const existeExacto = await query(`
       SELECT 1 FROM ESTATUS_REPORTE
       WHERE CLAVE_REP=${esc(clave_rep)} AND CLAVE_PLATAFORMA=${esc(clave_plataforma)}${versionFilter}
@@ -703,15 +925,17 @@ router.put('/estatus-reporte', requireAuth, async (req, res) => {
       WHERE CLAVE_REP=${esc(clave_rep)} AND CLAVE_PLATAFORMA=${esc(clave_plataforma)}
     `);
 
+    // Rama 2.1: registros existen (exacto o general sin versionFilter).
     if (existeExacto.length || (!versionFilter && existeGeneral.length)) {
-      // Foto "antes" de las filas que se van a tocar (para bitácora)
+      // Foto "antes" de las filas que se van a tocar (para bitácora).
       const antesRows = await query(`
         SELECT ID_ESTATUS_REP, VERSION_CARGA, DOCUMENTADO, PROGRAMADO, CERTIFICADO, ESTATUS
         FROM ESTATUS_REPORTE
         WHERE CLAVE_REP=${esc(clave_rep)} AND CLAVE_PLATAFORMA=${esc(clave_plataforma)}${versionFilter}
       `);
-      // Candado: sin versión y con varias versiones en el par → pedir confirmación
-      // explícita antes de tocar todas (evita planchar flags de versiones históricas).
+      // Candado 409: sin versión especificada Y con varias versiones en el par →
+      // pedir confirmación explícita (confirmar_todas:true) antes de actualizar todas.
+      // Esto evita el bug histórico donde se planchaba VERSION_CARGA de versiones antiguas.
       if (!versionFilter && antesRows.length > 1 && !req.body.confirmar_todas) {
         const versiones = antesRows.map(a => a.VERSION_CARGA == null ? 'NULL' : String(a.VERSION_CARGA).trim());
         return res.status(409).json({
@@ -732,14 +956,15 @@ router.put('/estatus-reporte', requireAuth, async (req, res) => {
           filas_afectadas: antesRows.length, antes: antesRows.slice(0, 20), despues });
       return res.json({ ok: true });
     } else if (existeGeneral.length) {
-      // La versión indicada NO existe para esa plataforma.
-      // Antes aquí se reasignaba VERSION_CARGA a todos los registros de la
-      // clave+plataforma (planchaba versiones de otras plataformas). Ahora se rechaza.
+      // Rama 2.2 (error): registros existen para clave_rep+plataforma, pero NO
+      // con la versión especificada. En lugar de crear un fantasma o planchar,
+      // se rechaza con error 400 (comportamiento seguro post-bug).
       return res.status(400).json({
         ok: false,
         message: `La versión ${version} no existe para ${clave_rep} en ${clave_plataforma}. No se modificó nada.`
       });
     } else {
+      // Rama 2.3: alta nueva (no existe el par clave_rep+plataforma).
       const invRow = await query(`SELECT CLAVE_REP_GENERAL FROM INVENTARIO_REPORTES WHERE CLAVE_REP=${esc(clave_rep)}`);
       const claveRepGeneral = invRow.length ? invRow[0].CLAVE_REP_GENERAL : clave_rep;
       // Auto-insertar en CAT_REPORTES_GENERALES si no existe
@@ -761,10 +986,12 @@ router.put('/estatus-reporte', requireAuth, async (req, res) => {
   } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
 });
 
-// ── PUT actualizar estatus de validación ──────────────────
-// Cascada MARCAR:    DOC→doc | PROG→doc+prog | CERT→doc+prog+cert
-// Cascada DESMARCAR: DOC→los 3 | PROG→prog+cert | CERT→cert
-// ── PUT actualizar estatus secuencial de validación ───────
+// ── PUT /estatus-validacion/estatus
+// Descripción: actualiza el ESTATUS secuencial (texto libre) de una validación,
+// sin afectar las banderas DOCUMENTADO/PROGRAMADO/CERTIFICADO.
+// Parámetros body: clave_validacion, clave_plataforma, estatus, version (opcional).
+// Tablas: REPORTE_VALIDACION (UPDATE estatus + fechas); AUDIT_LOG.
+// Sin cascada de hitos (solo actualiza ESTATUS + USER_ESTATUS + FECHA_ESTATUS).
 router.put('/estatus-validacion/estatus', requireAuth, async (req, res) => {
   try {
     const { clave_validacion, clave_plataforma, estatus, version } = req.body;
@@ -789,14 +1016,31 @@ router.put('/estatus-validacion/estatus', requireAuth, async (req, res) => {
   } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
 });
 
+// ── PUT /estatus-validacion
+// Descripción: actualiza los hitos (DOCUMENTADO/PROGRAMADO/CERTIFICADO) de una validación,
+// con cascada automática similar a reportes (marcar CERT = marcar DOC+PROG+CERT).
+// Parámetros body:
+//   - clave_validacion, clave_rep, clave_plataforma: identifican la validación.
+//   - etapa: 'DOCUMENTADO'|'PROGRAMADO'|'CERTIFICADO'|'IDENTIFICADO' (últi retorna a inicial).
+//   - desmarcar: true para desmarcar (en lugar de marcar).
+//   - fecha: fecha personalizada (default: GETDATE()).
+// Tablas: REPORTE_VALIDACION (UPSERT); AUDIT_LOG.
+// Cascada de hitos (con banderas 'S'/'N' en lugar de 'SI'/'NO'):
+//   - MARCAR DOC: DOCUMENTADO='S', PROGRAMADO='N', CERTIFICADO='N'.
+//   - MARCAR PROG: DOCUMENTADO='S', PROGRAMADO='S', CERTIFICADO='N'.
+//   - MARCAR CERT: DOCUMENTADO='S', PROGRAMADO='S', CERTIFICADO='S'.
+//   - DESMARCAR: opuesto (limpia flags inferiores).
+//   - IDENTIFICADO: limpia todo, ESTATUS='NO DOCUMENTADO' (regresa a inicial).
+// Bitácora: registra cambios (sin "antes/después" detallado, solo parámetros).
 router.put('/estatus-validacion', requireAuth, async (req, res) => {
   try {
     const { clave_validacion, clave_rep, clave_plataforma, etapa, fecha, desmarcar } = req.body;
     const usuario  = req.session.user?.username || 'sistema';
     const fechaVal = fecha ? esc(fecha) : 'GETDATE()';
 
+    // Cascada de hitos para validaciones (similar a reportes, pero con 'S'/'N').
     let docVal, progVal, certVal, nuevoEstatus;
-    if (etapa === 'IDENTIFICADO') {
+    if (etapa === 'IDENTIFICADO') {  // Retornar a inicial (limpia todo).
       // Regresa al estado inicial: limpia todo
       docVal = "'N'"; progVal = "'N'"; certVal = "'N'";
       nuevoEstatus = 'NO DOCUMENTADO';
@@ -847,7 +1091,12 @@ router.put('/estatus-validacion', requireAuth, async (req, res) => {
   } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
 });
 
-// ── GET validaciones de un reporte (para bulk update) ────────────────────
+// ── GET /validaciones-por-reporte
+// Descripción: lista de validaciones de un reporte (para bulk update de hitos).
+// Parámetros query: rep (CLAVE_REP, requerido), plataforma (CLAVE_PLATAFORMA, opcional).
+// Tablas: REPORTE_VALIDACION, INVENTARIO_VALIDACIONES (LEFT JOIN).
+// Lógica: soporta sufijo _AÑO (ej: "ACLME_2024" si busca "ACLME").
+// Sin bitácora (consulta de solo lectura).
 router.get('/validaciones-por-reporte', requireAuth, async (req, res) => {
   try {
     const { rep, plataforma } = req.query;
@@ -872,7 +1121,19 @@ router.get('/validaciones-por-reporte', requireAuth, async (req, res) => {
   } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
 });
 
-// ── PUT bulk update de validaciones ──────────────────────────────────────
+// ── PUT /estatus-validacion-bulk
+// Descripción: actualiza hitos de múltiples validaciones en paralelo (bulk).
+// Parámetros body:
+//   - claves: array de CLAVE_VALIDACION (requerido).
+//   - clave_rep: CLAVE_REP base.
+//   - clave_plataforma: CLAVE_PLATAFORMA (común para todas).
+//   - etapa: 'DOCUMENTADO'|'PROGRAMADO'|'CERTIFICADO'|'IDENTIFICADO'.
+//   - desmarcar: true para desmarcar.
+//   - version: VERSION_CARGA (opcional, filtro para validación).
+//   - fecha: fecha personalizada (default: GETDATE()).
+// Tablas: REPORTE_VALIDACION (UPDATE o INSERT); AUDIT_LOG.
+// Lógica: loop por cada validación, UPDATE si existe, INSERT si no (y no es IDENTIFICADO+desmarcar).
+// Bitácora: registra acción MARCAR_BULK|DESMARCAR_BULK con total y cantidad actualizada.
 router.put('/estatus-validacion-bulk', requireAuth, async (req, res) => {
   try {
     const { claves, clave_rep, clave_plataforma, etapa, fecha, desmarcar, version } = req.body;
@@ -932,7 +1193,12 @@ router.put('/estatus-validacion-bulk', requireAuth, async (req, res) => {
   } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
 });
 
-// ── GET búsqueda de validaciones (para autocompletar en el form) ──────────
+// ── GET /buscar-validacion
+// Descripción: autocompletar validaciones por CLAVE_VALIDACION o DESCRIPCION.
+// Parámetros query: q (texto de búsqueda, mín 2 caracteres).
+// Tablas: REPORTE_VALIDACION.
+// Límite: TOP 10 resultados.
+// Sin bitácora (consulta de solo lectura).
 router.get('/buscar-validacion', requireAuth, async (req, res) => {
   const q = (req.query.q || '').trim().replace(/'/g, "''");
   if (q.length < 2) return res.json({ ok: true, data: [] });
@@ -947,7 +1213,15 @@ router.get('/buscar-validacion', requireAuth, async (req, res) => {
   } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
 });
 
-// ── POST check inventario reportes ────────────────────────
+// ── POST /inventario-reportes/check
+// Descripción: valida qué reportes/versiones de un Excel ya existen en BD,
+// para preparar la carga y avisar al usuario sobre duplicados.
+// Parámetros body:
+//   - pares: array de {clave_rep, version} a verificar.
+//   - claves_entidad: array de CLAVE_ENTIDADREGULADA a validar contra catálogo.
+// Tablas: INVENTARIO_REPORTES_HIST, CAT_ENTIDAD_REGULADA.
+// Respuesta: version_existe (bool), version_count, entidades_invalidas (array).
+// Sin bitácora (consulta de solo lectura).
 router.post('/inventario-reportes/check', requireAuth, async (req, res) => {
   try {
     const { pares = [], claves_entidad = [] } = req.body;
@@ -969,7 +1243,29 @@ router.post('/inventario-reportes/check', requireAuth, async (req, res) => {
   } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
 });
 
-// ── POST carga Excel inventario reportes ──────────────────
+// ── POST /inventario-reportes/upload
+// Descripción: carga masiva de reportes desde Excel con lógica robusta:
+//   1. Auto-respaldo de seguridad previo a cualquier cambio.
+//   2. Insert/Update en INVENTARIO_REPORTES (comparación campo por campo).
+//   3. Insert en INVENTARIO_REPORTES_HIST (solo nuevas combinaciones CLAVE_REP|VERSION_CARGA).
+//   4. Insert en INVENTARIO_VERSIONES (registro de qué versión existe).
+//   5. Bitácora detallada con diff de cambios (campo por campo, hasta 100 entradas).
+// Parámetros form:
+//   - archivo: file (Excel con hojas: CLAVE_REP, CLAVE_PAIS, ..., VERSION_CARGA, etc.)
+//   - version: versión global si no viene en fila (default '1.0.0').
+//   - regulacion, tipo_version, descripcion: metadata global.
+//   - versiones, tipos, descripciones: JSON maps para override por clave|plataforma.
+//   - force: 'true' para recargar versiones existentes.
+// Tablas:
+//   - INVENTARIO_REPORTES (INSERT/UPDATE), INVENTARIO_REPORTES_HIST (INSERT).
+//   - INVENTARIO_VERSIONES (INSERT), CAT_* (auto-insert de catálogos).
+//   - AUDIT_LOG (bitácora con cambios).
+// Validaciones:
+//   - Respaldo automático previo (aborta si falla, excepto si tabla no existe).
+//   - Auto-inserción en catálogos si no existen las claves.
+//   - Diff campo por campo (solo UPDATE si cambió algo).
+// Bitácora: archivo, insertados, actualizados, errores, respaldo_previo, cambios (array).
+// Respuesta: insertados, actualizados, errores, reportes, combos.
 router.post('/inventario-reportes/upload', requireAuth, upload.single('archivo'), async (req, res) => {
   if (!req.file) return res.status(400).json({ ok: false, message: 'No se recibió archivo' });
   try {
@@ -988,10 +1284,12 @@ router.post('/inventario-reportes/upload', requireAuth, upload.single('archivo')
     // Auto-detectar la fila de encabezados (soporta templates con títulos arriba)
     const rows = XLSX.utils.sheet_to_json(ws, { defval: '', range: _detectHeaderRow(ws) });
 
-    // ── Respaldo de seguridad ANTES de tocar cualquier tabla ──
-    // Solo respalda las filas de las claves que vienen en el Excel (rápido).
-    // Si las tablas *_RESPALDO no existen todavía, solo avisa y sigue;
-    // cualquier otro error de respaldo ABORTA la carga (nada se sube).
+    // ── Paso 0: Respaldo de seguridad (antes de cualquier cambio) ──
+    // Aprovecha el servicio respaldos.respaldarAntesDeCarga() para snapshot de las
+    // tablas *_RESPALDO con las claves que vienen en el Excel (rápido, no copia todo).
+    // Lógica:
+    //   - Si tabla RESPALDO no existe: avisa con warn, pero continúa (tolerante).
+    //   - Si otro error: ABORTA la carga (seguro: mejor no subir que quebrar datos).
     const clavesExcel = [...new Set(rows.map(r => String(r.CLAVE_REP || '').trim()).filter(Boolean))];
     let respaldo_previo = false;
     try {
@@ -1007,19 +1305,21 @@ router.post('/inventario-reportes/upload', requireAuth, upload.single('archivo')
     }
 
     let insertados = 0, actualizados = 0, errores = 0;
-    const combos = []; // combinaciones {CLAVE_REP, CLAVE_REP_GENERAL, PLATAFORMA, VERSION} fila por fila
-    const cambiosDetalle = []; // diff campo por campo de filas modificadas (para bitácora)
+    const combos = []; // array de {CLAVE_REP, CLAVE_REP_GENERAL, PLATAFORMA, VERSION} procesadas (para bitácora).
+    const cambiosDetalle = []; // array de diff {clave_rep, cambios: [{campo, antes, despues}]} (para bitácora).
+
+    // ── Paso 1: procesar cada fila del Excel ──
     for (const r of rows) {
       const clave = String(r.CLAVE_REP || '').trim();
-      if (!clave) continue;
+      if (!clave) continue;  // Saltar filas sin CLAVE_REP.
       const plataformaRow = String(r.PLATAFORMA || r.CLAVE_PLATAFORMA || '').trim();
-      // Resolución de versión por fila: primero clave|plataforma (edición del modal
-      // por combinación), luego clave (compatibilidad), luego versión de la propia
-      // fila del Excel, y al final la global. Así dos filas del mismo reporte con
-      // versión/plataforma distinta NO se colapsan.
+
+      // ── Resolución de versión (cascada de prioridades) ──
+      // El usuario puede especificar versión a nivel: (1) combinación exacta clave|plat|versión,
+      // (2) combinación clave|plataforma, (3) clave sola, (4) versión en la fila, (5) global.
+      // Esto permite que dos filas del mismo reporte con versión/plataforma distinta
+      // NO se colapsen (regresión: antes se sobrescribía VERSION_CARGA).
       const versionRowExcel = String(r.VERSION_CARGA || '').trim();
-      // Llaves de resolución: completa (clave|plataforma|versión original del Excel),
-      // luego clave|plataforma, luego clave sola (compatibilidad).
       const comboKey = `${clave}|${plataformaRow}`;
       const comboKeyFull = `${comboKey}|${versionRowExcel}`;
       const version = (versionesMap && (versionesMap[comboKeyFull] || versionesMap[comboKey] || versionesMap[clave]))
@@ -1027,13 +1327,16 @@ router.post('/inventario-reportes/upload', requireAuth, upload.single('archivo')
       const tipo_ver_row = (tiposMap && (tiposMap[comboKeyFull] || tiposMap[comboKey] || tiposMap[clave])) || tipo_version;
       const descripcion_row = (descripcionesMap && (descripcionesMap[comboKeyFull] || descripcionesMap[comboKey] || descripcionesMap[clave])) || descripcion;
       try {
+        // Buscar reporte existente en inventario.
         const existeInv = await query(`
           SELECT CLAVE_PAIS, CLAVE_ENTIDADREGULADA, CLAVE_REG, CLAVE_SERIE, SUBSERIE,
                  CLAVE_GRUPO, REPORTE, CLAVE_SECCION_REP, CLAVE_VERSION_REPORTE, CLAVE_PERIODO,
                  DESCRIPCION_ESP, CLAVE_FECHA_ENT_REP, CARACTERISTICAS,
                  CLAVE_REGULACION_REP, CLAVE_REP_GENERAL, FECHA_REGULACION, VERSION_CARGA
           FROM INVENTARIO_REPORTES WHERE CLAVE_REP=${esc(clave)}`);
-        // Auto-insertar en catálogos si la clave no existe (aplica a INSERT y UPDATE)
+
+        // ── Helper: auto-insertar en catálogos si no existen ──
+        // Previene errores FK al insertar reportes con claves de catálogos nuevas.
         const autoInsert = async (tabla, campoClave, campoNombre, valor) => {
           if (!valor) return;
           const existe = await query(`SELECT 1 FROM ${tabla} WHERE ${campoClave}=${esc(valor)}`);
@@ -1055,7 +1358,7 @@ router.post('/inventario-reportes/upload', requireAuth, upload.single('archivo')
         await autoInsert('CAT_REGULACION',         'CLAVE_REGULACION_REP',  'NOMBRE_REGULACION_REP', r.CLAVE_REGULACION_REP);
 
         if (!existeInv.length) {
-          // Reporte nuevo — INSERT
+          // Rama A: reporte nuevo → INSERT en INVENTARIO_REPORTES.
           await query(`
             INSERT INTO INVENTARIO_REPORTES (
               CLAVE_REP, CLAVE_PAIS, CLAVE_ENTIDADREGULADA, CLAVE_REG,
@@ -1076,10 +1379,12 @@ router.post('/inventario-reportes/upload', requireAuth, upload.single('archivo')
           `);
           insertados++;
         } else {
-          // Comparar campos fila por fila — solo UPDATE si algo cambió
+          // Rama B: reporte existente → comparar campos + UPDATE si cambió algo.
           const bd = existeInv[0];
-          const str = v => (v == null ? '' : String(v).trim());
-          // Diff campo por campo (para bitácora: qué cambió, de qué valor a qué valor)
+          const str = v => (v == null ? '' : String(v).trim());  // normalizar para comparación.
+
+          // ── Diff campo por campo (para bitácora detallada) ──
+          // Comparar los campos principales de INVENTARIO_REPORTES.
           const camposComp = ['CLAVE_PAIS','CLAVE_ENTIDADREGULADA','CLAVE_REG','CLAVE_SERIE',
             'SUBSERIE','CLAVE_GRUPO','REPORTE','CLAVE_SECCION_REP','CLAVE_VERSION_REPORTE',
             'CLAVE_PERIODO','DESCRIPCION_ESP','CLAVE_FECHA_ENT_REP','CARACTERISTICAS',
@@ -1089,9 +1394,12 @@ router.post('/inventario-reportes/upload', requireAuth, upload.single('archivo')
             .map(c => ({ campo: c, antes: str(bd[c]), despues: str(r[c]) }));
           const cambio = difs.length > 0;
 
+          // Verificar cambio de VERSION_CARGA (puede cambiar aunque otros campos no).
           const versionCambio = str(bd.VERSION_CARGA) !== str(version);
           if (versionCambio) difs.push({ campo: 'VERSION_CARGA', antes: str(bd.VERSION_CARGA), despues: str(version) });
           if (difs.length) cambiosDetalle.push({ clave_rep: clave, cambios: difs });
+
+          // ── Actualizar solo si cambió algo ──
           if (cambio) {
             await query(`
               UPDATE INVENTARIO_REPORTES SET
@@ -1108,19 +1416,22 @@ router.post('/inventario-reportes/upload', requireAuth, upload.single('archivo')
             `);
             actualizados++;
           } else if (versionCambio) {
-            // Solo cambió la versión — actualizar únicamente VERSION_CARGA
+            // Rama B.2: solo cambió VERSION_CARGA (otros campos sin cambios).
+            // Actualizar únicamente la versión para reflejar cambios menores.
             await query(`
               UPDATE INVENTARIO_REPORTES SET VERSION_CARGA=${esc(version)}, FECHA_ACTUALIZADA=GETDATE()
               WHERE CLAVE_REP=${esc(clave)}
             `);
             actualizados++;
           }
-          // Sin cambios — no toca inventario
+          // Rama B.3: sin cambios → no tocar inventario (evita timestamp innecesario).
         }
-        // Registrar en hist y versiones solo si es nueva combinación CLAVE_REP + VERSION_CARGA
+        // ── Paso 2: registrar en historial y versiones (solo si es nueva combo CLAVE_REP|VERSION_CARGA) ──
+        // INVENTARIO_REPORTES_HIST: snapshot de cada versión del reporte (auditoría de cambios).
+        // INVENTARIO_VERSIONES: registro de que existe esa versión (metadata general).
         try {
           const existeHist = await query(`SELECT 1 FROM INVENTARIO_REPORTES_HIST WHERE CLAVE_REP=${esc(clave)} AND VERSION_CARGA=${esc(version)}`);
-          if (!existeHist.length) {
+          if (!existeHist.length) {  // Si es nueva combo, insertar en ambas tablas.
             await query(`
               INSERT INTO INVENTARIO_REPORTES_HIST
                 (CLAVE_REP, VERSION_CARGA, CLAVE_PAIS, CLAVE_ENTIDADREGULADA, CLAVE_REG,
@@ -1159,7 +1470,13 @@ router.post('/inventario-reportes/upload', requireAuth, upload.single('archivo')
   } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
 });
 
-// ── POST preview de combinaciones (solo consulta, NO inserta nada) ──
+// ── POST /inventario-reportes/preview-combos
+// Descripción: valida qué combinaciones reporte+plataforma+versión existen en ESTATUS_REPORTE
+// sin hacer cambios (solo lectura, para preview antes de confirmar).
+// Parámetros body: combos (array de {clave_rep, plataforma, version}).
+// Tablas: ESTATUS_REPORTE, INVENTARIO_REPORTES.
+// Respuesta: combos (array con existe: true/false), inventario (mapa de VERSION_CARGA actuales).
+// Sin bitácora (consulta de solo lectura).
 router.post('/inventario-reportes/preview-combos', requireAuth, async (req, res) => {
   try {
     const { combos = [] } = req.body;
@@ -1195,7 +1512,14 @@ router.post('/inventario-reportes/preview-combos', requireAuth, async (req, res)
   } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
 });
 
-// ── POST asignar plataformas a reportes ───────────────────
+// ── POST /inventario-reportes/asignar-plataformas
+// Descripción: crea nuevas combinaciones reporte+plataforma+versión en ESTATUS_REPORTE
+// (asignación masiva de plataformas a reportes después de carga de inventario).
+// Parámetros body: asignaciones (array de {clave_rep, clave_rep_general, plataforma, version}).
+// Tablas: ESTATUS_REPORTE (INSERT), CAT_REPORTES_GENERALES (auto-insert si no existe).
+// Lógica: UPSERT por (CLAVE_REP, CLAVE_PLATAFORMA, VERSION_CARGA).
+//         Omite si ya existe (omitidos++).
+// Bitácora: registra creados, omitidos, combos asignadas.
 router.post('/inventario-reportes/asignar-plataformas', requireAuth, async (req, res) => {
   try {
     const { asignaciones = [] } = req.body;
@@ -1235,7 +1559,15 @@ router.post('/inventario-reportes/asignar-plataformas', requireAuth, async (req,
   } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
 });
 
-// ── POST check inventario validaciones ────────────────────
+// ── POST /inventario-validaciones/check
+// Descripción: valida qué validaciones/versiones de un Excel ya existen en BD.
+// Parámetros body:
+//   - version: VERSION_CARGA a verificar (requerida).
+//   - claves_rep: array de CLAVE_REP a validar (opcional).
+//   - claves_validacion: array de CLAVE_VALIDACION a verificar (opcional).
+// Tablas: INVENTARIO_VERSIONES, INVENTARIO_REPORTES.
+// Respuesta: version_existe, version_count, claves_rep_invalidas.
+// Sin bitácora (consulta de solo lectura).
 router.post('/inventario-validaciones/check', requireAuth, async (req, res) => {
   try {
     const { version, claves_rep = [], claves_validacion = [] } = req.body;
@@ -1261,7 +1593,25 @@ router.post('/inventario-validaciones/check', requireAuth, async (req, res) => {
   } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
 });
 
-// ── POST carga Excel inventario validaciones ───────────────
+// ── POST /inventario-validaciones/upload
+// Descripción: carga masiva de validaciones desde Excel con lógica robusta:
+//   1. Lectura de filas y normalización.
+//   2. Batch INSERT en INVENTARIO_VALIDACIONES (nuevas claves).
+//   3. Batch UPDATE en INVENTARIO_VALIDACIONES (claves existentes).
+//   4. Batch INSERT en INVENTARIO_VALIDACIONES_HIST (nuevas combos).
+//   5. Batch INSERT en INVENTARIO_VERSIONES (si force=true, DELETE primero).
+// Parámetros form:
+//   - archivo: file (Excel con CLAVE_VALIDACION, CLAVE_REP, ...).
+//   - version: VERSION_CARGA (default '1.0.0').
+//   - regulacion, tipo_version, descripcion: metadata.
+//   - force: 'true' para recargar versiones (DELETE + INSERT en INVENTARIO_VERSIONES).
+// Tablas:
+//   - INVENTARIO_VALIDACIONES (INSERT/UPDATE batch).
+//   - INVENTARIO_VALIDACIONES_HIST (INSERT batch).
+//   - INVENTARIO_VERSIONES (INSERT batch, DELETE opcional).
+// Chunk size: 200 filas por batch (balance entre tamaño SQL y cantidad de queries).
+// Bitácora: insertados, actualizados, errores, validaciones.
+// Respuesta: insertados, actualizados, errores, validaciones procesadas.
 router.post('/inventario-validaciones/upload', requireAuth, upload.single('archivo'), async (req, res) => {
   if (!req.file) return res.status(400).json({ ok: false, message: 'No se recibió archivo' });
   try {
@@ -1276,7 +1626,7 @@ router.post('/inventario-validaciones/upload', requireAuth, upload.single('archi
     const ws   = wb.Sheets[wb.SheetNames[0]];
     const rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
 
-    // Normalizar filas válidas
+    // ── Paso 0: normalizar filas válidas (trim + filter) ──
     const validas = rows.map(r => ({
       clave:    String(r.CLAVE_VALIDACION || '').trim(),
       claveRep: String(r.CLAVE_REP || '').trim(),
@@ -1289,21 +1639,23 @@ router.post('/inventario-validaciones/upload', requireAuth, upload.single('archi
       tipoCalc: String(r.TIPO_VALIDACION_CALC || '').trim(),
     })).filter(r => r.clave);
 
-    // ── 1. Pre-cargar existentes en una sola query ──────────
+    // ── Paso 1: pre-cargar existentes (single query para performance) ──
+    // Carga en SET para búsqueda O(1) al iterar filas del Excel.
     const existingRows = await query(`SELECT CLAVE_VALIDACION FROM INVENTARIO_VALIDACIONES`);
     const existingSet  = new Set(existingRows.map(r => r.CLAVE_VALIDACION));
 
     const existingHist = await query(`SELECT CLAVE_VALIDACION FROM INVENTARIO_VALIDACIONES_HIST WHERE VERSION_CARGA=${esc(version)}`);
     const existingHistSet = new Set(existingHist.map(r => r.CLAVE_VALIDACION));
 
+    // Segmentar filas: INSERT si es nueva, UPDATE si existe, HIST si es nueva combo versión.
     const toInsert = validas.filter(r => !existingSet.has(r.clave));
     const toUpdate = validas.filter(r =>  existingSet.has(r.clave));
     const toHist   = validas.filter(r => !existingHistSet.has(r.clave));
 
-    const CHUNK = 200;
+    const CHUNK = 200;  // Tamaño de batch: 200 filas por query (balance SQL/network).
     let insertados = 0, actualizados = 0, errores = 0;
 
-    // ── 2. Batch INSERT INVENTARIO_VALIDACIONES ─────────────
+    // ── Paso 2: Batch INSERT en INVENTARIO_VALIDACIONES (nuevas validaciones) ──
     for (let i = 0; i < toInsert.length; i += CHUNK) {
       const chunk = toInsert.slice(i, i + CHUNK);
       const vals  = chunk.map(r =>
@@ -1319,7 +1671,8 @@ router.post('/inventario-validaciones/upload', requireAuth, upload.single('archi
       } catch(e) { console.error('[upload-val] batch insert error:', e.message); errores += chunk.length; }
     }
 
-    // ── 3. Batch UPDATE usando MERGE ────────────────────────
+    // ── Paso 3: Batch UPDATE en INVENTARIO_VALIDACIONES (actualizar existentes) ──
+    // Usa JOIN con VALUES temporal para actualizar solo campos que cambiaron.
     for (let i = 0; i < toUpdate.length; i += CHUNK) {
       const chunk = toUpdate.slice(i, i + CHUNK);
       const vals  = chunk.map(r =>
@@ -1338,7 +1691,8 @@ router.post('/inventario-validaciones/upload', requireAuth, upload.single('archi
       } catch(e) { console.error('[upload-val] batch update error:', e.message); errores += chunk.length; }
     }
 
-    // ── 4. Batch INSERT INVENTARIO_VALIDACIONES_HIST ────────
+    // ── Paso 4: Batch INSERT en INVENTARIO_VALIDACIONES_HIST (historial de versiones) ──
+    // Snapshot de cada versión de validaciones para auditoría.
     for (let i = 0; i < toHist.length; i += CHUNK) {
       const chunk = toHist.slice(i, i + CHUNK);
       const vals  = chunk.map(r =>
@@ -1353,7 +1707,8 @@ router.post('/inventario-validaciones/upload', requireAuth, upload.single('archi
       } catch(e) { console.warn('[inv-val-hist] batch error:', e.message); }
     }
 
-    // ── 5. Batch INSERT INVENTARIO_VERSIONES ────────────────
+    // ── Paso 5: Batch INSERT en INVENTARIO_VERSIONES (registro de versión existente) ──
+    // Si force=true, limpia versión anterior (permite recargar si cambió metadata).
     if (force) {
       const clavesList = validas.map(r => esc(r.clave)).join(',');
       try { await query(`DELETE FROM INVENTARIO_VERSIONES WHERE TIPO_OBJETO='VALIDACION' AND VERSION=${esc(version)} AND CLAVE_OBJ IN (${clavesList})`); }
@@ -1379,10 +1734,10 @@ router.post('/inventario-validaciones/upload', requireAuth, upload.single('archi
   } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
 });
 
-// ── POST carga Excel contratos (2 hojas) ──────────────────
-// Hoja "CONTRATO": CLAVE_CONTRATO, NOMBRE_CONTRATO, CLAVE_CLIENTE, CLAVE_PLATAFORMA
-// Hoja "REPORTES": CLAVE_CONTRATO, CLAVE_REP, FECHA_ESTIMADA_QA, FECHA_ESTIMADA_CERT, FECHA_ESTIMADA_PROD
-// ── GET catálogo de plataformas ───────────────────────────
+// ── GET /cat-plataformas
+// Descripción: lista de plataformas disponibles en el catálogo.
+// Tablas: CAT_PLATAFORMA.
+// Sin bitácora (consulta de solo lectura).
 router.get('/cat-plataformas', requireAuth, async (req, res) => {
   try {
     const rows = await query(`SELECT CLAVE_PLATAFORMA FROM CAT_PLATAFORMA ORDER BY CLAVE_PLATAFORMA`);
@@ -1390,7 +1745,10 @@ router.get('/cat-plataformas', requireAuth, async (req, res) => {
   } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
 });
 
-// ── GET catálogo de estatus ───────────────────────────────
+// ── GET /cat-estatus
+// Descripción: lista de estatus disponibles para reportes y validaciones.
+// Tablas: CAT_ESTATUS, CAT_ESTATUSINT_REPVAL (JOIN para filtrar solo los usados).
+// Sin bitácora (consulta de solo lectura).
 router.get('/cat-estatus', requireAuth, async (req, res) => {
   try {
     const rows = await query(`
@@ -1402,7 +1760,20 @@ router.get('/cat-estatus', requireAuth, async (req, res) => {
   } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
 });
 
-// ── PUT actualizar VERSION_CLIENTE en ESTATUS_REPORTE ────
+// ── PUT /estatus-reporte/:id/version-cliente
+// Descripción: marca/desmarca una versión de reporte como "versión cliente"
+// (es decir, validada/aprobada por el cliente para ese contrato).
+// Lógica: mutualmente exclusiva dentro de un grupo (clave_rep_base+plataforma),
+// es decir, solo una versión puede ser VERSION_CLIENTE=1 para un contrato.
+// Parámetros path: id (ID_ESTATUS_REP).
+// Parámetros body:
+//   - version_cliente: 1 para marcar, 0 para desmarcar.
+//   - clave_rep_base, clave_plataforma, clave_contrato (para context, clave_contrato requerida).
+// Tablas: CONTRATOS_VERSION_CLIENTE (UPSERT); AUDIT_LOG.
+// Validaciones:
+//   - Si version_cliente=1: desactiva otras versiones del mismo grupo en ese contrato.
+//   - Si version_cliente=0: desactiva solo esta versión.
+// Bitácora: registra id, clave_contrato, clave_rep_base, clave_plataforma, acción (MARCAR/DESMARCAR).
 router.put('/estatus-reporte/:id/version-cliente', requireAuth, async (req, res) => {
   try {
     const { version_cliente, clave_rep_base, clave_plataforma, clave_contrato } = req.body;
@@ -1442,7 +1813,22 @@ router.put('/estatus-reporte/:id/version-cliente', requireAuth, async (req, res)
   } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
 });
 
-// ── PUT actualizar estatus secuencial de reporte ──────────
+// ── PUT /estatus-reporte/estatus
+// Descripción: actualiza el ESTATUS secuencial (texto libre, estado de progreso)
+// de un reporte, sin afectar las banderas DOCUMENTADO/PROGRAMADO/CERTIFICADO.
+// Similar a /estatus-validacion/estatus pero para reportes.
+// Parámetros body:
+//   - clave_rep, clave_plataforma: identifican el reporte.
+//   - estatus: nuevo ESTATUS.
+//   - version: VERSION_CARGA (opcional, para especificar exacta).
+//   - id_estatus_rep: ID_ESTATUS_REP (si viene, actualiza directo por ID + candado 404).
+// Tablas: ESTATUS_REPORTE (UPDATE); AUDIT_LOG.
+// Validaciones:
+//   - Si id_estatus_rep: foto "antes" de esa fila, UPDATE directo.
+//   - Si sin id pero existe el par + versión: UPDATE esa(s) fila(s).
+//   - Si sin id y sin versión pero varias versiones existen: 409 pidiendo confirmación.
+//   - Si no existe: INSERT alta nueva (si viene versión, usa esa; si no, NULL).
+// Bitácora: registra antes/después (para versiones), filas_afectadas, version, confirmación si aplica.
 router.put('/estatus-reporte/estatus', requireAuth, async (req, res) => {
   try {
     const { clave_rep, clave_plataforma, estatus, version, id_estatus_rep } = req.body;
@@ -1554,7 +1940,12 @@ router.put('/estatus-reporte/estatus', requireAuth, async (req, res) => {
   } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
 });
 
-// ── POST plataformas ya asignadas a lista de validaciones ─
+// ── POST /inventario-validaciones/plataformas-asignadas
+// Descripción: obtiene qué plataformas ya tienen asignada cada validación.
+// Parámetros body: claves (array de CLAVE_VALIDACION).
+// Tablas: REPORTE_VALIDACION.
+// Respuesta: mapa {CLAVE_VALIDACION: [CLAVE_PLATAFORMA, ...], ...}.
+// Sin bitácora (consulta de solo lectura).
 router.post('/inventario-validaciones/plataformas-asignadas', requireAuth, async (req, res) => {
   try {
     const { claves = [] } = req.body;
@@ -1574,9 +1965,17 @@ router.post('/inventario-validaciones/plataformas-asignadas', requireAuth, async
   } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
 });
 
-// ── POST asignar plataformas a validaciones ────────────────
-// Lógica: (CLAVE_VALIDACION, CLAVE_PLATAFORMA, CLAVE_REP) exacto existe → omitir
-//         no existe esa combinación exacta → insertar (permite compartir validaciones entre reportes)
+// ── POST /inventario-validaciones/asignar-plataformas
+// Descripción: crea asignaciones de plataformas a validaciones (nuevas combinaciones
+// en REPORTE_VALIDACION). Permite una validación en múltiples reportes de múltiples plataformas.
+// Parámetros body:
+//   - asignaciones: array de {clave_validacion, clave_rep, tipo_validacion, descripcion, plataforma}.
+//   - version: VERSION_CARGA (default '1.0.0').
+// Tablas: REPORTE_VALIDACION (INSERT); AUDIT_LOG.
+// Lógica: UPSERT por (CLAVE_VALIDACION, CLAVE_PLATAFORMA, CLAVE_REP).
+//         Omite si ya existe (omitidos++), en otro caso inserta.
+//         Esto permite compartir una validación entre reportes (flexibilidad).
+// Bitácora: registra creados, omitidos.
 router.post('/inventario-validaciones/asignar-plataformas', requireAuth, async (req, res) => {
   try {
     const { asignaciones = [], version = '1.0.0' } = req.body;
@@ -1601,7 +2000,10 @@ router.post('/inventario-validaciones/asignar-plataformas', requireAuth, async (
   } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
 });
 
-// ── GET entidades del inventario de validaciones ──────────
+// ── GET /inventario-validaciones/entidades
+// Descripción: lista de entidades reguladas únicas en inventario de validaciones.
+// Tablas: INVENTARIO_VALIDACIONES.
+// Sin bitácora (consulta de solo lectura).
 router.get('/inventario-validaciones/entidades', requireAuth, async (req, res) => {
   try {
     const rows = await query(`SELECT DISTINCT CLAVE_ENTIDADREGULADA FROM INVENTARIO_VALIDACIONES WHERE CLAVE_ENTIDADREGULADA IS NOT NULL ORDER BY CLAVE_ENTIDADREGULADA`);
@@ -1609,7 +2011,11 @@ router.get('/inventario-validaciones/entidades', requireAuth, async (req, res) =
   } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
 });
 
-// ── GET reportes del inventario filtrados por entidad ─────
+// ── GET /inventario-validaciones/reportes-por-entidad
+// Descripción: lista de reportes en inventario filtrados por entidad regulada.
+// Parámetros query: entidad (CLAVE_ENTIDADREGULADA, opcional).
+// Tablas: INVENTARIO_VALIDACIONES.
+// Sin bitácora (consulta de solo lectura).
 router.get('/inventario-validaciones/reportes-por-entidad', requireAuth, async (req, res) => {
   try {
     const entidad = (req.query.entidad || '').trim();
@@ -1619,7 +2025,11 @@ router.get('/inventario-validaciones/reportes-por-entidad', requireAuth, async (
   } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
 });
 
-// ── GET filtros del inventario de validaciones ─────────────
+// ── GET /inventario-validaciones/filtros
+// Descripción: devuelve listas de valores únicos para filtros dinámicos
+// (países, reguladores, tipos de validaciones).
+// Tablas: INVENTARIO_VALIDACIONES.
+// Sin bitácora (consulta de solo lectura).
 router.get('/inventario-validaciones/filtros', requireAuth, async (req, res) => {
   try {
     const [paises, regs, tipos] = await Promise.all([
@@ -1635,7 +2045,16 @@ router.get('/inventario-validaciones/filtros', requireAuth, async (req, res) => 
   } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
 });
 
-// ── GET resumen del inventario: conteo de validaciones por reporte ─
+// ── GET /inventario-validaciones/resumen
+// Descripción: resumen del inventario: conteo de validaciones por reporte.
+// Parámetros query:
+//   - entidad, pais, reg, tipo: filtros opcionales.
+//   - q: búsqueda de texto en CLAVE_VALIDACION, DESCRIPCION, CLAVE_REP.
+// Tablas: INVENTARIO_VALIDACIONES, INVENTARIO_REPORTES (LEFT JOIN).
+// Lógica: si hay búsqueda o tipo, solo reportes con validaciones que coincidan;
+//         si no, todos los reportes (con COUNT = 0 si no tienen validaciones).
+// Respuesta: array de {CLAVE_REP, VERSION_CARGA, TOTAL}.
+// Sin bitácora (consulta de solo lectura).
 router.get('/inventario-validaciones/resumen', requireAuth, async (req, res) => {
   try {
     const entidad = (req.query.entidad || '').trim();
@@ -1646,7 +2065,7 @@ router.get('/inventario-validaciones/resumen', requireAuth, async (req, res) => 
     const pat     = q ? esc(`%${q}%`) : '';
     let rows;
     if (q || tipo) {
-      // Con búsqueda de texto o tipo: solo reportes con validaciones que coincidan
+      // Rama A: con búsqueda de texto o tipo: filtrar validaciones, luego agrupar por reporte.
       const w = [
         entidad ? `CLAVE_ENTIDADREGULADA=${esc(entidad)}` : '',
         pais    ? `CLAVE_PAIS=${esc(pais)}` : '',
@@ -1662,7 +2081,7 @@ router.get('/inventario-validaciones/resumen', requireAuth, async (req, res) => 
         ORDER BY CLAVE_REP
       `);
     } else {
-      // Sin búsqueda: todos los reportes del inventario, con conteo 0 si no tienen validaciones
+      // Rama B: sin búsqueda: todos los reportes (incluye reportes sin validaciones, COUNT=0).
       const conds = [
         entidad ? `CLAVE_ENTIDADREGULADA=${esc(entidad)}` : '',
         pais    ? `CLAVE_PAIS=${esc(pais)}` : '',
@@ -1685,9 +2104,15 @@ router.get('/inventario-validaciones/resumen', requireAuth, async (req, res) => 
   } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
 });
 
-// ── GET estatus mínimo de validación por reporte ──────────
-// Regresa por CLAVE_REP el estatus más atrasado de sus validaciones
-// (orden: IDENTIFICADO=1 ... CERTIFICADO=9; sin estatus=0)
+// ── GET /inventario-validaciones/estatus-minimo
+// Descripción: para cada reporte, retorna el estatus MÁS ATRASADO de sus validaciones.
+// Útil para ver el "cuello de botella" de un reporte (si una validación falta documentar,
+// el reporte está atrasado).
+// Parámetros query: entidad, pais, reg, tipo, q (filtros opcionales).
+// Tablas: INVENTARIO_VALIDACIONES, REPORTE_VALIDACION (LEFT JOIN).
+// Mapa de estatus: IDENTIFICADO=1, EN DOCUMENTACION=2, ..., CERTIFICADO=9, sin estatus=0.
+// MIN_RANK: valor numérico del estatus más atrasado (menor = más atrasado).
+// Sin bitácora (consulta de solo lectura).
 router.get('/inventario-validaciones/estatus-minimo', requireAuth, async (req, res) => {
   try {
     const entidad = (req.query.entidad || '').trim();
@@ -1725,7 +2150,12 @@ router.get('/inventario-validaciones/estatus-minimo', requireAuth, async (req, r
   } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
 });
 
-// ── GET validaciones del inventario por entidad + reporte ─
+// ── GET /inventario-validaciones/lista
+// Descripción: lista de validaciones del inventario con filtros opcionales.
+// Parámetros query: entidad, rep (CLAVE_REP), pais, reg, tipo.
+// Tablas: INVENTARIO_VALIDACIONES, REPORTE_VALIDACION (LEFT JOIN).
+// Respuesta: array con campos de inventario + estatus de proyecto (si existe).
+// Sin bitácora (consulta de solo lectura).
 router.get('/inventario-validaciones/lista', requireAuth, async (req, res) => {
   try {
     const entidad = (req.query.entidad || '').trim();
@@ -1755,7 +2185,9 @@ router.get('/inventario-validaciones/lista', requireAuth, async (req, res) => {
   } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
 });
 
-// ── helper: detectar fila de headers ─────────────────────
+// ── Helper: detectar fila de headers en Excel ──
+// Propósito: encontrar la fila que contiene encabezados (CLAVE_CONTRATO o CLAVE_REP).
+// Busca en las primeras 5 filas. Soporta templates con títulos descriptivos arriba.
 function _detectHeaderRow(ws) {
   const raw = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null });
   for (let i = 0; i < Math.min(raw.length, 5); i++) {
@@ -1765,7 +2197,11 @@ function _detectHeaderRow(ws) {
   return 0;
 }
 
-// ── helpers para parsear Excel de contratos ───────────────
+// ── Helper: parseContratosExcel(buffer) ──
+// Propósito: parsear Excel de contratos con dos hojas:
+//   1. "CONTRATO": CLAVE_CONTRATO, NOMBRE_CONTRATO, CLAVE_CLIENTE, CLAVE_PLATAFORMA, CLAVE_PAIS, NOMBRE_CLIENTE, NOTAS.
+//   2. "REPORTES": CLAVE_CONTRATO, CLAVE_REP.
+// Retorna: {contratos: [...], reportes: [...]}.
 function parseContratosExcel(buffer) {
   const wb = XLSX.read(buffer, { type: 'buffer' });
   const wsC = wb.Sheets['CONTRATO'] || wb.Sheets[wb.SheetNames[0]];
@@ -1788,7 +2224,15 @@ function parseContratosExcel(buffer) {
   return { contratos, reportes };
 }
 
-// ── POST /contratos/preview — analiza sin guardar ─────────
+// ── POST /contratos/preview
+// Descripción: preview de carga de Excel de contratos (solo lectura, sin guardar cambios).
+// Permite al usuario ver qué se va a insertar/actualizar/desactivar antes de confirmar.
+// Parámetros form: archivo (Excel con hojas CONTRATO y REPORTES).
+// Tablas: CLIENTE, CONTRATOS, CONTRATOS_REPORTES, ESTATUS_REPORTE (solo lecturas).
+// Respuesta: preview (array con análisis por contrato):
+//   - clienteNuevo, contratoNuevo, totalReportes.
+//   - repsNuevos, repsDesactivar, repsActualizar, repsInvalidos.
+// Sin bitácora (consulta de solo lectura).
 router.post('/contratos/preview', requireAuth, upload.single('archivo'), async (req, res) => {
   if (!req.file) return res.status(400).json({ ok: false, message: 'No se recibió archivo' });
   try {
@@ -1833,7 +2277,24 @@ router.post('/contratos/preview', requireAuth, upload.single('archivo'), async (
   } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
 });
 
-// ── POST /contratos/upload — carga real ───────────────────
+// ── POST /contratos/upload
+// Descripción: carga real de Excel de contratos con INSERT/UPDATE de clientes y contratos,
+// e INSERT/UPDATE/DESACTIVACIÓN de reportes asignados.
+// Parámetros form: archivo (Excel con hojas CONTRATO y REPORTES).
+// Tablas:
+//   - CLIENTE (INSERT si no existe).
+//   - CONTRATOS (INSERT o UPDATE).
+//   - CONTRATOS_REPORTES (INSERT o UPDATE ACTIVO, y UPDATE ACTIVO=0 para no mencionados).
+//   - AUDIT_LOG (bitácora por contrato).
+// Lógica:
+//   1. Por cada contrato: verificar/crear cliente, crear/actualizar contrato.
+//   2. Insertar reportes nuevos (validar que existan en ESTATUS_REPORTE para la plataforma).
+//   3. Actualizar reportes existentes (ACTIVO=1).
+//   4. Desactivar reportes no mencionados en el Excel (ACTIVO=0).
+// Validaciones:
+//   - Reporte debe existir en ESTATUS_REPORTE para la plataforma (en otro caso, error + omitir).
+// Bitácora: por contrato, registra clientes creados, contratos nuevos/actualizados, reportes (nuevos/desactivados).
+// Respuesta: clientes/contratos/reportes con {insertados, actualizados, desactivados}, errores, errMsg.
 router.post('/contratos/upload', requireAuth, upload.single('archivo'), async (req, res) => {
   if (!req.file) return res.status(400).json({ ok: false, message: 'No se recibió archivo' });
   try {
@@ -1907,7 +2368,12 @@ router.post('/contratos/upload', requireAuth, upload.single('archivo'), async (r
   } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
 });
 
-// ── GET exportar inventario reportes a Excel ──────────────
+// ── GET /inventario-reportes/export
+// Descripción: exporta inventario de reportes a Excel (descarga archivo .xlsx).
+// Tablas: INVENTARIO_REPORTES.
+// Headers: CLAVE_REP, CLAVE_PAIS, CLAVE_ENTIDADREGULADA, ..., VERSION_CARGA.
+// Respuesta: archivo binario (application/vnd.openxmlformats-officedocument.spreadsheetml.sheet).
+// Sin bitácora (exportación de solo lectura).
 router.get('/inventario-reportes/export', requireAuth, async (req, res) => {
   try {
     const rows = await query(`
@@ -1930,7 +2396,12 @@ router.get('/inventario-reportes/export', requireAuth, async (req, res) => {
   } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
 });
 
-// ── GET búsqueda inventario reportes ─────────────────────
+// ── GET /inventario/reportes
+// Descripción: búsqueda rápida de reportes por CLAVE_REP o DESCRIPCION_ESP.
+// Parámetros query: q (texto de búsqueda).
+// Tablas: INVENTARIO_REPORTES.
+// Límite: TOP 20 resultados.
+// Sin bitácora (consulta de solo lectura).
 router.get('/inventario/reportes', requireAuth, async (req, res) => {
   try {
     const q = req.query.q || '';
@@ -1945,7 +2416,13 @@ router.get('/inventario/reportes', requireAuth, async (req, res) => {
   } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
 });
 
-// ── GET resumen de estatus por contrato (para dashboard) ──
+// ── GET /contratos/:clave/resumen
+// Descripción: resumen de estatus de reportes para un contrato (para dashboard).
+// Devuelve conteo de reportes por hito alcanzado.
+// Parámetros path: clave (CLAVE_CONTRATO).
+// Tablas: CONTRATOS_REPORTES, ESTATUS_REPORTE (LEFT JOIN).
+// Respuesta: {documentados, programados, certificados, total}.
+// Sin bitácora (consulta de solo lectura).
 router.get('/contratos/:clave/resumen', requireAuth, async (req, res) => {
   try {
     const rows = await query(`

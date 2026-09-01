@@ -10,23 +10,36 @@ const XLSX  = require('xlsx');
 const path  = require('path');
 const { query } = require('./connection');
 
+// Validar que se proporcione ruta del archivo Excel
 const archivo = process.argv[2];
 if (!archivo) {
   console.error('❌ Indica la ruta del Excel: node db/importar-sofipo.js <archivo.xlsx>');
   process.exit(1);
 }
 
+// Escapar valor para SQL: null/undefined/vacío → NULL, strings con comillas escapadas
 const esc = v => (v === null || v === undefined || v === '') ? 'NULL' : `'${String(v).trim().replace(/'/g, "''")}'`;
+
+// Convertir valor a entero o NULL si no es número válido (previene errores de tipo INT)
 const escInt = v => {
   const n = parseInt(v);
   return isNaN(n) ? 'NULL' : String(n);
 };
 
+/**
+ * importar()
+ * Lee Excel SOFIPO (3 hojas) y carga tablas SQL Server:
+ * 1. LAYOUT_DESC SOFIPO → SOFIPO_LAYOUT_DESC (metadata de campos)
+ * 2. LAYOUT SOFIPO → SOFIPO_LAYOUT_USO (uso en reportes)
+ * 3. ESTRUCTURA DE REPORTES SOFIPO → SOFIPO_REPORTES (estructura de reportes)
+ * Borra datos existentes y recarga (upsert completo).
+ */
 async function importar() {
   console.log(`📂 Leyendo: ${archivo}`);
   const wb = XLSX.readFile(path.resolve(archivo));
 
   // ── Hoja 1: LAYOUT_DESC ──────────────────────────────────
+  // Importa metadata de campos: tipos, formatos, validaciones, catálogos permitidos
   console.log('\n📋 Importando SOFIPO_LAYOUT_DESC...');
   await query('DELETE FROM SOFIPO_LAYOUT_DESC');
 
@@ -38,6 +51,8 @@ async function importar() {
     const r = rows1[i];
     const layout = String(r[2] || '').trim();
     const campo  = String(r[5] || '').trim();
+
+    // Saltar filas sin layout ni campo
     if (!layout || !campo) continue;
 
     try {
@@ -55,12 +70,14 @@ async function importar() {
       ok1++;
     } catch (e) {
       err1++;
+      // Mostrar solo primeros 3 errores para no saturar consola
       if (err1 <= 3) console.error(`  ❌ Fila ${i + 1}:`, e.message);
     }
   }
   console.log(`  ✅ ${ok1} registros insertados, ${err1} errores`);
 
   // ── Hoja 2: LAYOUT_USO ───────────────────────────────────
+  // Importa vinculación: qué campos de layouts se usan en qué reportes (por columna)
   console.log('\n🔗 Importando SOFIPO_LAYOUT_USO...');
   await query('DELETE FROM SOFIPO_LAYOUT_USO');
 
@@ -72,6 +89,8 @@ async function importar() {
     const r = rows2[i];
     const layout = String(r[2] || '').trim();
     const campo  = String(r[3] || '').trim();
+
+    // Saltar filas vacías
     if (!layout || !campo) continue;
 
     try {
@@ -92,6 +111,7 @@ async function importar() {
   console.log(`  ✅ ${ok2} registros insertados, ${err2} errores`);
 
   // ── Hoja 3: REPORTES ─────────────────────────────────────
+  // Importa estructura de reportes: columnas, tipos, longitudes, decimales, catálogos
   console.log('\n📊 Importando SOFIPO_REPORTES...');
   await query('DELETE FROM SOFIPO_REPORTES');
 
@@ -102,6 +122,8 @@ async function importar() {
   for (let i = 1; i < rows3.length; i++) {
     const r = rows3[i];
     const idReporte = String(r[0] || '').trim();
+
+    // Saltar filas sin ID de reporte
     if (!idReporte) continue;
 
     try {
@@ -121,9 +143,11 @@ async function importar() {
   }
   console.log(`  ✅ ${ok3} registros insertados, ${err3} errores`);
 
+  // Fin de importación exitosa
   console.log('\n🎉 Importación completada.');
 }
 
+// Ejecutar importación y salir con código de estado apropiado
 importar()
   .then(() => process.exit(0))
   .catch(e => { console.error('❌ Error fatal:', e.message); process.exit(1); });

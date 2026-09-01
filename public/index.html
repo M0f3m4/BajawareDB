@@ -461,6 +461,7 @@
 </head>
 <body>
 
+<!-- SECCIÓN: PÁGINA DE LOGIN — Pantalla de autenticación con usuario/contraseña. Aparece antes de iniciar sesión. -->
 <!-- ══════════════════ LOGIN ══════════════════════════════ -->
 <div id="login-page">
   <div class="login-card">
@@ -486,6 +487,7 @@
   </div>
 </div>
 
+<!-- MODAL: Cambio de contraseña — Permite al usuario restablecer o cambiar su contraseña. Accesible desde la pantalla de login. -->
 <!-- Modal: cambiar contraseña -->
 <div id="cambio-pwd-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:99999;align-items:center;justify-content:center;">
   <div style="background:#fff;border-radius:12px;padding:32px;width:380px;box-shadow:0 8px 32px rgba(0,0,0,.2);">
@@ -523,6 +525,7 @@
   </div>
 </div>
 
+<!-- SECCIÓN: APLICACIÓN PRINCIPAL — Contenedor de la app tras login. Incluye header, sidebar y área de contenido dinámica. -->
 <!-- ══════════════════ MAIN APP ════════════════════════════ -->
 <div id="main-app">
   <div class="app-header">
@@ -532,6 +535,7 @@
   </div>
 
   <div class="app-body">
+    <!-- SIDEBAR: Navegación principal — Menú jerárquico de funciones: Seguridad, Inventario, CHI, Actividad, QA, Sprints, Jira Explorer, Base Conocimiento, Paquetes. -->
     <!-- SIDEBAR -->
     <div class="sidebar">
       <div class="sidebar-logo" onclick="showSection('dashboard')" style="cursor:pointer;" title="Ir al dashboard">
@@ -697,9 +701,11 @@
       </div>
     </div>
 
+    <!-- CONTENT: Área dinámica — Todas las pantallas se renderean aquí. Solo una .content-section visible según navegación del usuario. -->
     <!-- CONTENT -->
     <div class="content-area">
 
+      <!-- PANTALLA: Dashboard — Resumen ejecutivo: estadísticas Jira, inventario, actividad BD reciente, sprints activos, epics por proyecto. -->
       <!-- Dashboard -->
       <div class="content-section active" id="sec-dashboard">
         <h2 class="section-title">Dashboard</h2>
@@ -755,6 +761,7 @@
         <div class="epics-section" id="dashboard-epics"><div class="loading">Cargando epics...</div></div>
       </div>
 
+      <!-- PANTALLA: Inventario Layouts — Gestión de layouts: carga Excel, versionado, historial, comparación, filtros país/entidad. -->
       <!-- Inventario — Layouts -->
       <div class="content-section" id="sec-inv-layouts">
         <h2 class="section-title">Inventario — Layouts</h2>
@@ -861,6 +868,7 @@
         </div>
       </div>
 
+      <!-- MODAL: Detalle Layout — Tabla de campos (código, tipo, requerido, descripción) expandible con búsqueda por campo. -->
       <!-- Modal: detalle de layout -->
       <div id="lay-detalle-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9999;align-items:flex-start;justify-content:center;padding:32px 16px;overflow-y:auto;">
         <div style="background:#fff;border-radius:12px;width:100%;max-width:960px;box-shadow:0 12px 48px rgba(0,0,0,.25);margin:auto;">
@@ -878,12 +886,14 @@
         </div>
       </div>
 
+      <!-- PANTALLA: Sprint Activo — Sprint actual desde Jira: tablero, capacidad, burndown/burnup. -->
       <!-- Sprints — Activo -->
       <div class="content-section" id="sec-spr-activo">
         <h2 class="section-title">Sprints — Sprint Activo</h2>
         <div id="sprint-activo-content"><div class="loading">Cargando...</div></div>
       </div>
 
+      <!-- PANTALLA: Tickets — Tabla de tickets Jira con panel: cambio estado, comentarios, enlace Jira. Filtros por proyecto/estado/asignado. -->
       <!-- Sprints — Tickets -->
       <div class="content-section" id="sec-spr-tickets">
         <h2 class="section-title">Sprints — Tickets</h2>
@@ -941,6 +951,7 @@
         </div>
       </div>
 
+      <!-- MODAL: Nuevo ticket — Crear ticket Jira: proyecto, resumen, descripción, tipo (Task/Bug/Story/Epic), prioridad. -->
       <!-- Modal nuevo ticket -->
       <div class="modal-overlay" id="modal-nuevo">
         <div class="modal-card">
@@ -972,6 +983,7 @@
         </div>
       </div>
 
+      <!-- PANTALLA: Detalle Ticket — Vista expandida: título, descripción, comentarios, cambio estado, metadata (asignado, prioridad, tipo). -->
       <!-- Detalle de ticket -->
       <div class="content-section" id="sec-ticket-detalle">
         <div class="detalle-header">
@@ -1010,6 +1022,7 @@
         </div>
       </div>
 
+      <!-- PANTALLA: Paquetes — Gestión paquetes desarrollo: filtro estatus (Identificado, Análisis, Desarrollo, Cerrado), grupo, cliente. -->
       <!-- Paquetes -->
       <div class="content-section" id="sec-paquetes">
         <h2 class="section-title">Paquetes</h2>
@@ -1037,6 +1050,7 @@
         <div id="paquetes-content"><div class="loading">Cargando...</div></div>
       </div>
 
+      <!-- PANTALLA: Seguridad Usuarios — CRUD usuarios: tabla, crear/editar/eliminar modal, asignación roles. -->
       <!-- Placeholders genéricos -->
       <div class="content-section" id="sec-usuarios">
         <h2 class="section-title">Seguridad — Usuarios</h2>
@@ -2394,6 +2408,7 @@
 
 <script>
   // ── LOGIN ────────────────────────────────────────────────
+  // doLogin(): POST /auth/login con username/password, valida credenciales. Éxito: initApp(). Error: muestra mensaje. Desactiva botón mientras procesa.
   async function doLogin() {
     const username = document.getElementById('username').value.trim();
     const password = document.getElementById('password').value;
@@ -2437,6 +2452,7 @@
     btn.textContent = 'Entrar';
   }
 
+  // abrirCambioPassword(): Abre modal #cambio-pwd-modal, pre-carga usuario desde login, limpia campos. Instrucciones: default 123456789.
   function abrirCambioPassword() {
     const user = document.getElementById('username').value.trim();
     document.getElementById('cpwd-user').value = user;
@@ -2447,6 +2463,7 @@
     document.getElementById('cambio-pwd-modal').style.display = 'flex';
   }
 
+  // cambiarPassword(): Valida actual, nueva, confirmación. POST /auth/cambiar-password, maneja errores (actual incorrecta, sin coincidencia). Muestra resultado.
   async function cambiarPassword() {
     const username     = document.getElementById('cpwd-user').value.trim();
     const actual       = document.getElementById('cpwd-actual').value;
@@ -2484,6 +2501,7 @@
 
   // ── INIT APP ─────────────────────────────────────────────
   let _currentUser = {};
+  // initApp(user): Post-login: oculta login-page, muestra main-app, renderiza header con usuario, carga datos (usuarios, layouts, permisos, inventario), muestra dashboard.
   function initApp(user) {
     _currentUser = user;
     document.getElementById('login-page').style.display = 'none';
@@ -2515,6 +2533,7 @@
   }
 
   // ── LOGOUT ────────────────────────────────────────────────
+  // doLogout(): POST /auth/logout, limpia datos memoria, oculta main-app, muestra login-page. Retorna a estado autenticación inicial.
   async function doLogout() {
     await fetch('/auth/logout', { method: 'POST' });
     document.getElementById('main-app').style.display = 'none';
@@ -2647,6 +2666,7 @@
     _layTimer = setTimeout(loadLayouts, 350);
   }
 
+  // loadLayoutsResumenDebounced(): Debounce 300ms de loadLayoutsResumen para búsquedas en tiempo real (oninput de filtro-texto). Evita sobrecarga GET.
   function loadLayoutsResumenDebounced() {
     clearTimeout(_layTimer);
     _layTimer = setTimeout(loadLayoutsResumen, 350);
@@ -2671,6 +2691,7 @@
     loadLayoutsResumen();
   }
 
+  // loadLayoutsResumen(): GET /inv/layouts con filtros (país, entidad, texto). Renderiza accordion con layouts, campos expandibles, versiones, botones comparar/descargar.
   async function loadLayoutsResumen() {
     const wrap    = document.getElementById('layouts-accordion');
     const dot     = document.getElementById('layouts-dot');
@@ -3058,6 +3079,7 @@
   // ── UPLOAD EXCEL → LAYOUTS ───────────────────────────────
   let _layUploadFile = null;
 
+  // abrirModalVersionLayout(input): Click cargar Excel. Abre modal #lay-version-modal para ingresar versión y descripción antes de subir layout.
   function abrirModalVersionLayout(input) {
     const file = input.files[0];
     if (!file) return;
@@ -3075,6 +3097,7 @@
     _layUploadFile = null;
   }
 
+  // confirmarUploadLayout(): Valida versión (requerida), POST a /inv/layouts/upload con Excel, maneja errores, muestra resultado, recarga layouts.
   async function confirmarUploadLayout() {
     const version = document.getElementById('lay-version-input').value.trim();
     const desc    = document.getElementById('lay-version-desc').value.trim();
@@ -3382,6 +3405,7 @@
     btn.style.display = sel.length === 2 ? 'inline-block' : 'none';
   }
 
+  // abrirComparador(): Abre modal #lay-comp-modal mostrando diff lado a lado de dos versiones de layout seleccionadas.
   function abrirComparador() {
     const checks  = [...document.querySelectorAll('#lay-versiones-content input[type=checkbox]:checked')];
     if (checks.length !== 2) return;
@@ -4043,6 +4067,7 @@
     document.getElementById('nuevo-descripcion').value = '';
   }
 
+  // crearTicket(): Valida proyecto+resumen (requeridos), POST /jira/ticket, cierra modal, recarga tabla, muestra confirm. Maneja errores conectando con Jira.
   async function crearTicket() {
     const project    = document.getElementById('nuevo-proyecto').value;
     const resumen    = document.getElementById('nuevo-resumen').value.trim();
@@ -4432,6 +4457,7 @@
 
   // ── INVENTARIO REPORTES ───────────────────────────────────
   let _invrTimer = null;
+  // loadInvReportesDebounced(): Debounce búsqueda inventario reportes.
   function loadInvReportesDebounced() {
     clearTimeout(_invrTimer);
     _invrTimer = setTimeout(loadInvReportes, 400);
@@ -4477,6 +4503,7 @@
     loadInvReportes();
   }
 
+  // loadInvReportes(): GET /inv/reportes, renderiza resumen con filtros (país, entidad, estado validación), tabla con detalles.
   async function loadInvReportes() {
     const wrap = document.getElementById('invr-content');
     const count = document.getElementById('invr-count');
@@ -4566,6 +4593,7 @@
 
   // ── ESTATUS DE REPORTES ───────────────────────────────────
   let _estTimer = null;
+  // loadEstatusDebounced(): Debounce búsqueda estatus reportes.
   function loadEstatusDebounced() {
     clearTimeout(_estTimer);
     _estTimer = setTimeout(loadEstatus, 400);
@@ -4691,11 +4719,13 @@
     } catch(e) { wrap.innerHTML = `<p style="color:#e74c3c;">Error: ${e.message}</p>`; }
   }
 
+  // filtrarCatalogos(): Filtra tabla catálogos por tipo (select), renderiza renderCatalogos().
   function filtrarCatalogos() {
     const q = document.getElementById('cat-buscar').value.toLowerCase();
     renderCatalogos(_catData.filter(c => c.CATALOGO.toLowerCase().includes(q)));
   }
 
+  // renderCatalogos(data): Renderiza tabla de catálogos (pares clave-valor) de tipos seleccionados, permite editar/crear valores.
   function renderCatalogos(data) {
     const wrap = document.getElementById('cat-lista');
     if (!data.length) { wrap.innerHTML = '<p style="color:#aaa;font-size:13px;">Sin catálogos.</p>'; return; }
@@ -4744,6 +4774,7 @@
     } catch(e) { document.getElementById('cat-detalle-body').innerHTML = `<p style="color:#e74c3c;">Error: ${e.message}</p>`; }
   }
 
+  // abrirNuevoCatalogo(): Abre modal para nuevo tipo de catálogo, valida nombre único.
   function abrirNuevoCatalogo() {
     _catValorId = null;
     document.getElementById('cat-valor-titulo').textContent = '+ Nuevo valor de catálogo';
@@ -4756,6 +4787,7 @@
     document.getElementById('cat-valor-modal').style.display = 'flex';
   }
 
+  // abrirNuevoValor(): Abre modal para nuevo valor en catálogo, ingresa clave, descripción, orden.
   function abrirNuevoValor() {
     _catValorId = null;
     document.getElementById('cat-valor-titulo').textContent = `+ Nuevo valor — ${_catActual}`;
@@ -4834,6 +4866,7 @@
     loadEstatus();
   }
 
+  // loadEstatus(): GET /inv/estatus, renderiza tabla estatus reporte con cascada de hitos, filtros, actualizaciones.
   async function loadEstatus() {
     const wrap  = document.getElementById('est-content');
     const count = document.getElementById('est-count');
@@ -5257,6 +5290,7 @@
                 const obj = JSON.parse(detalle);
                 // Formatear valores anidados (recursivo): arreglos → desplegable,
                 // objetos → pares k:v, cambios {campo, antes, despues} → "campo: antes → despues"
+                // fmtV(v): Renderer RECURSIVO JSON AUDIT_LOG.DETALLE (bitácora de cambios). Arrays → <details> desplegables. Objetos {campo, antes, despues} → "campo: antes(🔴) → despues(🟢)" con ∅ para nulos. Muestra diffs Excel y fotos antes/después. DOMINIO CRÍTICO.
                 const fmtV = v => {
                   if (Array.isArray(v)) {
                     const items = v.map(x => fmtV(x));
@@ -5523,6 +5557,7 @@
     return `<span style="background:${c.bg};color:#fff;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;">${c.label}</span>`;
   }
 
+  // radioVcClick(el, id_estatus_rep, ...): Click en radio de estatus reporte en Base Conocimiento. Llama putEstatusConConfirmacion si hay varias versiones. Cascada de hitos.
   function radioVcClick(el, id_estatus_rep, clave_rep_base, clave_plataforma, clave_contrato) {
     if (el.dataset.checked === '1') {
       // Ya estaba seleccionado — desmarcar
@@ -5546,6 +5581,7 @@
     } catch(e) { console.error('Error al actualizar version_cliente:', e.message); }
   }
 
+  // actualizarEstatusContratoRep(...): Helper PUT que actualiza estatus de reporte en contrato. Llama putEstatusConConfirmacion para manejo de versiones.
   async function actualizarEstatusContratoRep(clave_rep, clave_contrato, estatus, id_estatus_rep) {
     if (!clave_contrato) return;
     try {
@@ -5564,6 +5600,7 @@
     'DETENIDO':      { bg: '#e74c3c', label: 'DETENIDO' },
   };
 
+  // bccEstatusPill(e): Renderiza pill HTML de estatus reporte (colores por estado).
   function bccEstatusPill(e) {
     if (!e) return '<span style="color:#ccc;font-size:11px;">—</span>';
     const c = BCC_ESTATUS_COLORS[e] || { bg: '#aaa', label: e };
@@ -5627,6 +5664,7 @@
     } catch(e) { wrap.innerHTML = `<p style="color:#e74c3c;">Error: ${e.message}</p>`; }
   }
 
+  // bccEditar(...): Abre modal para editar estatus reporte en Base Conocimiento. Cascada de hitos.
   function bccEditar(clave, nombre, estatus, etapa) {
     _bccCurrent = { clave };
     document.getElementById('bcc-modal-info').textContent = nombre;
@@ -5705,6 +5743,7 @@
     } catch(e) { wrap.innerHTML = '<div class="loading">Error: ' + e.message + '</div>'; }
   }
 
+  // filtrarReportesContrato(): Filtra reportes por contrato seleccionado, renderiza renderReportesContrato().
   function filtrarReportesContrato() {
     const q = document.getElementById('bc-rep-search').value.toLowerCase();
     renderReportesContrato(bcRepData.filter(r =>
@@ -5712,6 +5751,7 @@
     ));
   }
 
+  // renderReportesContrato(data): Renderiza tabla reportes Base Conocimiento con radios de estatus, hitos DOCUMENTADO/PROGRAMADO/CERTIFICADO, personalización.
   function renderReportesContrato(data) {
     const wrap = document.getElementById('bc-rep-content');
     if (!data.length) { wrap.innerHTML = '<p style="color:#aaa;font-size:13px;">Sin reportes.</p>'; return; }
@@ -5918,6 +5958,7 @@
 
   // PUT con confirmación: si el servidor detecta varias versiones y pide confirmar,
   // pregunta al usuario y reintenta con confirmar_todas solo si acepta.
+  // putEstatusConConfirmacion(url, body): Helper PUT especial - candado. Si 409 {requiere_confirmacion, versiones}, muestra confirm() listando versiones. Si OK, reintenta con confirmar_todas:true. Impide planchar varias versiones sin querer. DOMINIO CRÍTICO.
   async function putEstatusConConfirmacion(url, body) {
     let r = await fetch(url, {
       method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
@@ -5954,6 +5995,7 @@
     } catch(e) { document.getElementById('rep-estatus-msg').innerHTML = `<span style="color:#e74c3c;">Error: ${e.message}</span>`; }
   }
 
+  // exportarReportesContrato(): Exporta tabla actual a Excel. Generador de reportes para análisis.
   function exportarReportesContrato() {
     if (!bcRepData || !bcRepData.length) return;
     const contrato = document.getElementById('bc-rep-contrato').value;
@@ -6061,6 +6103,7 @@
     } catch(e) { wrap.innerHTML = `<p style="color:#e74c3c;">Error: ${e.message}</p>`; }
   }
 
+  // invvRenderResumen(): Renderiza resumen inventario validaciones (totales, gráficos).
   function invvRenderResumen() {
     const wrap  = document.getElementById('invv-content');
     const badge = document.getElementById('invv-badge');
@@ -6327,6 +6370,7 @@
     XLSX.writeFile(wb, `inventario_validaciones_${entidad}${rep ? '_' + rep : ''}.xlsx`);
   }
 
+  // invvRenderVals(vals): Renderiza tabla detallada de validaciones (clave, plataforma, versión, estatus). Permite cambio estado con cascada.
   function invvRenderVals(vals) {
     const wrap  = document.getElementById('invv-content');
     const badge = document.getElementById('invv-badge');
@@ -6583,6 +6627,7 @@
     ), document.getElementById('vcli-select').options[document.getElementById('vcli-select').selectedIndex]?.text || null, _vcliEstatusProyectoGlobal);
   }
 
+  // renderValCliente(data, cliente, ...): Renderiza validaciones agrupadas por cliente. Muestra estado actual y permite editar.
   function renderValCliente(data, cliente, estatusProyectoMapa) {
     if (estatusProyectoMapa) _vcliEstatusProyectoGlobal = estatusProyectoMapa;
     const wrap = document.getElementById('vcli-content');
@@ -6823,6 +6868,7 @@
     renderUpdRepLista();
   }
 
+  // updRepEtapaChange(): Cambia etapa en Actualizar Estatus Reporte. Cascada: marcar CERTIFICADO enciende los 3 (DOC/PROG/CERT), desmarcar DOC apaga los 3.
   function updRepEtapaChange() {
     const etapa = document.getElementById('upd-rep-etapa').value;
     const esHito = HITOS_REP.has(etapa);
@@ -7053,6 +7099,7 @@
 
   const HITOS_VAL = new Set(['DOCUMENTADO', 'PROGRAMADO', 'CERTIFICADO']);
 
+  // updValEtapaChange(): Similar a updRepEtapaChange pero para Validaciones. Misma cascada de hitos DOCUMENTADO/PROGRAMADO/CERTIFICADO.
   function updValEtapaChange() {
     const etapa = document.getElementById('upd-val-etapa').value;
     const esHito = HITOS_VAL.has(etapa);
@@ -7237,6 +7284,7 @@
     window.location.href = '/api/contratos/inventario-reportes/export';
   }
 
+  // cargarInventarioReportes(): GET /inv/reportes, renderiza tabla de reportes cargados en BD. Permite ver, editar, comparar, descargar.
   function cargarInventarioReportes() {
     const file = document.getElementById('bc-inv-rep-file').files[0];
     const msg  = document.getElementById('bc-inv-rep-msg');
@@ -7248,6 +7296,7 @@
     document.getElementById('inv-ver-modal').style.display = 'flex';
   }
 
+  // cargarInventarioValidaciones(): GET /inv/validaciones, renderiza tabla validaciones. Similar a reportes.
   function cargarInventarioValidaciones() {
     const file = document.getElementById('bc-inv-val-file').files[0];
     const msg  = document.getElementById('bc-inv-val-msg');
@@ -7751,6 +7800,7 @@
     } catch(e) { msg.innerHTML = '<span style="color:#e74c3c;">Error: ' + e.message + `</span> (se guardaron ${creados} antes del error)`; }
   }
 
+  // actualizarEstatusProyectoVal(...): PUT para validaciones. Llama putEstatusConConfirmacion si hay versiones múltiples.
   async function actualizarEstatusProyectoVal(clave_validacion, clave_plataforma, estatus, version_carga) {
     if (!clave_validacion || !clave_plataforma || !estatus) return;
     const contrato = document.getElementById('vcli-contrato').value;
@@ -8488,6 +8538,7 @@
   };
   const loaded = {};
 
+  // showSection(id): Cambia sección visible: oculta todas .content-section, muestra #sec-{id}. Trigger carga datos si needed (loadLayoutsResumen, etc).
   function showSection(id) {
     document.querySelectorAll('.content-section').forEach(s => s.classList.remove('active'));
     const sec = document.getElementById('sec-' + id);

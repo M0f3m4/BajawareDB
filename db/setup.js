@@ -8,6 +8,13 @@
 require('dotenv').config();
 const { query } = require('./connection');
 
+/**
+ * setup()
+ * Crea todas las tablas necesarias en SQL Server si no existen.
+ * Tablas: LAYOUT_VERSIONES, QA_ALERTAS, SOFIPO_LAYOUT_DESC/USO/REPORTES, AUDIT_LOG, INVENTARIO_VERSIONES
+ * Se ejecuta automáticamente al arrancar server.js o manualmente: node db/setup.js
+ * Idempotente: IF NOT EXISTS previene errores si se llama múltiples veces.
+ */
 async function setup() {
   console.log('🔧 Verificando / creando tablas...');
 
@@ -264,8 +271,10 @@ async function setup() {
   console.log('✅ Setup de tablas completado.');
 }
 
+// Exportar función setup para inicialización en server.js
 module.exports = { setup };
 
+// Permitir ejecución como script independiente
 // Ejecutar directo si: node db/setup.js
 if (require.main === module) {
   setup()

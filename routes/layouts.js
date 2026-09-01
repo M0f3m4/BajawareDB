@@ -1,3 +1,12 @@
+// ════════════════════════════════════════════════════════════════════════════
+// ARCHIVO: routes/layouts.js — Gestión de layouts con versionamiento semántico
+// PROPÓSITO: Importa Excel con metadatos de campos, detecta cambios, calcula versiones.
+//            Maneja catálogos, relaciones layout→reporte, integra QA_ALERTAS.
+// TABLAS: LAYOUTS, LAYOUT_VERSIONES, LAYOUT_CATALOGO_DATOS, REL_LAYOUT_REPORTE,
+//         QA_ALERTAS, INVENTARIO_VERSIONES.
+// FLUJO: POST /preview (parsea) → POST /upload (procesa + versionea + audita)
+// ════════════════════════════════════════════════════════════════════════════
+
 const express  = require('express');
 const router   = express.Router();
 const multer   = require('multer');
@@ -6,12 +15,14 @@ const path     = require('path');
 const fs       = require('fs');
 const { query } = require('../db/connection');
 
+// Middleware de autenticación: verifica sesión de usuario activa
 // ── Auth ──────────────────────────────────────────────────
 function requireAuth(req, res, next) {
   if (!req.session.user) return res.status(401).json({ ok: false, message: 'No autenticado' });
   next();
 }
 
+// Configuración Multer: acepta .xlsx/.xls, máximo 20MB, en memoria
 // ── Multer ────────────────────────────────────────────────
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -22,6 +33,7 @@ const upload = multer({
   }
 });
 
+// Respaldo: versiones en JSON local si LAYOUT_VERSIONES no existe en BD
 // ── JSON local de versiones (respaldo) ───────────────────
 const VERSIONES_JSON = path.join(__dirname, '../data/layout-versiones.json');
 function leerVersionesJSON() {
@@ -32,6 +44,7 @@ function guardarVersionJSON(entrada) {
   fs.writeFileSync(VERSIONES_JSON, JSON.stringify(v, null, 2));
 }
 
+// Mapeo flexible de alias: Excel puede tener múltiples nombres por columna BD
 // ── Mapeo columnas Excel → BD ─────────────────────────────
 const COL_MAP = {
   CLAVE_PAIS:            ['CLAVE_PAIS','PAIS','COUNTRY'],
@@ -52,6 +65,8 @@ const COL_MAP = {
   VALIDEZ_INFO:          ['VALIDEZ_INFO','VALIDEZ_INFORMACION','VALIDEZ INFORMACION','VALIDEZ INFO','VALIDITY'],
   FUENTE:                ['FUENTE','SOURCE','ORIGEN'],
 };
+
+// Retorna {dbCol: indexEnExcel} mapeando encabezados contra aliases
 function mapColumns(headers) {
   const mapping = {};
   const upper = headers.map(h => (h||'').toString().toUpperCase().trim());
@@ -64,6 +79,8 @@ function mapColumns(headers) {
   return mapping;
 }
 
+// Parsea Excel: detecta headers automáticamente, normaliza a objetos planos,
+// extrae CATALOGOS y REL_REPORTES si existen. Retorna {rows, headerIdx, colMapping, catalogos, relReportes}
 // ── Parsear Excel → rows + header + catalogos ────────────
 function parseExcel(buffer) {
   const wb = XLSX.read(buffer, { type: 'buffer', cellDates: true });
@@ -178,8 +195,10 @@ function parseExcel(buffer) {
   return { rows, headerIdx, colMapping, catalogos, relReportes };
 }
 
+// Escapa valor SQL: NULL o string con comilla simple escapada
 const esc = v => v === null || v === undefined ? 'NULL' : `'${String(v).replace(/'/g,"''")}'`;
 
+// Lee versión semántica más reciente de LAYOUT_VERSIONES para un layout
 // ── Versión semántica ─────────────────────────────────────
 // Lee la versión actual desde SQL Server; si no existe arranca en 0.0.0
 async function getVersionActual(claveLayout) {
@@ -214,6 +233,8 @@ function detectarNivel(cambios) {
 const CAMPOS_MINOR = ['TIPO_DATO','OBLIGATORIO','LLAVE','VALIDACION'];
 const CAMPOS_PATCH = ['DESCRIPCION_ESP','DESCRIPCION_ING','FORMATO','CATALOGO','CLAVE_LAYOUT_CITI','OBSERVACIONES','VALIDEZ_INFO','FUENTE'];
 
+// PASO 1: POST /preview — parsea Excel, sugiere mapeo con BD, sin escribir nada
+// Retorna: total_filas, layouts_excel, sugerencias, versiones_actuales. Guarda en sesión.
 // ─────────────────────────────────────────────────────────
 // PASO 1: POST /api/layouts/preview
 // Parsea el Excel, detecta layouts, sugiere mapeo con layouts BD.
@@ -273,6 +294,8 @@ router.post('/preview', requireAuth, upload.single('archivo'), async (req, res) 
   } catch (e) { res.status(500).json({ ok: false, message: e.message }); }
 });
 
+// PASO 2: POST /upload — procesa carga: upsert LAYOUTS, calcula versión, audita,
+// registra catálogos, relaciones, marca alertas QA procesadas, respaldo JSON.
 // ─────────────────────────────────────────────────────────
 // PASO 2: POST /api/layouts/upload
 // Body JSON: { mapeo: { excelLayout: bdLayout }, jiraTicket?: "QD-42" }
@@ -313,6 +336,7 @@ router.post('/upload', requireAuth, async (req, res) => {
   const resultados = [];
 
   for (const [claveBD, items] of Object.entries(porLayout)) {
+    // Carga campos actuales en BD para detectar si son nuevos, eliminados o modificados
     // ── Leer estado actual en BD para comparar ────────────
     const existentes = await query(`
       SELECT NOMBRE_CAMPO, TIPO_DATO, OBLIGATORIO, LLAVE, VALIDACION,
@@ -323,9 +347,11 @@ router.post('/upload', requireAuth, async (req, res) => {
     const nombresExcel  = new Set(items.map(i => get(i.row, 'NOMBRE_CAMPO')));
     const nombresDB     = new Set(Object.keys(mapExistentes));
 
+    // Contadores para detectar nivel de cambio (MAJOR/MINOR/PATCH)
     // ── Contadores de cambio ──────────────────────────────
     const cambios = { nuevos: 0, eliminados: 0, minor: 0, patch: 0, sin_cambio: 0 };
 
+    // Detecta campos eliminados (existían en BD pero no en Excel) → MAJOR
     // Campos en BD que ya no están en el Excel → MAJOR
     for (const n of nombresDB) {
       if (!nombresExcel.has(n)) cambios.eliminados++;
@@ -357,6 +383,7 @@ router.post('/upload', requireAuth, async (req, res) => {
 
       try {
         if (mapExistentes[nombreCampo]) {
+          // Compara campo Excel vs BD: detecta si MINOR (estructural) o PATCH (cosmético)
           // ── UPDATE: detectar nivel de cambio ─────────────
           const existing = mapExistentes[nombreCampo];
           let nivelFila = 'sin_cambio';
@@ -386,6 +413,7 @@ router.post('/upload', requireAuth, async (req, res) => {
           }
           camposActualizados++;
         } else {
+          // Inserta campo nuevo en LAYOUTS (dispara MAJOR version bump)
           // ── INSERT: campo nuevo → MAJOR ───────────────────
           cambios.nuevos++;
           await query(`
@@ -410,6 +438,7 @@ router.post('/upload', requireAuth, async (req, res) => {
       }
     }
 
+    // Detecta nivel, calcula versión nueva, parsea versionStr (maneja truncamiento Excel 1.6 vs 1.6.0)
     // ── Calcular versión semántica ────────────────────────
     const nivel    = detectarNivel(cambios);
     const actual   = await getVersionActual(claveBD);
@@ -421,6 +450,7 @@ router.post('/upload', requireAuth, async (req, res) => {
     const vMinor = parseInt(vParts[1] ?? nuevaSem.minor) || 0;
     const vPatch = parseInt(vParts[2] ?? nuevaSem.patch) || 0;
 
+    // Lee datos Jira de QA_ALERTAS para asociar a la versión
     // ── Insertar en LAYOUT_VERSIONES ──────────────────────
     let jiraSummary = null, jiraStatus = null;
     if (jiraTicket) {
@@ -430,6 +460,7 @@ router.post('/upload', requireAuth, async (req, res) => {
       } catch (_) {}
     }
 
+    // Construye resumen de cambios para NOTAS de LAYOUT_VERSIONES
     const notas = [
       notasExtra || null,
       cambios.nuevos     ? `${cambios.nuevos} campos nuevos`      : null,
@@ -438,6 +469,7 @@ router.post('/upload', requireAuth, async (req, res) => {
       cambios.patch      ? `${cambios.patch} cambios PATCH`        : null,
     ].filter(Boolean).join(' | ') || null;
 
+    // Captura estado completo de LAYOUTS en JSON para auditoría (CAMPOS_JSON en BD)
     // Snapshot completo de campos al momento de la carga
     const camposActualesSnap = await query(`
       SELECT NOMBRE_CAMPO, TIPO_DATO, FORMATO, OBLIGATORIO, LLAVE,
@@ -447,6 +479,7 @@ router.post('/upload', requireAuth, async (req, res) => {
     `);
     const camposJson = JSON.stringify(camposActualesSnap.map(c => ({ ...c, CLAVE_LAYOUT: claveBD })));
 
+    // Evita duplicar versiones: si existe (major, minor, patch), actualiza en lugar de insertar
     // Upsert: si ya existe esa versión para ese layout, actualizar en lugar de duplicar
     const existeVer = await query(`SELECT ID_VERSION FROM LAYOUT_VERSIONES WHERE CLAVE_LAYOUT=${esc(claveBD)} AND VER_MAJOR=${vMajor} AND VER_MINOR=${vMinor} AND VER_PATCH=${vPatch}`);
     if (existeVer.length) {
@@ -472,6 +505,7 @@ router.post('/upload', requireAuth, async (req, res) => {
         )`);
     }
 
+    // Intenta registrar en tabla central INVENTARIO_VERSIONES; fallback no detiene proceso
     // ── Registrar en INVENTARIO_VERSIONES ────────────────
     try {
       const version    = req.body.version    || `${nuevaSem.major}.${nuevaSem.minor}.${nuevaSem.patch}`;
@@ -485,6 +519,7 @@ router.post('/upload', requireAuth, async (req, res) => {
       }
     } catch(e3) { console.warn('[layouts] INVENTARIO_VERSIONES error:', e3.message); }
 
+    // Si hay jiraTicket, marca alerta QA como PROCESADO con timestamp y usuario
     // ── Marcar alerta QA como PROCESADA ──────────────────
     if (jiraTicket) {
       try {
@@ -496,6 +531,7 @@ router.post('/upload', requireAuth, async (req, res) => {
       } catch (_) {}
     }
 
+    // Guarda copia en JSON local como respaldo si LAYOUT_VERSIONES no existe
     // ── Guardar en JSON local (respaldo) ──────────────────
     guardarVersionJSON({
       id: Date.now(), clave_layout: claveBD,
@@ -515,6 +551,7 @@ router.post('/upload', requireAuth, async (req, res) => {
     });
   }
 
+  // Importa valores de catálogos desde hoja CATALOGOS del Excel; Upsert por (catalogo, clave)
   // ── Guardar catálogos del Excel ───────────────────────────
   const catalogos = session.catalogos || [];
   let catInsertados = 0, catOmitidos = 0;
@@ -531,6 +568,7 @@ router.post('/upload', requireAuth, async (req, res) => {
     } catch(e) { console.warn('[layouts-cat]', e.message); }
   }
 
+  // Importa relaciones campo→reporte desde hoja REL_REPORTES; Upsert por (layout, campo, uso)
   // ── Guardar relaciones layout → reporte ──────────────────
   const relReportes = session.relReportes || [];
   let relInsertados = 0, relActualizados = 0;
@@ -558,6 +596,7 @@ router.post('/upload', requireAuth, async (req, res) => {
   res.json({ ok: true, jira_ticket: jiraTicket || null, resultados, catalogos: { insertados: catInsertados, actualizados: catOmitidos }, relReportes: { insertados: relInsertados, actualizados: relActualizados } });
 });
 
+// Verifica conflictos de versión: retorna layouts que YA tienen esa versión (evitar duplicados)
 // ─────────────────────────────────────────────────────────
 // GET /api/layouts/versiones/check?version=X&layouts=A,B,C
 // Verifica si alguno de esos layouts ya tiene esa versión registrada
@@ -580,6 +619,7 @@ router.get('/versiones/check', requireAuth, async (req, res) => {
   } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
 });
 
+// Historial de versiones con snapshot CAMPOS_JSON parseado; fallback a JSON local si no existe tabla
 // GET /api/layouts/versiones
 // ─────────────────────────────────────────────────────────
 router.get('/versiones', requireAuth, async (req, res) => {
@@ -611,6 +651,7 @@ router.get('/versiones', requireAuth, async (req, res) => {
   }
 });
 
+// Alertas QA pendientes: tickets Jira detectados en QA, esperando confirmación de layout
 // ─────────────────────────────────────────────────────────
 // GET /api/layouts/alertas-qa
 // Tickets QD/CDL en "Instalados en QA" pendientes de procesar
@@ -631,6 +672,7 @@ router.get('/alertas-qa', requireAuth, async (req, res) => {
   } catch (e) { res.status(500).json({ ok: false, message: e.message }); }
 });
 
+// Marca alerta como IGNORADO (usuario decidió no procesarla)
 // PUT /api/layouts/alertas-qa/:id/ignorar
 router.put('/alertas-qa/:id/ignorar', requireAuth, async (req, res) => {
   try {
@@ -639,6 +681,7 @@ router.put('/alertas-qa/:id/ignorar', requireAuth, async (req, res) => {
   } catch (e) { res.status(500).json({ ok: false, message: e.message }); }
 });
 
+// Confirma layout manualmente para una alerta; Body: {clave_layout}; marca PROCESADO + LAYOUT_CONFIRMADO=1
 // PUT /api/layouts/alertas-qa/:id/layout  — confirmar el layout manualmente
 router.put('/alertas-qa/:id/layout', requireAuth, async (req, res) => {
   const { clave_layout } = req.body;
