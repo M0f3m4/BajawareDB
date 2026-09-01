@@ -661,9 +661,18 @@ router.put('/estatus-reporte', requireAuth, async (req, res) => {
       certVal      = etapa === 'CERTIFICADO' ? "'SI'" : "'NO'";
       nuevoEstatus = etapa;
     }
+    // Valores planos de la cascada (para registrar el "después" en bitácora)
+    const despues = {
+      DOCUMENTADO: docVal.replace(/'/g, ''), PROGRAMADO: progVal.replace(/'/g, ''),
+      CERTIFICADO: certVal.replace(/'/g, ''), ESTATUS: nuevoEstatus
+    };
 
     // Si viene ID, actualizar directamente por ID (evita crear duplicados)
     if (id_estatus_rep) {
+      const antesRows = await query(`
+        SELECT ID_ESTATUS_REP, VERSION_CARGA, DOCUMENTADO, PROGRAMADO, CERTIFICADO, ESTATUS
+        FROM ESTATUS_REPORTE WHERE ID_ESTATUS_REP=${parseInt(id_estatus_rep)}
+      `);
       await query(`
         UPDATE ESTATUS_REPORTE SET
           DOCUMENTADO=${docVal}, PROGRAMADO=${progVal}, CERTIFICADO=${certVal},
@@ -671,7 +680,8 @@ router.put('/estatus-reporte', requireAuth, async (req, res) => {
         WHERE ID_ESTATUS_REP=${parseInt(id_estatus_rep)}
       `);
       await auditLog(usuario, 'estatus-reporte', desmarcar ? 'DESMARCAR' : 'MARCAR',
-        { id_estatus_rep, clave_rep, clave_plataforma, etapa, resultado: nuevoEstatus });
+        { id_estatus_rep, clave_rep, clave_plataforma, etapa, resultado: nuevoEstatus,
+          filas_afectadas: antesRows.length, antes: antesRows[0] || null, despues: antesRows.length ? despues : null });
       return res.json({ ok: true });
     }
 
@@ -685,6 +695,12 @@ router.put('/estatus-reporte', requireAuth, async (req, res) => {
     `);
 
     if (existeExacto.length || (!versionFilter && existeGeneral.length)) {
+      // Foto "antes" de las filas que se van a tocar (para bitácora)
+      const antesRows = await query(`
+        SELECT ID_ESTATUS_REP, VERSION_CARGA, DOCUMENTADO, PROGRAMADO, CERTIFICADO, ESTATUS
+        FROM ESTATUS_REPORTE
+        WHERE CLAVE_REP=${esc(clave_rep)} AND CLAVE_PLATAFORMA=${esc(clave_plataforma)}${versionFilter}
+      `);
       await query(`
         UPDATE ESTATUS_REPORTE SET
           DOCUMENTADO=${docVal}, PROGRAMADO=${progVal}, CERTIFICADO=${certVal},
@@ -692,6 +708,10 @@ router.put('/estatus-reporte', requireAuth, async (req, res) => {
           ${version ? `, VERSION_CARGA=${esc(version)}` : ''}
         WHERE CLAVE_REP=${esc(clave_rep)} AND CLAVE_PLATAFORMA=${esc(clave_plataforma)}${versionFilter}
       `);
+      await auditLog(usuario, 'estatus-reporte', desmarcar ? 'DESMARCAR' : 'MARCAR',
+        { clave_rep, clave_plataforma, etapa, version: version || 'todas', resultado: nuevoEstatus,
+          filas_afectadas: antesRows.length, antes: antesRows.slice(0, 20), despues });
+      return res.json({ ok: true });
     } else if (existeGeneral.length) {
       // La versión indicada NO existe para esa plataforma.
       // Antes aquí se reasignaba VERSION_CARGA a todos los registros de la
@@ -716,7 +736,8 @@ router.put('/estatus-reporte', requireAuth, async (req, res) => {
       `);
     }
     await auditLog(usuario, 'estatus-reporte', desmarcar ? 'DESMARCAR' : 'MARCAR',
-      { clave_rep, clave_plataforma, etapa, resultado: nuevoEstatus });
+      { clave_rep, clave_plataforma, etapa, version: version || null, resultado: nuevoEstatus,
+        alta_nueva: true, filas_afectadas: 1, antes: null, despues });
     res.json({ ok: true });
   } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
 });
@@ -968,6 +989,7 @@ router.post('/inventario-reportes/upload', requireAuth, upload.single('archivo')
 
     let insertados = 0, actualizados = 0, errores = 0;
     const combos = []; // combinaciones {CLAVE_REP, CLAVE_REP_GENERAL, PLATAFORMA, VERSION} fila por fila
+    const cambiosDetalle = []; // diff campo por campo de filas modificadas (para bitácora)
     for (const r of rows) {
       const clave = String(r.CLAVE_REP || '').trim();
       if (!clave) continue;
@@ -1038,25 +1060,19 @@ router.post('/inventario-reportes/upload', requireAuth, upload.single('archivo')
           // Comparar campos fila por fila — solo UPDATE si algo cambió
           const bd = existeInv[0];
           const str = v => (v == null ? '' : String(v).trim());
-          const cambio =
-            str(bd.CLAVE_PAIS)              !== str(r.CLAVE_PAIS)              ||
-            str(bd.CLAVE_ENTIDADREGULADA)   !== str(r.CLAVE_ENTIDADREGULADA)   ||
-            str(bd.CLAVE_REG)               !== str(r.CLAVE_REG)               ||
-            str(bd.CLAVE_SERIE)             !== str(r.CLAVE_SERIE)             ||
-            str(bd.SUBSERIE)                !== str(r.SUBSERIE)                ||
-            str(bd.CLAVE_GRUPO)             !== str(r.CLAVE_GRUPO)             ||
-            str(bd.REPORTE)                 !== str(r.REPORTE)                 ||
-            str(bd.CLAVE_SECCION_REP)       !== str(r.CLAVE_SECCION_REP)       ||
-            str(bd.CLAVE_VERSION_REPORTE)   !== str(r.CLAVE_VERSION_REPORTE)   ||
-            str(bd.CLAVE_PERIODO)           !== str(r.CLAVE_PERIODO)           ||
-            str(bd.DESCRIPCION_ESP)         !== str(r.DESCRIPCION_ESP)         ||
-            str(bd.CLAVE_FECHA_ENT_REP)     !== str(r.CLAVE_FECHA_ENT_REP)     ||
-            str(bd.CARACTERISTICAS)         !== str(r.CARACTERISTICAS)         ||
-            str(bd.CLAVE_REGULACION_REP)    !== str(r.CLAVE_REGULACION_REP)    ||
-            str(bd.CLAVE_REP_GENERAL)       !== str(r.CLAVE_REP_GENERAL)       ||
-            str(bd.FECHA_REGULACION)        !== str(r.FECHA_REGULACION);
+          // Diff campo por campo (para bitácora: qué cambió, de qué valor a qué valor)
+          const camposComp = ['CLAVE_PAIS','CLAVE_ENTIDADREGULADA','CLAVE_REG','CLAVE_SERIE',
+            'SUBSERIE','CLAVE_GRUPO','REPORTE','CLAVE_SECCION_REP','CLAVE_VERSION_REPORTE',
+            'CLAVE_PERIODO','DESCRIPCION_ESP','CLAVE_FECHA_ENT_REP','CARACTERISTICAS',
+            'CLAVE_REGULACION_REP','CLAVE_REP_GENERAL','FECHA_REGULACION'];
+          const difs = camposComp
+            .filter(c => str(bd[c]) !== str(r[c]))
+            .map(c => ({ campo: c, antes: str(bd[c]), despues: str(r[c]) }));
+          const cambio = difs.length > 0;
 
           const versionCambio = str(bd.VERSION_CARGA) !== str(version);
+          if (versionCambio) difs.push({ campo: 'VERSION_CARGA', antes: str(bd.VERSION_CARGA), despues: str(version) });
+          if (difs.length) cambiosDetalle.push({ clave_rep: clave, cambios: difs });
           if (cambio) {
             await query(`
               UPDATE INVENTARIO_REPORTES SET
@@ -1115,6 +1131,7 @@ router.post('/inventario-reportes/upload', requireAuth, upload.single('archivo')
     }
     await auditLog(usuario, 'inventario-reportes', 'UPLOAD', {
       archivo: req.file.originalname, insertados, actualizados, errores, respaldo_previo,
+      cambios: cambiosDetalle.slice(0, 100),
       combos: combos.slice(0, 200).map(c => ({ clave_rep: c.CLAVE_REP, plataforma: c.PLATAFORMA || null, version: c.VERSION }))
     });
     res.json({ ok: true, insertados, actualizados, errores,
@@ -1414,12 +1431,19 @@ router.put('/estatus-reporte/estatus', requireAuth, async (req, res) => {
 
     // Si viene ID, actualizar directamente por ID
     if (id_estatus_rep) {
+      const antesRows = await query(`
+        SELECT ID_ESTATUS_REP, VERSION_CARGA, ESTATUS
+        FROM ESTATUS_REPORTE WHERE ID_ESTATUS_REP=${parseInt(id_estatus_rep)}
+      `);
       await query(`
         UPDATE ESTATUS_REPORTE SET
           ESTATUS=${esc(estatus)}, FECHA_ESTATUS=GETDATE(), USER_ESTATUS=${esc(usuario)}
         WHERE ID_ESTATUS_REP=${parseInt(id_estatus_rep)}
       `);
-      await auditLog(usuario, 'estatus-reporte', 'ESTATUS', { id_estatus_rep, clave_rep, clave_plataforma, estatus });
+      await auditLog(usuario, 'estatus-reporte', 'ESTATUS',
+        { id_estatus_rep, clave_rep, clave_plataforma, estatus,
+          filas_afectadas: antesRows.length, antes: antesRows[0] || null,
+          despues: antesRows.length ? { ESTATUS: estatus } : null });
       return res.json({ ok: true });
     }
 
@@ -1430,11 +1454,21 @@ router.put('/estatus-reporte/estatus', requireAuth, async (req, res) => {
     `);
 
     if (existe.length) {
+      // Foto "antes" de las filas que se van a tocar (para bitácora)
+      const antesRows = await query(`
+        SELECT ID_ESTATUS_REP, VERSION_CARGA, ESTATUS
+        FROM ESTATUS_REPORTE
+        WHERE CLAVE_REP=${esc(clave_rep)} AND CLAVE_PLATAFORMA=${esc(clave_plataforma)}${versionFilter}
+      `);
       await query(`
         UPDATE ESTATUS_REPORTE SET
           ESTATUS=${esc(estatus)}, FECHA_ESTATUS=GETDATE(), USER_ESTATUS=${esc(usuario)}
         WHERE CLAVE_REP=${esc(clave_rep)} AND CLAVE_PLATAFORMA=${esc(clave_plataforma)}${versionFilter}
       `);
+      await auditLog(usuario, 'estatus-reporte', 'ESTATUS',
+        { clave_rep, clave_plataforma, version: version || 'todas', estatus,
+          filas_afectadas: antesRows.length, antes: antesRows.slice(0, 20), despues: { ESTATUS: estatus } });
+      return res.json({ ok: true });
     } else if (version) {
       // La plataforma tiene registros pero NO con esa versión: rechazar en lugar
       // de crear un registro fantasma con una versión que no le corresponde.
@@ -1476,7 +1510,8 @@ router.put('/estatus-reporte/estatus', requireAuth, async (req, res) => {
       `);
     }
     await auditLog(usuario, 'estatus-reporte', 'ESTATUS',
-      { clave_rep, clave_plataforma, version: version || 'todas', estatus });
+      { clave_rep, clave_plataforma, version: version || null, estatus,
+        alta_nueva: true, filas_afectadas: 1, antes: null, despues: { ESTATUS: estatus } });
     res.json({ ok: true });
   } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
 });

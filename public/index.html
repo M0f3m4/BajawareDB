@@ -5255,12 +5255,11 @@
               let detalle = row.DETALLE || '';
               try {
                 const obj = JSON.parse(detalle);
-                // Formatear valores anidados: arreglos → desplegable legible, objetos → pares k:v
+                // Formatear valores anidados (recursivo): arreglos → desplegable,
+                // objetos → pares k:v, cambios {campo, antes, despues} → "campo: antes → despues"
                 const fmtV = v => {
                   if (Array.isArray(v)) {
-                    const items = v.map(x => (x && typeof x === 'object')
-                      ? Object.values(x).filter(y => y !== null && y !== undefined && y !== '').join(' · ')
-                      : String(x));
+                    const items = v.map(x => fmtV(x));
                     return `<details style="display:inline-block;vertical-align:top;">
                       <summary style="cursor:pointer;color:#1a3558;">${v.length} elementos ▾</summary>
                       <div style="font-family:monospace;font-size:11px;max-height:180px;overflow:auto;padding:4px 8px;background:#f8f9fa;border-radius:6px;margin-top:4px;">
@@ -5268,8 +5267,11 @@
                       </div></details>`;
                   }
                   if (v && typeof v === 'object') {
+                    if ('campo' in v && 'antes' in v && 'despues' in v) {
+                      return `${v.campo}: <span style="color:#c62828;">${v.antes === '' || v.antes == null ? '∅' : v.antes}</span> → <span style="color:#2e7d32;">${v.despues === '' || v.despues == null ? '∅' : v.despues}</span>`;
+                    }
                     return Object.entries(v).filter(([,v2]) => v2 !== null && v2 !== undefined && v2 !== '')
-                      .map(([k2,v2]) => `${k2}: ${v2}`).join(', ');
+                      .map(([k2,v2]) => (v2 && typeof v2 === 'object') ? `${k2}: ${fmtV(v2)}` : `${k2}: ${v2}`).join(', ');
                   }
                   return String(v);
                 };
