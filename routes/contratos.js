@@ -673,6 +673,13 @@ router.put('/estatus-reporte', requireAuth, async (req, res) => {
         SELECT ID_ESTATUS_REP, VERSION_CARGA, DOCUMENTADO, PROGRAMADO, CERTIFICADO, ESTATUS
         FROM ESTATUS_REPORTE WHERE ID_ESTATUS_REP=${parseInt(id_estatus_rep)}
       `);
+      // Candado: si el ID ya no existe, avisar en lugar de regresar un falso éxito
+      if (!antesRows.length) {
+        return res.status(404).json({
+          ok: false,
+          message: `El registro (ID ${id_estatus_rep}) ya no existe. No se modificó nada. Recarga la lista e intenta de nuevo.`
+        });
+      }
       await query(`
         UPDATE ESTATUS_REPORTE SET
           DOCUMENTADO=${docVal}, PROGRAMADO=${progVal}, CERTIFICADO=${certVal},
@@ -681,7 +688,7 @@ router.put('/estatus-reporte', requireAuth, async (req, res) => {
       `);
       await auditLog(usuario, 'estatus-reporte', desmarcar ? 'DESMARCAR' : 'MARCAR',
         { id_estatus_rep, clave_rep, clave_plataforma, etapa, resultado: nuevoEstatus,
-          filas_afectadas: antesRows.length, antes: antesRows[0] || null, despues: antesRows.length ? despues : null });
+          filas_afectadas: antesRows.length, antes: antesRows[0] || null, despues });
       return res.json({ ok: true });
     }
 
@@ -701,6 +708,15 @@ router.put('/estatus-reporte', requireAuth, async (req, res) => {
         FROM ESTATUS_REPORTE
         WHERE CLAVE_REP=${esc(clave_rep)} AND CLAVE_PLATAFORMA=${esc(clave_plataforma)}${versionFilter}
       `);
+      // Candado: sin versión y con varias versiones en el par → pedir confirmación
+      // explícita antes de tocar todas (evita planchar flags de versiones históricas).
+      if (!versionFilter && antesRows.length > 1 && !req.body.confirmar_todas) {
+        const versiones = antesRows.map(a => a.VERSION_CARGA == null ? 'NULL' : String(a.VERSION_CARGA).trim());
+        return res.status(409).json({
+          ok: false, requiere_confirmacion: true, filas: antesRows.length, versiones,
+          message: `${clave_rep} en ${clave_plataforma} tiene ${antesRows.length} versiones (${versiones.join(', ')}). Especifica la versión, o confirma que quieres aplicar a TODAS. No se modificó nada.`
+        });
+      }
       await query(`
         UPDATE ESTATUS_REPORTE SET
           DOCUMENTADO=${docVal}, PROGRAMADO=${progVal}, CERTIFICADO=${certVal},
@@ -710,6 +726,7 @@ router.put('/estatus-reporte', requireAuth, async (req, res) => {
       `);
       await auditLog(usuario, 'estatus-reporte', desmarcar ? 'DESMARCAR' : 'MARCAR',
         { clave_rep, clave_plataforma, etapa, version: version || 'todas', resultado: nuevoEstatus,
+          confirmo_todas: !version && antesRows.length > 1 ? true : undefined,
           filas_afectadas: antesRows.length, antes: antesRows.slice(0, 20), despues });
       return res.json({ ok: true });
     } else if (existeGeneral.length) {
@@ -1435,6 +1452,13 @@ router.put('/estatus-reporte/estatus', requireAuth, async (req, res) => {
         SELECT ID_ESTATUS_REP, VERSION_CARGA, ESTATUS
         FROM ESTATUS_REPORTE WHERE ID_ESTATUS_REP=${parseInt(id_estatus_rep)}
       `);
+      // Candado: si el ID ya no existe, avisar en lugar de regresar un falso éxito
+      if (!antesRows.length) {
+        return res.status(404).json({
+          ok: false,
+          message: `El registro (ID ${id_estatus_rep}) ya no existe. No se modificó nada. Recarga la lista e intenta de nuevo.`
+        });
+      }
       await query(`
         UPDATE ESTATUS_REPORTE SET
           ESTATUS=${esc(estatus)}, FECHA_ESTATUS=GETDATE(), USER_ESTATUS=${esc(usuario)}
@@ -1443,7 +1467,7 @@ router.put('/estatus-reporte/estatus', requireAuth, async (req, res) => {
       await auditLog(usuario, 'estatus-reporte', 'ESTATUS',
         { id_estatus_rep, clave_rep, clave_plataforma, estatus,
           filas_afectadas: antesRows.length, antes: antesRows[0] || null,
-          despues: antesRows.length ? { ESTATUS: estatus } : null });
+          despues: { ESTATUS: estatus } });
       return res.json({ ok: true });
     }
 
@@ -1460,6 +1484,15 @@ router.put('/estatus-reporte/estatus', requireAuth, async (req, res) => {
         FROM ESTATUS_REPORTE
         WHERE CLAVE_REP=${esc(clave_rep)} AND CLAVE_PLATAFORMA=${esc(clave_plataforma)}${versionFilter}
       `);
+      // Candado: sin versión y con varias versiones en el par → pedir confirmación
+      // explícita antes de tocar todas (evita planchar estatus de versiones históricas).
+      if (!versionFilter && antesRows.length > 1 && !req.body.confirmar_todas) {
+        const versiones = antesRows.map(a => a.VERSION_CARGA == null ? 'NULL' : String(a.VERSION_CARGA).trim());
+        return res.status(409).json({
+          ok: false, requiere_confirmacion: true, filas: antesRows.length, versiones,
+          message: `${clave_rep} en ${clave_plataforma} tiene ${antesRows.length} versiones (${versiones.join(', ')}). Especifica la versión, o confirma que quieres aplicar a TODAS. No se modificó nada.`
+        });
+      }
       await query(`
         UPDATE ESTATUS_REPORTE SET
           ESTATUS=${esc(estatus)}, FECHA_ESTATUS=GETDATE(), USER_ESTATUS=${esc(usuario)}
@@ -1467,6 +1500,7 @@ router.put('/estatus-reporte/estatus', requireAuth, async (req, res) => {
       `);
       await auditLog(usuario, 'estatus-reporte', 'ESTATUS',
         { clave_rep, clave_plataforma, version: version || 'todas', estatus,
+          confirmo_todas: !version && antesRows.length > 1 ? true : undefined,
           filas_afectadas: antesRows.length, antes: antesRows.slice(0, 20), despues: { ESTATUS: estatus } });
       return res.json({ ok: true });
     } else if (version) {
