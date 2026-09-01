@@ -687,8 +687,10 @@ router.put('/estatus-reporte', requireAuth, async (req, res) => {
         WHERE ID_ESTATUS_REP=${parseInt(id_estatus_rep)}
       `);
       await auditLog(usuario, 'estatus-reporte', desmarcar ? 'DESMARCAR' : 'MARCAR',
-        { id_estatus_rep, clave_rep, clave_plataforma, etapa, resultado: nuevoEstatus,
-          filas_afectadas: antesRows.length, antes: antesRows[0] || null, despues });
+        { id_estatus_rep, clave_rep, clave_plataforma,
+          version: antesRows[0].VERSION_CARGA == null ? 'NULL' : String(antesRows[0].VERSION_CARGA).trim(),
+          etapa, resultado: nuevoEstatus,
+          filas_afectadas: antesRows.length, antes: antesRows[0], despues });
       return res.json({ ok: true });
     }
 
@@ -1465,8 +1467,10 @@ router.put('/estatus-reporte/estatus', requireAuth, async (req, res) => {
         WHERE ID_ESTATUS_REP=${parseInt(id_estatus_rep)}
       `);
       await auditLog(usuario, 'estatus-reporte', 'ESTATUS',
-        { id_estatus_rep, clave_rep, clave_plataforma, estatus,
-          filas_afectadas: antesRows.length, antes: antesRows[0] || null,
+        { id_estatus_rep, clave_rep, clave_plataforma,
+          version: antesRows[0].VERSION_CARGA == null ? 'NULL' : String(antesRows[0].VERSION_CARGA).trim(),
+          estatus,
+          filas_afectadas: antesRows.length, antes: antesRows[0],
           despues: { ESTATUS: estatus } });
       return res.json({ ok: true });
     }
