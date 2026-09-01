@@ -11,6 +11,7 @@ const layoutsRoutes   = require('./routes/layouts');
 const reportesRoutes  = require('./routes/reportes');
 const contratosRoutes = require('./routes/contratos');
 const monitor        = require('./services/monitor');
+const respaldos      = require('./services/respaldos');
 const { setup }     = require('./db/setup');
 
 const app  = express();
@@ -49,6 +50,7 @@ app.listen(PORT, async () => {
   console.log(`Bajaware corriendo en http://localhost:${PORT}`);
   try { await setup(); } catch (e) { console.warn('⚠ Setup DB:', e.message); }
   monitor.iniciar();
+  respaldos.iniciar(); // respaldo diario automático de tablas críticas
   // Pre-calentar cache de validaciones en background (no bloquea el arranque)
   contratosRoutes.warmCache()
     .then(() => console.log('✔ Cache validaciones listo'))

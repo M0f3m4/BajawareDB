@@ -4,6 +4,7 @@ const multer  = require('multer');
 const XLSX    = require('xlsx');
 const path    = require('path');
 const { query } = require('../db/connection');
+const respaldos = require('../services/respaldos');
 
 function requireAuth(req, res, next) {
   if (!req.session.user) return res.status(401).json({ ok: false, message: 'No autenticado' });
@@ -946,6 +947,25 @@ router.post('/inventario-reportes/upload', requireAuth, upload.single('archivo')
     const ws   = wb.Sheets[wb.SheetNames[0]];
     // Auto-detectar la fila de encabezados (soporta templates con títulos arriba)
     const rows = XLSX.utils.sheet_to_json(ws, { defval: '', range: _detectHeaderRow(ws) });
+
+    // ── Respaldo de seguridad ANTES de tocar cualquier tabla ──
+    // Solo respalda las filas de las claves que vienen en el Excel (rápido).
+    // Si las tablas *_RESPALDO no existen todavía, solo avisa y sigue;
+    // cualquier otro error de respaldo ABORTA la carga (nada se sube).
+    const clavesExcel = [...new Set(rows.map(r => String(r.CLAVE_REP || '').trim()).filter(Boolean))];
+    let respaldo_previo = false;
+    try {
+      await respaldos.respaldarAntesDeCarga(usuario, req.file.originalname, clavesExcel);
+      respaldo_previo = true;
+    } catch (eBak) {
+      if (/no existe la tabla|invalid object name/i.test(eBak.message)) {
+        console.warn('[upload-rep] sin respaldo previo:', eBak.message);
+      } else {
+        return res.status(500).json({ ok: false,
+          message: 'No se pudo crear el respaldo previo — la carga se canceló y NO se subió nada. ' + eBak.message });
+      }
+    }
+
     let insertados = 0, actualizados = 0, errores = 0;
     const combos = []; // combinaciones {CLAVE_REP, CLAVE_REP_GENERAL, PLATAFORMA, VERSION} fila por fila
     for (const r of rows) {
@@ -1094,7 +1114,7 @@ router.post('/inventario-reportes/upload', requireAuth, upload.single('archivo')
       } catch(e2) { console.error('[upload-rep] fila error:', e2.message); errores++; }
     }
     await auditLog(usuario, 'inventario-reportes', 'UPLOAD', {
-      archivo: req.file.originalname, insertados, actualizados, errores,
+      archivo: req.file.originalname, insertados, actualizados, errores, respaldo_previo,
       combos: combos.slice(0, 200).map(c => ({ clave_rep: c.CLAVE_REP, plataforma: c.PLATAFORMA || null, version: c.VERSION }))
     });
     res.json({ ok: true, insertados, actualizados, errores,
