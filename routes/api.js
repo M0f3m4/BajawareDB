@@ -709,7 +709,12 @@ router.get('/estatus-validaciones/filtros', requireAuth, async (req, res) => {
 /* GET /api/estatus-reportes — Estatus de reportes (documentación, programación, certificación).
    Filtros: plataforma, estatus, texto.
    Tabla: ESTATUS_REPORTE + INVENTARIO_REPORTES.
-   Nota: Maneja VERSION_CARGA con posible truncamiento Excel (1.6 vs 1.6.0). */
+   Nota: Maneja VERSION_CARGA con posible truncamiento Excel (1.6 vs 1.6.0).
+   VERSION_CARGA es la versión PROPIA de la fila de estatus (NULL si no tiene);
+   VERSION_INV es la última versión cargada en el inventario (general por clave,
+   sin plataforma) — se regresan separadas para que la pantalla nunca las mezcle
+   como si fueran lo mismo (antes un COALESCE hacía parecer que un cambio de
+   versión en inventario "planchaba" la versión de todas las plataformas). */
 // ── GET /api/estatus-reportes ─────────────────────────────
 router.get('/estatus-reportes', requireAuth, async (req, res) => {
   const { plataforma, estatus, texto } = req.query;
@@ -725,7 +730,8 @@ router.get('/estatus-reportes', requireAuth, async (req, res) => {
         er.PROGRAMADO,  er.PROG_FECHA_ESTIMADA, er.PROG_FECHA_REAL, er.USER_PROG,
         er.CERTIFICADO, er.CERT_FECHA_ESTIMADA, er.CERT_FECHA_REAL, er.USER_CERT,
         er.QA_ALPHA, er.QA_BETA,
-        COALESCE(er.VERSION_CARGA, ir.VERSION_CARGA) AS VERSION_CARGA
+        er.VERSION_CARGA AS VERSION_CARGA,
+        ir.VERSION_CARGA AS VERSION_INV
       FROM ESTATUS_REPORTE er
       LEFT JOIN INVENTARIO_REPORTES ir ON ir.CLAVE_REP = er.CLAVE_REP
       ${where}

@@ -4936,7 +4936,11 @@
           <td><strong style="color:#1a3558;">${r.CLAVE_REP ?? '—'}</strong>${legacy ? tagHistorico : ''}</td>
           <td><span style="font-size:11px;background:#f0f2f5;padding:1px 6px;border-radius:4px;">${r.CLAVE_PLATAFORMA ?? '—'}</span></td>
           <td style="font-size:11px;color:#888;">${r.VERSION ?? '—'}</td>
-          <td style="text-align:center;"><span style="font-size:11px;background:#f0f4ff;color:#1a3558;padding:2px 7px;border-radius:10px;font-family:monospace;">${r.VERSION_CARGA ?? '—'}</span></td>
+          <td style="text-align:center;">${(r.VERSION_CARGA != null && String(r.VERSION_CARGA).trim() !== '')
+            ? `<span style="font-size:11px;background:#f0f4ff;color:#1a3558;padding:2px 7px;border-radius:10px;font-family:monospace;">${r.VERSION_CARGA}</span>`
+            : (r.VERSION_INV != null && String(r.VERSION_INV).trim() !== ''
+              ? `<span style="font-size:11px;background:#f4f4f4;color:#9aa4b0;padding:2px 7px;border-radius:10px;font-family:monospace;font-style:italic;" title="Esta fila de estatus no tiene versión de carga propia. Se muestra la última versión cargada en el INVENTARIO del reporte (dato general por clave, NO por plataforma).">${r.VERSION_INV} inv</span>`
+              : '—')}</td>
           <td>${estatusBadge(r.ESTATUS)}</td>
           ${cell3(r.DOCUMENTADO,  r.DOC_FECHA_ESTIMADA,  r.DOC_FECHA_REAL,  r.USER_DOC)}
           ${cell3(r.PROGRAMADO,   r.PROG_FECHA_ESTIMADA, r.PROG_FECHA_REAL,  r.USER_PROG)}
