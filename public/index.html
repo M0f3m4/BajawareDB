@@ -5558,6 +5558,47 @@
   // Colores de semáforo (mismos que el resto de la app).
   const PROY_RAG_COLOR = { Green:'#27ae60', Amber:'#f39c12', Red:'#e74c3c' };
 
+  // Catálogos para los dropdowns de la tabla (mismas listas que el Excel).
+  const PROY_PAGOS = ['Sin iniciar', 'Sin inicio de pagos', 'Pago parcial', 'Pago completado', 'Detenido', 'No Aplica'];
+  const PROY_FUNCIONALES = ['Gisela Escalante', 'Francisco Sánchez', 'Dante Suárez'];
+  const PROY_TECNICOS = ['Eduardo Ibarra', 'Karen Palomares', 'Oswaldo Casasola', 'Hugo Salazar', 'Ezequiel Lara'];
+
+  // Colores tipo Excel para el dropdown de pagos.
+  const PROY_PAGO_COLOR = {
+    'Sin iniciar':         { bg:'#e8eaf6', fg:'#3f51b5' },
+    'Sin inicio de pagos': { bg:'#ede7f6', fg:'#6a4fb3' },
+    'Pago parcial':        { bg:'#e8f5e9', fg:'#2e7d32' },
+    'Pago completado':     { bg:'#c8e6c9', fg:'#1b5e20' },
+    'Detenido':            { bg:'#8b2f23', fg:'#ffffff' },
+    'No Aplica':           { bg:'#37474f', fg:'#ffffff' },
+  };
+
+  // Genera un <select> editable en celda (estilo Excel). Si el valor actual no
+  // está en el catálogo (capturas viejas), se agrega para no perderlo.
+  function proySelectCell(id, campo, actual, opciones, colores) {
+    const val = actual || '';
+    const lista = opciones.includes(val) || !val ? opciones : [val, ...opciones];
+    const c = (colores && colores[val]) || { bg:'#fff', fg:'#333' };
+    return `<select onchange="proyGuardarSelect(this, ${id}, '${campo}')"
+        style="font-size:11px;border:1px solid #d5dce3;border-radius:10px;padding:2px 6px;max-width:150px;cursor:pointer;background:${c.bg};color:${c.fg};font-weight:600;">
+        <option value=""${val ? '' : ' selected'}>—</option>
+        ${lista.map(o => `<option value="${proyEsc(o)}"${o === val ? ' selected' : ''}>${proyEsc(o)}</option>`).join('')}
+      </select>`;
+  }
+
+  // Guarda el valor elegido en un dropdown de la tabla.
+  async function proyGuardarSelect(sel, id, campo) {
+    try {
+      const res = await fetch(`/api/proyectos/${id}/info`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ [campo]: sel.value || null }),
+      });
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.message);
+      loadProyTablero();
+    } catch (e) { alert('Error: ' + e.message); loadProyTablero(); }
+  }
+
   // Escapa texto para meterlo en atributos/HTML generado.
   const proyEsc = s => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
 
@@ -5718,7 +5759,7 @@
     const cont = document.getElementById('proy-tabla-wrap');
     if (!rows.length) { cont.innerHTML = '<div class="loading">Sin proyectos con ese filtro. Usa "➕ Nuevo proyecto" para dar de alta.</div>'; return; }
     cont.innerHTML = `
-      <div style="font-size:12px;color:#888;margin-bottom:8px;">${rows.length} proyectos · clic en el círculo RAG para cambiarlo · doble clic en Proyecto/Pagos/Avance/Funcional/Técnico/Tipo para editar</div>
+      <div style="font-size:12px;color:#888;margin-bottom:8px;">${rows.length} proyectos · clic en el círculo RAG para cambiarlo · Pagos/Funcional/Técnico se cambian con el dropdown · doble clic en Proyecto/Tipo/Avance para editar</div>
       <table class="data-table">
         <thead><tr>
           <th>Institución</th><th>Cliente</th><th>Proyecto</th><th>Tipo</th><th>Pagos</th>
@@ -5742,9 +5783,9 @@
               <td><strong style="color:#1a3558;">${proyEsc(p.NOMBRE_CLIENTE || p.CLAVE_CLIENTE || '—')}</strong></td>
               <td style="font-size:12px;cursor:pointer;" title="Contrato: ${proyEsc(p.NOMBRE_CONTRATO || p.CLAVE_CONTRATO || '')}" ondblclick="proyEditarCampo(${id},'nombre_proyecto','${proyEsc((p.NOMBRE_PROYECTO||'').replace(/'/g,"\\'"))}')">${proyEsc(p.NOMBRE_PROYECTO || '—')}</td>
               <td style="font-size:11px;cursor:pointer;" ondblclick="proyEditarCampo(${id},'tipo_actividad','${p.TIPO_ACTIVIDAD||''}')">${p.TIPO_ACTIVIDAD || '<span style="color:#ccc;">—</span>'}</td>
-              <td style="font-size:11px;cursor:pointer;" ondblclick="proyEditarCampo(${id},'estatus_pago','${proyEsc((p.ESTATUS_PAGO||'').replace(/'/g,"\\'"))}')">${proyEsc(p.ESTATUS_PAGO || '') || '<span style="color:#ccc;">—</span>'}</td>
-              <td style="font-size:11px;cursor:pointer;" ondblclick="proyEditarCampo(${id},'funcional_nombre','${proyEsc((p.FUNCIONAL_NOMBRE||'').replace(/'/g,"\\'"))}')">${proyEsc(p.FUNCIONAL_NOMBRE || '') || '<span style="color:#ccc;">—</span>'}</td>
-              <td style="font-size:11px;cursor:pointer;" ondblclick="proyEditarCampo(${id},'tecnico_nombre','${proyEsc((p.TECNICO_NOMBRE||'').replace(/'/g,"\\'"))}')">${proyEsc(p.TECNICO_NOMBRE || '') || '<span style="color:#ccc;">—</span>'}</td>
+              <td>${proySelectCell(id, 'estatus_pago', p.ESTATUS_PAGO, PROY_PAGOS, PROY_PAGO_COLOR)}</td>
+              <td>${proySelectCell(id, 'funcional_nombre', p.FUNCIONAL_NOMBRE, PROY_FUNCIONALES)}</td>
+              <td>${proySelectCell(id, 'tecnico_nombre', p.TECNICO_NOMBRE, PROY_TECNICOS)}</td>
               <td style="text-align:center;">
                 <span onclick="proyCambiarRag(${id})" title="${proyEsc(ragTip)}"
                       style="display:inline-block;width:16px;height:16px;border-radius:50%;background:${ragColor};cursor:pointer;border:2px solid #fff;box-shadow:0 0 0 1px #d5dce3;"></span>
