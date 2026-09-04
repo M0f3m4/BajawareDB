@@ -5536,12 +5536,15 @@
   }
 
   // ── PROYECTOS (Tablero RAG) ───────────────────────────────
-  // Réplica viva de la hoja "Proyectos" del Excel del área: un renglón por
-  // contrato/proyecto con RAG manual (editable) y RAG de reportes y
-  // validaciones calculados en el backend a partir de fechas reales.
+  // Réplica viva de la hoja "Proyectos" del Excel del área. Modelo en cascada:
+  // CLIENTE → CONTRATOS → PROYECTOS. Cada renglón es un registro de la tabla
+  // PROYECTOS (ID_PROYECTO) colgado de su contrato; el RAG manual es editable
+  // y los RAG de reportes/validaciones se calculan en el backend con las
+  // fechas del contrato padre.
   let proyData = [];          // datos crudos del tablero
   let proyFiltroTipo = '';    // pestaña activa (TIPO_ACTIVIDAD) — '' = todos
   let proyFiltroTexto = '';   // búsqueda libre
+  let proyCatalogo = [];      // catálogo cliente→contratos para el alta en cascada
 
   // Etiquetas de las pestañas por tipo de actividad (mismas "hojas" del Excel).
   const PROY_TIPOS = [
@@ -5554,6 +5557,9 @@
 
   // Colores de semáforo (mismos que el resto de la app).
   const PROY_RAG_COLOR = { Green:'#27ae60', Amber:'#f39c12', Red:'#e74c3c' };
+
+  // Escapa texto para meterlo en atributos/HTML generado.
+  const proyEsc = s => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
 
   // Badge de RAG calculado con desglose en tooltip. null = sin datos (gris).
   function proyRagCalc(rag, verdes, ambar, rojos, grises, total) {
@@ -5579,19 +5585,22 @@
     }
   }
 
-  // Renderiza pestañas, filtro y tabla a partir de proyData (sin refetch).
-  function proyRender() {
-    const wrap = document.getElementById('proy-content');
-    const filtered = proyData.filter(p => {
+  // Filtro común de pestaña + texto sobre proyData.
+  function proyFiltrar() {
+    return proyData.filter(p => {
       if (proyFiltroTipo && (p.TIPO_ACTIVIDAD || '') !== proyFiltroTipo) return false;
       if (proyFiltroTexto) {
         const t = proyFiltroTexto.toLowerCase();
-        const blob = `${p.NOMBRE_CLIENTE||''} ${p.NOMBRE_CONTRATO||''} ${p.CLAVE_CONTRATO||''} ${p.FUNCIONAL_NOMBRE||''} ${p.TECNICO_NOMBRE||''}`.toLowerCase();
+        const blob = `${p.NOMBRE_CLIENTE||''} ${p.NOMBRE_PROYECTO||''} ${p.NOMBRE_CONTRATO||''} ${p.CLAVE_CONTRATO||''} ${p.FUNCIONAL_NOMBRE||''} ${p.TECNICO_NOMBRE||''}`.toLowerCase();
         if (!blob.includes(t)) return false;
       }
       return true;
     });
+  }
 
+  // Renderiza pestañas, filtro, botón de alta y tabla a partir de proyData.
+  function proyRender() {
+    const wrap = document.getElementById('proy-content');
     const tabs = PROY_TIPOS.map(([val, label]) => {
       const activo = proyFiltroTipo === val;
       const n = val ? proyData.filter(p => (p.TIPO_ACTIVIDAD||'') === val).length : proyData.length;
@@ -5601,38 +5610,115 @@
     wrap.innerHTML = `
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px;">
         ${tabs}
-        <input id="proy-buscar" placeholder="Buscar cliente, proyecto, líder..." value="${proyFiltroTexto}"
+        <input id="proy-buscar" placeholder="Buscar cliente, proyecto, líder..." value="${proyEsc(proyFiltroTexto)}"
                oninput="proyFiltroTexto=this.value;proyRenderSoloTabla();"
                style="margin-left:auto;padding:6px 10px;border:1px solid #d5dce3;border-radius:6px;font-size:12px;min-width:220px;">
+        <button onclick="proyAbrirAlta()" style="padding:6px 12px;border:none;border-radius:6px;background:#1a3558;color:#fff;font-size:12px;cursor:pointer;">➕ Nuevo proyecto</button>
         <button onclick="loadProyTablero()" title="Recargar" style="padding:6px 10px;border:1px solid #d5dce3;border-radius:6px;background:#fff;cursor:pointer;">⟳</button>
       </div>
+      <div id="proy-alta-panel" style="display:none;"></div>
       <div id="proy-tabla-wrap"></div>`;
-    proyPintarTabla(filtered);
+    proyPintarTabla(proyFiltrar());
   }
 
   // Cambia la pestaña activa y repinta.
   function proySetTipo(val) { proyFiltroTipo = val; proyRender(); }
 
   // Repinta solo la tabla (para no perder el foco del input de búsqueda).
-  function proyRenderSoloTabla() {
-    const filtered = proyData.filter(p => {
-      if (proyFiltroTipo && (p.TIPO_ACTIVIDAD || '') !== proyFiltroTipo) return false;
-      if (proyFiltroTexto) {
-        const t = proyFiltroTexto.toLowerCase();
-        const blob = `${p.NOMBRE_CLIENTE||''} ${p.NOMBRE_CONTRATO||''} ${p.CLAVE_CONTRATO||''} ${p.FUNCIONAL_NOMBRE||''} ${p.TECNICO_NOMBRE||''}`.toLowerCase();
-        if (!blob.includes(t)) return false;
+  function proyRenderSoloTabla() { proyPintarTabla(proyFiltrar()); }
+
+  // ── Alta en cascada: cliente → contrato → nombre del proyecto ──
+  // Abre el panel de alta; carga el catálogo cliente/contratos la primera vez.
+  async function proyAbrirAlta() {
+    const panel = document.getElementById('proy-alta-panel');
+    if (panel.style.display !== 'none') { panel.style.display = 'none'; return; }
+    panel.style.display = '';
+    panel.innerHTML = '<div class="loading">Cargando catálogo...</div>';
+    try {
+      if (!proyCatalogo.length) {
+        const res  = await fetch('/api/proyectos/catalogo-alta');
+        const data = await res.json();
+        if (!data.ok) throw new Error(data.message);
+        proyCatalogo = data.data;
       }
-      return true;
-    });
-    proyPintarTabla(filtered);
+      // Clientes únicos (orden alfabético, ya viene ordenado del backend).
+      const vistos = new Set();
+      const clientes = proyCatalogo.filter(r => {
+        if (vistos.has(r.CLAVE_CLIENTE)) return false;
+        vistos.add(r.CLAVE_CLIENTE); return true;
+      });
+      panel.innerHTML = `
+        <div style="border:1px solid #d5dce3;border-radius:8px;padding:14px;margin-bottom:14px;background:#f8fafc;">
+          <div style="font-size:13px;font-weight:700;color:#1a3558;margin-bottom:10px;">Nuevo proyecto — elige en cascada</div>
+          <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;">
+            <div>
+              <label style="font-size:11px;color:#888;display:block;">1. Cliente</label>
+              <select id="proy-alta-cliente" onchange="proyAltaFiltrarContratos()" style="padding:6px;border:1px solid #d5dce3;border-radius:6px;font-size:12px;min-width:200px;">
+                <option value="">— elige cliente —</option>
+                ${clientes.map(c => `<option value="${proyEsc(c.CLAVE_CLIENTE)}">${proyEsc(c.NOMBRE_CLIENTE || c.CLAVE_CLIENTE)}</option>`).join('')}
+              </select>
+            </div>
+            <div>
+              <label style="font-size:11px;color:#888;display:block;">2. Contrato</label>
+              <select id="proy-alta-contrato" disabled style="padding:6px;border:1px solid #d5dce3;border-radius:6px;font-size:12px;min-width:240px;">
+                <option value="">— primero elige cliente —</option>
+              </select>
+            </div>
+            <div>
+              <label style="font-size:11px;color:#888;display:block;">3. Nombre del proyecto</label>
+              <input id="proy-alta-nombre" placeholder="ej. Migración a RW7" style="padding:6px;border:1px solid #d5dce3;border-radius:6px;font-size:12px;min-width:260px;">
+            </div>
+            <div>
+              <label style="font-size:11px;color:#888;display:block;">Tipo</label>
+              <select id="proy-alta-tipo" style="padding:6px;border:1px solid #d5dce3;border-radius:6px;font-size:12px;">
+                ${PROY_TIPOS.filter(t => t[0]).map(([val,label]) => `<option value="${val}">${label}</option>`).join('')}
+              </select>
+            </div>
+            <button onclick="proyGuardarAlta()" style="padding:7px 16px;border:none;border-radius:6px;background:#27ae60;color:#fff;font-size:12px;cursor:pointer;">Crear</button>
+            <button onclick="document.getElementById('proy-alta-panel').style.display='none'" style="padding:7px 12px;border:1px solid #d5dce3;border-radius:6px;background:#fff;font-size:12px;cursor:pointer;">Cancelar</button>
+          </div>
+          <div style="font-size:11px;color:#888;margin-top:8px;">Pagos, líderes, RAG y avance se capturan después directo en el tablero (doble clic / clic en el círculo).</div>
+        </div>`;
+    } catch (e) {
+      panel.innerHTML = '<div class="loading">Error: ' + e.message + '</div>';
+    }
+  }
+
+  // Al elegir cliente, llena el select de contratos solo con los suyos.
+  function proyAltaFiltrarContratos() {
+    const cliente = document.getElementById('proy-alta-cliente').value;
+    const sel = document.getElementById('proy-alta-contrato');
+    const contratos = proyCatalogo.filter(r => r.CLAVE_CLIENTE === cliente);
+    sel.disabled = !contratos.length;
+    sel.innerHTML = contratos.length
+      ? contratos.map(c => `<option value="${proyEsc(c.CLAVE_CONTRATO)}">${proyEsc(c.NOMBRE_CONTRATO || c.CLAVE_CONTRATO)}</option>`).join('')
+      : '<option value="">— este cliente no tiene contratos —</option>';
+  }
+
+  // Guarda el alta (POST) y recarga el tablero.
+  async function proyGuardarAlta() {
+    const clave_contrato  = document.getElementById('proy-alta-contrato').value;
+    const nombre_proyecto = document.getElementById('proy-alta-nombre').value.trim();
+    const tipo_actividad  = document.getElementById('proy-alta-tipo').value;
+    if (!clave_contrato) { alert('Elige cliente y contrato.'); return; }
+    if (!nombre_proyecto) { alert('Ponle nombre al proyecto.'); return; }
+    try {
+      const res = await fetch('/api/proyectos', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clave_contrato, nombre_proyecto, tipo_actividad }),
+      });
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.message);
+      loadProyTablero();
+    } catch (e) { alert('Error: ' + e.message); }
   }
 
   // Pinta la tabla principal del tablero.
   function proyPintarTabla(rows) {
     const cont = document.getElementById('proy-tabla-wrap');
-    if (!rows.length) { cont.innerHTML = '<div class="loading">Sin proyectos con ese filtro.</div>'; return; }
+    if (!rows.length) { cont.innerHTML = '<div class="loading">Sin proyectos con ese filtro. Usa "➕ Nuevo proyecto" para dar de alta.</div>'; return; }
     cont.innerHTML = `
-      <div style="font-size:12px;color:#888;margin-bottom:8px;">${rows.length} proyectos · clic en el círculo RAG para cambiarlo · doble clic en Pagos/Avance/Funcional/Técnico/Tipo para editar</div>
+      <div style="font-size:12px;color:#888;margin-bottom:8px;">${rows.length} proyectos · clic en el círculo RAG para cambiarlo · doble clic en Proyecto/Pagos/Avance/Funcional/Técnico/Tipo para editar</div>
       <table class="data-table">
         <thead><tr>
           <th>Institución</th><th>Cliente</th><th>Proyecto</th><th>Tipo</th><th>Pagos</th>
@@ -5645,7 +5731,7 @@
         </tr></thead>
         <tbody>
           ${rows.map((p, i) => {
-            const clave = (p.CLAVE_CONTRATO || '').replace(/'/g, "\\'");
+            const id = p.ID_PROYECTO;
             const ragColor = p.RAG_PROYECTO ? PROY_RAG_COLOR[p.RAG_PROYECTO] : '#b8c2cc';
             const ragTip = p.RAG_PROYECTO
               ? `${p.RAG_PROYECTO}${p.RAG_COMENTARIO ? ' — ' + p.RAG_COMENTARIO : ''}${p.RAG_USUARIO ? ' (' + p.RAG_USUARIO + ')' : ''}`
@@ -5653,20 +5739,23 @@
             const avance = p.AVANCE_ESTIMADO != null ? Math.round(p.AVANCE_ESTIMADO) : null;
             return `<tr>
               <td style="font-size:11px;">${p.TIPO_INSTITUCION || '<span style="color:#ccc;">—</span>'}</td>
-              <td><strong style="color:#1a3558;">${p.NOMBRE_CLIENTE || p.CLAVE_CLIENTE || '—'}</strong></td>
-              <td style="font-size:12px;" title="${p.CLAVE_CONTRATO}">${p.NOMBRE_CONTRATO || '—'}</td>
-              <td style="font-size:11px;cursor:pointer;" ondblclick="proyEditarCampo('${clave}','tipo_actividad','${p.TIPO_ACTIVIDAD||''}')">${p.TIPO_ACTIVIDAD || '<span style="color:#ccc;">—</span>'}</td>
-              <td style="font-size:11px;cursor:pointer;" ondblclick="proyEditarCampo('${clave}','estatus_pago','${(p.ESTATUS_PAGO||'').replace(/'/g,"\\'")}')">${p.ESTATUS_PAGO || '<span style="color:#ccc;">—</span>'}</td>
-              <td style="font-size:11px;cursor:pointer;" ondblclick="proyEditarCampo('${clave}','funcional_nombre','${(p.FUNCIONAL_NOMBRE||'').replace(/'/g,"\\'")}')">${p.FUNCIONAL_NOMBRE || '<span style="color:#ccc;">—</span>'}</td>
-              <td style="font-size:11px;cursor:pointer;" ondblclick="proyEditarCampo('${clave}','tecnico_nombre','${(p.TECNICO_NOMBRE||'').replace(/'/g,"\\'")}')">${p.TECNICO_NOMBRE || '<span style="color:#ccc;">—</span>'}</td>
+              <td><strong style="color:#1a3558;">${proyEsc(p.NOMBRE_CLIENTE || p.CLAVE_CLIENTE || '—')}</strong></td>
+              <td style="font-size:12px;cursor:pointer;" title="Contrato: ${proyEsc(p.NOMBRE_CONTRATO || p.CLAVE_CONTRATO || '')}" ondblclick="proyEditarCampo(${id},'nombre_proyecto','${proyEsc((p.NOMBRE_PROYECTO||'').replace(/'/g,"\\'"))}')">${proyEsc(p.NOMBRE_PROYECTO || '—')}</td>
+              <td style="font-size:11px;cursor:pointer;" ondblclick="proyEditarCampo(${id},'tipo_actividad','${p.TIPO_ACTIVIDAD||''}')">${p.TIPO_ACTIVIDAD || '<span style="color:#ccc;">—</span>'}</td>
+              <td style="font-size:11px;cursor:pointer;" ondblclick="proyEditarCampo(${id},'estatus_pago','${proyEsc((p.ESTATUS_PAGO||'').replace(/'/g,"\\'"))}')">${proyEsc(p.ESTATUS_PAGO || '') || '<span style="color:#ccc;">—</span>'}</td>
+              <td style="font-size:11px;cursor:pointer;" ondblclick="proyEditarCampo(${id},'funcional_nombre','${proyEsc((p.FUNCIONAL_NOMBRE||'').replace(/'/g,"\\'"))}')">${proyEsc(p.FUNCIONAL_NOMBRE || '') || '<span style="color:#ccc;">—</span>'}</td>
+              <td style="font-size:11px;cursor:pointer;" ondblclick="proyEditarCampo(${id},'tecnico_nombre','${proyEsc((p.TECNICO_NOMBRE||'').replace(/'/g,"\\'"))}')">${proyEsc(p.TECNICO_NOMBRE || '') || '<span style="color:#ccc;">—</span>'}</td>
               <td style="text-align:center;">
-                <span onclick="proyCambiarRag('${clave}')" title="${ragTip.replace(/"/g,'&quot;')}"
+                <span onclick="proyCambiarRag(${id})" title="${proyEsc(ragTip)}"
                       style="display:inline-block;width:16px;height:16px;border-radius:50%;background:${ragColor};cursor:pointer;border:2px solid #fff;box-shadow:0 0 0 1px #d5dce3;"></span>
               </td>
               <td style="text-align:center;">${proyRagCalc(p.RAG_REPORTES, p.REP_VERDES, p.REP_AMBAR, p.REP_ROJOS, p.REP_GRISES, p.REP_TOTAL)}</td>
               <td style="text-align:center;">${proyRagCalc(p.RAG_VALIDACIONES, p.VAL_VERDES, p.VAL_AMBAR, p.VAL_ROJOS, p.VAL_GRISES, p.VAL_TOTAL)}</td>
-              <td style="text-align:center;font-size:12px;cursor:pointer;" ondblclick="proyEditarCampo('${clave}','avance_estimado','${avance ?? ''}')">${avance != null ? avance + '%' : '<span style="color:#ccc;">—</span>'}</td>
-              <td><button onclick="proyToggleDetalle('${clave}', ${i})" style="border:none;background:none;cursor:pointer;font-size:14px;" title="Ver reportes y validaciones">📂</button></td>
+              <td style="text-align:center;font-size:12px;cursor:pointer;" ondblclick="proyEditarCampo(${id},'avance_estimado','${avance ?? ''}')">${avance != null ? avance + '%' : '<span style="color:#ccc;">—</span>'}</td>
+              <td style="white-space:nowrap;">
+                <button onclick="proyToggleDetalle(${id}, ${i})" style="border:none;background:none;cursor:pointer;font-size:14px;" title="Ver reportes y validaciones">📂</button>
+                <button onclick="proyBaja(${id})" style="border:none;background:none;cursor:pointer;font-size:12px;" title="Dar de baja este proyecto">🗑️</button>
+              </td>
             </tr>
             <tr id="proy-det-${i}" style="display:none;"><td colspan="12" style="background:#f8fafc;padding:10px 18px;" id="proy-det-cont-${i}"></td></tr>`;
           }).join('')}
@@ -5675,7 +5764,7 @@
   }
 
   // Cambia el RAG manual del proyecto: pide color y comentario, guarda y recarga.
-  async function proyCambiarRag(clave) {
+  async function proyCambiarRag(id) {
     const rag = prompt('RAG del proyecto (Green / Amber / Red, vacío = quitar):');
     if (rag === null) return; // canceló
     const val = rag.trim();
@@ -5683,7 +5772,7 @@
     if (norm === undefined) { alert('Valor inválido. Usa Green, Amber o Red.'); return; }
     const comentario = norm ? (prompt('Comentario / razón del color (opcional):') || '') : '';
     try {
-      const res = await fetch(`/api/proyectos/${encodeURIComponent(clave)}/rag`, {
+      const res = await fetch(`/api/proyectos/${id}/rag`, {
         method: 'PUT', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ rag: norm || null, comentario }),
       });
@@ -5694,8 +5783,9 @@
   }
 
   // Edita un campo simple del proyecto vía prompt y lo guarda.
-  async function proyEditarCampo(clave, campo, actual) {
+  async function proyEditarCampo(id, campo, actual) {
     const labels = {
+      nombre_proyecto: 'Nombre del proyecto:',
       tipo_actividad:  'Tipo de actividad (PROYECTO / CAMBIO_REGULATORIO / SOPORTE / CUSTOMER_S):',
       estatus_pago:    'Estatus de pagos (ej. "Pago completado"):',
       funcional_nombre:'Líder funcional:',
@@ -5705,7 +5795,7 @@
     const nuevo = prompt(labels[campo] || campo, actual || '');
     if (nuevo === null) return;
     try {
-      const res = await fetch(`/api/proyectos/${encodeURIComponent(clave)}/info`, {
+      const res = await fetch(`/api/proyectos/${id}/info`, {
         method: 'PUT', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ [campo]: nuevo.trim() === '' ? null : nuevo.trim() }),
       });
@@ -5715,15 +5805,27 @@
     } catch (e) { alert('Error: ' + e.message); }
   }
 
-  // Muestra/oculta el detalle de un proyecto (reportes y validaciones con semáforo).
-  async function proyToggleDetalle(clave, i) {
+  // Baja lógica de un proyecto (con confirmación).
+  async function proyBaja(id) {
+    const p = proyData.find(x => x.ID_PROYECTO === id);
+    if (!confirm(`¿Dar de baja el proyecto "${p ? p.NOMBRE_PROYECTO : id}"? No se borra, solo sale del tablero.`)) return;
+    try {
+      const res = await fetch(`/api/proyectos/${id}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.message);
+      loadProyTablero();
+    } catch (e) { alert('Error: ' + e.message); }
+  }
+
+  // Muestra/oculta el detalle de un proyecto (reportes y validaciones del contrato padre).
+  async function proyToggleDetalle(id, i) {
     const tr = document.getElementById('proy-det-' + i);
     if (tr.style.display !== 'none') { tr.style.display = 'none'; return; }
     tr.style.display = '';
     const cont = document.getElementById('proy-det-cont-' + i);
     cont.innerHTML = '<div class="loading">Cargando detalle...</div>';
     try {
-      const res  = await fetch(`/api/proyectos/${encodeURIComponent(clave)}/detalle`);
+      const res  = await fetch(`/api/proyectos/${id}/detalle`);
       const data = await res.json();
       if (!data.ok) throw new Error(data.message);
       const { reportes, validaciones } = data.data;
@@ -5732,7 +5834,6 @@
         return `<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${c};"></span>`;
       };
       const fmtF = f => f ? String(f).substring(0,10) : '—';
-      const claveJs = clave.replace(/'/g, "\\'");
       cont.innerHTML = `
         <div style="font-size:12px;font-weight:700;color:#1a3558;margin-bottom:6px;">Reportes (${reportes.length}) — doble clic en "Necesidad" o "Est. Prod" para capturar fecha</div>
         ${reportes.length ? `<table class="data-table" style="font-size:11px;">
@@ -5742,10 +5843,10 @@
             return `<tr>
               <td>${sem(r.SEMAFORO)}</td>
               <td style="font-family:monospace;">${r.CLAVE_REP}</td>
-              <td style="cursor:pointer;" ondblclick="proyEditarFechaRep('${claveJs}','${rep}','fecha_necesidad','${fmtF(r.FECHA_NECESIDAD) === '—' ? '' : fmtF(r.FECHA_NECESIDAD)}', ${i})">${fmtF(r.FECHA_NECESIDAD)}</td>
+              <td style="cursor:pointer;" ondblclick="proyEditarFechaRep(${id},'${rep}','fecha_necesidad','${fmtF(r.FECHA_NECESIDAD) === '—' ? '' : fmtF(r.FECHA_NECESIDAD)}', ${i})">${fmtF(r.FECHA_NECESIDAD)}</td>
               <td>${fmtF(r.FECHA_ESTIMADA_QA)}</td><td>${fmtF(r.FECHA_INSTALADO_QA)}</td>
               <td>${fmtF(r.FECHA_ESTIMADA_CERT)}</td><td>${fmtF(r.FECHA_CERTIFICADO)}</td>
-              <td style="cursor:pointer;" ondblclick="proyEditarFechaRep('${claveJs}','${rep}','fecha_estimada_prod','${fmtF(r.FECHA_ESTIMADA_PROD) === '—' ? '' : fmtF(r.FECHA_ESTIMADA_PROD)}', ${i})">${fmtF(r.FECHA_ESTIMADA_PROD)}</td>
+              <td style="cursor:pointer;" ondblclick="proyEditarFechaRep(${id},'${rep}','fecha_estimada_prod','${fmtF(r.FECHA_ESTIMADA_PROD) === '—' ? '' : fmtF(r.FECHA_ESTIMADA_PROD)}', ${i})">${fmtF(r.FECHA_ESTIMADA_PROD)}</td>
               <td>${fmtF(r.FECHA_INSTALADO_PROD)}</td>
             </tr>`;
           }).join('')}</tbody>
@@ -5765,15 +5866,15 @@
     }
   }
 
-  // Captura una fecha (necesidad o estimada de prod) de un reporte del proyecto.
-  async function proyEditarFechaRep(clave, claveRep, campo, actual, i) {
+  // Captura una fecha (necesidad o estimada de prod) de un reporte del contrato del proyecto.
+  async function proyEditarFechaRep(id, claveRep, campo, actual, i) {
     const label = campo === 'fecha_necesidad' ? 'Fecha de necesidad del cliente' : 'Fecha estimada de instalación en PROD';
     const f = prompt(`${label} para ${claveRep} (formato AAAA-MM-DD, vacío = quitar):`, actual || '');
     if (f === null) return;
     const val = f.trim();
     if (val && !/^\d{4}-\d{2}-\d{2}$/.test(val)) { alert('Formato inválido. Usa AAAA-MM-DD.'); return; }
     try {
-      const res = await fetch(`/api/proyectos/${encodeURIComponent(clave)}/reporte-fechas`, {
+      const res = await fetch(`/api/proyectos/${id}/reporte-fechas`, {
         method: 'PUT', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ clave_rep: claveRep, [campo]: val || null }),
       });

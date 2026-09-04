@@ -1,9 +1,15 @@
 // ============================================================================
 // routes/proyectos.js — Módulo PROYECTOS (Tablero tipo "PROYECTOS ACTIVOS 2026")
 // ----------------------------------------------------------------------------
-// Propósito: exponer los CONTRATOS como "proyectos" replicando el Excel del
-// área: RAG del proyecto (manual), RAG de reportes y RAG de validaciones
-// (calculados a partir de fechas), líderes funcional/técnico, avance, etc.
+// Modelo en cascada: CLIENTE → CONTRATOS → PROYECTOS.
+// Un contrato puede tener varios proyectos; cada proyecto vive en la tabla
+// PROYECTOS (ID_PROYECTO identity) y cuelga de su CLAVE_CONTRATO. El alta se
+// hace eligiendo cliente → contrato → nombre del proyecto.
+//
+// Cada proyecto trae: RAG manual (Green/Amber/Red con bitácora), líderes
+// funcional/técnico, avance, tipo de actividad y estatus de pagos. Los RAG de
+// reportes y validaciones se calculan al vuelo desde las fechas del CONTRATO
+// padre (ahí viven CONTRATOS_REPORTES y CONTRATOS_VALIDACION_ESTATUS).
 //
 // Reglas de semáforo por producto (reporte o validación), calculadas al vuelo:
 //   VERDE : ya se entregó (FECHA_INSTALADO_PROD / FECHA_REAL con valor), o la
@@ -13,11 +19,11 @@
 //   ROJO  : la estimada supera la necesidad, o la estimada ya venció sin
 //           entrega, o hay fecha de necesidad pero no hay estimada.
 //   GRIS  : sin fechas capturadas (no castiga; simplemente no hay dato).
-// El RAG agregado del proyecto (reportes o validaciones) es "el peor manda":
+// El RAG agregado (reportes o validaciones) es "el peor manda":
 //   ROJO > AMBAR > VERDE; si todo es GRIS, queda NULL (sin datos).
 //
-// Tablas: CONTRATOS, CLIENTE, CONTRATOS_REPORTES, CONTRATOS_VALIDACION_ESTATUS,
-//         AUDIT_LOG (bitácora de cambios manuales).
+// Tablas: PROYECTOS, CONTRATOS, CLIENTE, CONTRATOS_REPORTES,
+//         CONTRATOS_VALIDACION_ESTATUS, AUDIT_LOG (bitácora).
 // ============================================================================
 
 const express = require('express');
@@ -35,6 +41,12 @@ function requireAuth(req, res, next) {
 
 // Helper: escapa valores SQL (mismo helper que routes/contratos.js).
 const esc = v => (v === null || v === undefined || v === '') ? 'NULL' : `'${String(v).trim().replace(/'/g,"''")}'`;
+
+// Helper: valida que el id del proyecto sea un entero (evita inyección en la URL).
+function idNum(raw) {
+  const n = parseInt(raw, 10);
+  return (Number.isInteger(n) && n > 0) ? n : null;
+}
 
 // Helper: bitácora en AUDIT_LOG. Si falla, no bloquea el flujo principal.
 async function auditLog(usuario, seccion, accion, detalle) {
@@ -80,34 +92,34 @@ function ragAgregado(rojos, ambar, verdes) {
 }
 
 // ── GET /tablero
-// Descripción: tablero principal de proyectos — réplica viva de la hoja
-// "Proyectos" del Excel. Devuelve un renglón por contrato con datos del
-// cliente, RAG manual, avance, líderes y los RAG calculados de reportes
-// y validaciones (con sus conteos por color para tooltips).
+// Descripción: tablero principal — un renglón por PROYECTO con datos de su
+// contrato y cliente, RAG manual, avance, líderes y los RAG calculados de
+// reportes y validaciones del contrato padre (con conteos para tooltips).
 // Parámetros query opcionales: tipo_actividad, cliente, rag, texto.
 // Sin bitácora (solo lectura).
 router.get('/tablero', requireAuth, async (req, res) => {
   try {
     const { tipo_actividad, cliente, rag, texto } = req.query;
-    let where = 'WHERE 1=1';
-    if (tipo_actividad) where += ` AND c.TIPO_ACTIVIDAD = ${esc(tipo_actividad)}`;
+    let where = 'WHERE p.ACTIVO = 1';
+    if (tipo_actividad) where += ` AND p.TIPO_ACTIVIDAD = ${esc(tipo_actividad)}`;
     if (cliente)        where += ` AND c.CLAVE_CLIENTE = ${esc(cliente)}`;
-    if (rag)            where += ` AND c.RAG_PROYECTO = ${esc(rag)}`;
-    if (texto)          where += ` AND (c.NOMBRE_CONTRATO LIKE ${esc('%'+texto+'%')} OR cl.NOMBRE_CLIENTE LIKE ${esc('%'+texto+'%')} OR c.CLAVE_CONTRATO LIKE ${esc('%'+texto+'%')})`;
+    if (rag)            where += ` AND p.RAG_PROYECTO = ${esc(rag)}`;
+    if (texto)          where += ` AND (p.NOMBRE_PROYECTO LIKE ${esc('%'+texto+'%')} OR cl.NOMBRE_CLIENTE LIKE ${esc('%'+texto+'%')} OR c.CLAVE_CONTRATO LIKE ${esc('%'+texto+'%')})`;
 
     const rows = await query(`
       SELECT
+        p.ID_PROYECTO, p.NOMBRE_PROYECTO, p.TIPO_ACTIVIDAD, p.ESTATUS_PAGO,
+        p.RAG_PROYECTO, p.RAG_COMENTARIO, p.RAG_FECHA, p.RAG_USUARIO,
+        p.AVANCE_ESTIMADO, p.FECHA_ESTIMADA_CONCLUIR,
+        p.FUNCIONAL_NOMBRE, p.TECNICO_NOMBRE,
         c.CLAVE_CONTRATO, c.NOMBRE_CONTRATO, c.CLAVE_CLIENTE, c.CLAVE_PLATAFORMA,
-        c.ESTATUS, c.ETAPA,
-        c.TIPO_ACTIVIDAD, c.ESTATUS_PAGO, c.RAG_PROYECTO, c.RAG_COMENTARIO,
-        c.RAG_FECHA, c.RAG_USUARIO, c.AVANCE_ESTIMADO, c.FECHA_ESTIMADA_CONCLUIR,
-        c.FUNCIONAL_NOMBRE, c.TECNICO_NOMBRE,
         cl.NOMBRE_CLIENTE, cl.TIPO_INSTITUCION,
         ISNULL(r.TOT,0) AS REP_TOTAL, ISNULL(r.VERDES,0) AS REP_VERDES,
         ISNULL(r.AMBAR,0) AS REP_AMBAR, ISNULL(r.ROJOS,0) AS REP_ROJOS, ISNULL(r.GRISES,0) AS REP_GRISES,
         ISNULL(v.TOT,0) AS VAL_TOTAL, ISNULL(v.VERDES,0) AS VAL_VERDES,
         ISNULL(v.AMBAR,0) AS VAL_AMBAR, ISNULL(v.ROJOS,0) AS VAL_ROJOS, ISNULL(v.GRISES,0) AS VAL_GRISES
-      FROM CONTRATOS c
+      FROM PROYECTOS p
+      INNER JOIN CONTRATOS c ON c.CLAVE_CONTRATO = p.CLAVE_CONTRATO
       LEFT JOIN CLIENTE cl ON cl.CLAVE_CLIENTE = c.CLAVE_CLIENTE
       LEFT JOIN (
         SELECT cr.CLAVE_CONTRATO,
@@ -131,7 +143,7 @@ router.get('/tablero', requireAuth, async (req, res) => {
         GROUP BY cv.CLAVE_CONTRATO
       ) v ON v.CLAVE_CONTRATO = c.CLAVE_CONTRATO
       ${where}
-      ORDER BY cl.NOMBRE_CLIENTE, c.NOMBRE_CONTRATO
+      ORDER BY cl.NOMBRE_CLIENTE, p.NOMBRE_PROYECTO
     `);
 
     // Se calculan en JS los RAG agregados (peor color manda) para cada renglón.
@@ -144,13 +156,84 @@ router.get('/tablero', requireAuth, async (req, res) => {
   } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
 });
 
-// ── GET /:clave/detalle
-// Descripción: detalle de un proyecto — sus reportes con fechas y semáforo
-// por renglón, y sus validaciones con lo mismo. Es el "expandir" del tablero.
+// ── GET /catalogo-alta
+// Descripción: catálogo para el alta en cascada — todos los clientes con sus
+// contratos. El front agrupa: eliges cliente y se filtran sus contratos.
 // Sin bitácora (solo lectura).
-router.get('/:clave/detalle', requireAuth, async (req, res) => {
+router.get('/catalogo-alta', requireAuth, async (req, res) => {
   try {
-    const clave = req.params.clave;
+    const rows = await query(`
+      SELECT cl.CLAVE_CLIENTE, cl.NOMBRE_CLIENTE, cl.TIPO_INSTITUCION,
+             c.CLAVE_CONTRATO, c.NOMBRE_CONTRATO
+      FROM CLIENTE cl
+      INNER JOIN CONTRATOS c ON c.CLAVE_CLIENTE = cl.CLAVE_CLIENTE
+      ORDER BY cl.NOMBRE_CLIENTE, c.NOMBRE_CONTRATO
+    `);
+    res.json({ ok: true, data: rows });
+  } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
+});
+
+// ── POST /
+// Descripción: alta de proyecto en cascada. Body: clave_contrato (obligatorio),
+// nombre_proyecto (obligatorio) y opcionales tipo_actividad, estatus_pago,
+// funcional_nombre, tecnico_nombre, rag, avance_estimado,
+// fecha_estimada_concluir. Valida que el contrato exista. Bitácora ALTA.
+router.post('/', requireAuth, async (req, res) => {
+  try {
+    const usuario = req.session.user.username;
+    const { clave_contrato, nombre_proyecto, tipo_actividad, estatus_pago,
+            funcional_nombre, tecnico_nombre, rag, avance_estimado,
+            fecha_estimada_concluir } = req.body;
+
+    if (!clave_contrato || !nombre_proyecto)
+      return res.status(400).json({ ok: false, message: 'clave_contrato y nombre_proyecto son obligatorios' });
+    if (rag && !['Green','Amber','Red'].includes(rag))
+      return res.status(400).json({ ok: false, message: 'RAG inválido (Green/Amber/Red)' });
+
+    let avance = 'NULL';
+    if (avance_estimado !== undefined && avance_estimado !== null && avance_estimado !== '') {
+      const n = parseFloat(avance_estimado);
+      if (isNaN(n) || n < 0 || n > 100)
+        return res.status(400).json({ ok: false, message: 'avance_estimado debe ser 0-100' });
+      avance = n;
+    }
+
+    const [contrato] = await query(`SELECT CLAVE_CONTRATO, CLAVE_CLIENTE FROM CONTRATOS WHERE CLAVE_CONTRATO = ${esc(clave_contrato)}`);
+    if (!contrato) return res.status(404).json({ ok: false, message: 'El contrato no existe' });
+
+    const [nuevo] = await query(`
+      INSERT INTO PROYECTOS (CLAVE_CONTRATO, NOMBRE_PROYECTO, TIPO_ACTIVIDAD, ESTATUS_PAGO,
+                             FUNCIONAL_NOMBRE, TECNICO_NOMBRE, RAG_PROYECTO, RAG_USUARIO, RAG_FECHA,
+                             AVANCE_ESTIMADO, FECHA_ESTIMADA_CONCLUIR, USUARIO_ALTA, FECHA_MODIFICA)
+      OUTPUT INSERTED.ID_PROYECTO
+      VALUES (${esc(clave_contrato)}, ${esc(nombre_proyecto)}, ${esc(tipo_actividad)}, ${esc(estatus_pago)},
+              ${esc(funcional_nombre)}, ${esc(tecnico_nombre)}, ${esc(rag)},
+              ${rag ? esc(usuario) : 'NULL'}, ${rag ? 'GETDATE()' : 'NULL'},
+              ${avance}, ${esc(fecha_estimada_concluir)}, ${esc(usuario)}, GETDATE())
+    `);
+
+    await auditLog(usuario, 'proyectos', 'ALTA_PROYECTO', {
+      id_proyecto: nuevo ? nuevo.ID_PROYECTO : null,
+      clave_contrato, clave_cliente: contrato.CLAVE_CLIENTE, nombre_proyecto,
+      tipo_actividad, estatus_pago, rag
+    });
+    res.json({ ok: true, id_proyecto: nuevo ? nuevo.ID_PROYECTO : null });
+  } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
+});
+
+// ── GET /:id/detalle
+// Descripción: detalle de un proyecto — los reportes y validaciones del
+// CONTRATO padre, con fechas y semáforo por renglón. Es el "expandir".
+// Sin bitácora (solo lectura).
+router.get('/:id/detalle', requireAuth, async (req, res) => {
+  try {
+    const id = idNum(req.params.id);
+    if (!id) return res.status(400).json({ ok: false, message: 'id inválido' });
+
+    const [proy] = await query(`SELECT CLAVE_CONTRATO FROM PROYECTOS WHERE ID_PROYECTO = ${id}`);
+    if (!proy) return res.status(404).json({ ok: false, message: 'Proyecto no encontrado' });
+    const clave = proy.CLAVE_CONTRATO;
+
     const reportes = await query(`
       SELECT cr.CLAVE_REP, cr.ETAPA, cr.EN_USO,
              cr.FECHA_NECESIDAD, cr.FECHA_ESTIMADA_QA, cr.FECHA_INSTALADO_QA,
@@ -169,47 +252,49 @@ router.get('/:clave/detalle', requireAuth, async (req, res) => {
       WHERE cv.CLAVE_CONTRATO = ${esc(clave)}
       ORDER BY cv.CLAVE_VALIDACION
     `);
-    res.json({ ok: true, data: { reportes, validaciones } });
+    res.json({ ok: true, data: { clave_contrato: clave, reportes, validaciones } });
   } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
 });
 
-// ── PUT /:clave/rag
+// ── PUT /:id/rag
 // Descripción: actualiza el RAG manual del proyecto (Green/Amber/Red) con
 // comentario opcional. Guarda quién y cuándo, y deja bitácora antes/después.
-router.put('/:clave/rag', requireAuth, async (req, res) => {
+router.put('/:id/rag', requireAuth, async (req, res) => {
   try {
     const usuario = req.session.user.username;
-    const clave   = req.params.clave;
+    const id = idNum(req.params.id);
+    if (!id) return res.status(400).json({ ok: false, message: 'id inválido' });
     const { rag, comentario } = req.body;
     if (!['Green','Amber','Red', null, ''].includes(rag))
       return res.status(400).json({ ok: false, message: 'RAG inválido (Green/Amber/Red)' });
 
-    const [antes] = await query(`SELECT RAG_PROYECTO, RAG_COMENTARIO FROM CONTRATOS WHERE CLAVE_CONTRATO = ${esc(clave)}`);
+    const [antes] = await query(`SELECT RAG_PROYECTO, RAG_COMENTARIO FROM PROYECTOS WHERE ID_PROYECTO = ${id}`);
     if (!antes) return res.status(404).json({ ok: false, message: 'Proyecto no encontrado' });
 
     await query(`
-      UPDATE CONTRATOS SET
+      UPDATE PROYECTOS SET
         RAG_PROYECTO   = ${esc(rag)},
         RAG_COMENTARIO = ${esc(comentario)},
         RAG_FECHA      = GETDATE(),
         RAG_USUARIO    = ${esc(usuario)},
         FECHA_MODIFICA = GETDATE()
-      WHERE CLAVE_CONTRATO = ${esc(clave)}
+      WHERE ID_PROYECTO = ${id}
     `);
-    await auditLog(usuario, 'proyectos', 'RAG_MANUAL', { clave_contrato: clave, antes, despues: { rag, comentario } });
+    await auditLog(usuario, 'proyectos', 'RAG_MANUAL', { id_proyecto: id, antes, despues: { rag, comentario } });
     res.json({ ok: true });
   } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
 });
 
-// ── PUT /:clave/info
-// Descripción: actualiza los campos "de proyecto" del contrato. Solo toca los
-// campos que vienen en el body (los ausentes no se modifican). Bitácora con
-// antes/después.
-router.put('/:clave/info', requireAuth, async (req, res) => {
+// ── PUT /:id/info
+// Descripción: actualiza los campos del proyecto. Solo toca los campos que
+// vienen en el body (los ausentes no se modifican). Bitácora antes/después.
+router.put('/:id/info', requireAuth, async (req, res) => {
   try {
     const usuario = req.session.user.username;
-    const clave   = req.params.clave;
+    const id = idNum(req.params.id);
+    if (!id) return res.status(400).json({ ok: false, message: 'id inválido' });
     const permitidos = {
+      nombre_proyecto:         'NOMBRE_PROYECTO',
       tipo_actividad:          'TIPO_ACTIVIDAD',
       estatus_pago:            'ESTATUS_PAGO',
       avance_estimado:         'AVANCE_ESTIMADO',
@@ -227,6 +312,8 @@ router.put('/:clave/info', requireAuth, async (req, res) => {
           if (n !== null && (isNaN(n) || n < 0 || n > 100))
             return res.status(400).json({ ok: false, message: 'avance_estimado debe ser 0-100' });
           sets.push(`${col} = ${n === null ? 'NULL' : n}`);
+        } else if (campo === 'nombre_proyecto' && !req.body[campo]) {
+          return res.status(400).json({ ok: false, message: 'nombre_proyecto no puede quedar vacío' });
         } else {
           sets.push(`${col} = ${esc(req.body[campo])}`);
         }
@@ -236,30 +323,36 @@ router.put('/:clave/info', requireAuth, async (req, res) => {
     if (!sets.length) return res.status(400).json({ ok: false, message: 'Sin campos para actualizar' });
 
     const [antes] = await query(`
-      SELECT TIPO_ACTIVIDAD, ESTATUS_PAGO, AVANCE_ESTIMADO, FECHA_ESTIMADA_CONCLUIR, FUNCIONAL_NOMBRE, TECNICO_NOMBRE
-      FROM CONTRATOS WHERE CLAVE_CONTRATO = ${esc(clave)}`);
+      SELECT NOMBRE_PROYECTO, TIPO_ACTIVIDAD, ESTATUS_PAGO, AVANCE_ESTIMADO, FECHA_ESTIMADA_CONCLUIR, FUNCIONAL_NOMBRE, TECNICO_NOMBRE
+      FROM PROYECTOS WHERE ID_PROYECTO = ${id}`);
     if (!antes) return res.status(404).json({ ok: false, message: 'Proyecto no encontrado' });
 
-    await query(`UPDATE CONTRATOS SET ${sets.join(', ')}, FECHA_MODIFICA = GETDATE() WHERE CLAVE_CONTRATO = ${esc(clave)}`);
-    await auditLog(usuario, 'proyectos', 'INFO_PROYECTO', { clave_contrato: clave, antes, despues: cambios });
+    await query(`UPDATE PROYECTOS SET ${sets.join(', ')}, FECHA_MODIFICA = GETDATE() WHERE ID_PROYECTO = ${id}`);
+    await auditLog(usuario, 'proyectos', 'INFO_PROYECTO', { id_proyecto: id, antes, despues: cambios });
     res.json({ ok: true });
   } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
 });
 
-// ── PUT /:clave/reporte-fechas
+// ── PUT /:id/reporte-fechas
 // Descripción: captura la fecha de necesidad del cliente (y opcionalmente la
-// estimada de producción) para un reporte del proyecto. Bitácora antes/después.
-router.put('/:clave/reporte-fechas', requireAuth, async (req, res) => {
+// estimada de producción) para un reporte del CONTRATO padre del proyecto.
+// Bitácora antes/después.
+router.put('/:id/reporte-fechas', requireAuth, async (req, res) => {
   try {
     const usuario = req.session.user.username;
-    const clave   = req.params.clave;
+    const id = idNum(req.params.id);
+    if (!id) return res.status(400).json({ ok: false, message: 'id inválido' });
     const { clave_rep, fecha_necesidad, fecha_estimada_prod } = req.body;
     if (!clave_rep) return res.status(400).json({ ok: false, message: 'clave_rep requerido' });
+
+    const [proy] = await query(`SELECT CLAVE_CONTRATO FROM PROYECTOS WHERE ID_PROYECTO = ${id}`);
+    if (!proy) return res.status(404).json({ ok: false, message: 'Proyecto no encontrado' });
+    const clave = proy.CLAVE_CONTRATO;
 
     const [antes] = await query(`
       SELECT FECHA_NECESIDAD, FECHA_ESTIMADA_PROD FROM CONTRATOS_REPORTES
       WHERE CLAVE_CONTRATO = ${esc(clave)} AND CLAVE_REP = ${esc(clave_rep)}`);
-    if (!antes) return res.status(404).json({ ok: false, message: 'Reporte no ligado a este proyecto' });
+    if (!antes) return res.status(404).json({ ok: false, message: 'Reporte no ligado al contrato de este proyecto' });
 
     const sets = [];
     if ('fecha_necesidad' in req.body)     sets.push(`FECHA_NECESIDAD = ${esc(fecha_necesidad)}`);
@@ -269,7 +362,25 @@ router.put('/:clave/reporte-fechas', requireAuth, async (req, res) => {
     await query(`
       UPDATE CONTRATOS_REPORTES SET ${sets.join(', ')}
       WHERE CLAVE_CONTRATO = ${esc(clave)} AND CLAVE_REP = ${esc(clave_rep)}`);
-    await auditLog(usuario, 'proyectos', 'FECHAS_REPORTE', { clave_contrato: clave, clave_rep, antes, despues: { fecha_necesidad, fecha_estimada_prod } });
+    await auditLog(usuario, 'proyectos', 'FECHAS_REPORTE', { id_proyecto: id, clave_contrato: clave, clave_rep, antes, despues: { fecha_necesidad, fecha_estimada_prod } });
+    res.json({ ok: true });
+  } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
+});
+
+// ── DELETE /:id
+// Descripción: baja lógica del proyecto (ACTIVO = 0). No borra el renglón,
+// solo lo saca del tablero. Bitácora con los datos del proyecto dado de baja.
+router.delete('/:id', requireAuth, async (req, res) => {
+  try {
+    const usuario = req.session.user.username;
+    const id = idNum(req.params.id);
+    if (!id) return res.status(400).json({ ok: false, message: 'id inválido' });
+
+    const [antes] = await query(`SELECT NOMBRE_PROYECTO, CLAVE_CONTRATO FROM PROYECTOS WHERE ID_PROYECTO = ${id} AND ACTIVO = 1`);
+    if (!antes) return res.status(404).json({ ok: false, message: 'Proyecto no encontrado' });
+
+    await query(`UPDATE PROYECTOS SET ACTIVO = 0, FECHA_MODIFICA = GETDATE() WHERE ID_PROYECTO = ${id}`);
+    await auditLog(usuario, 'proyectos', 'BAJA_PROYECTO', { id_proyecto: id, ...antes });
     res.json({ ok: true });
   } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
 });

@@ -11,7 +11,7 @@ const { query } = require('./connection');
 /**
  * setup()
  * Crea todas las tablas necesarias en SQL Server si no existen.
- * Tablas: LAYOUT_VERSIONES, QA_ALERTAS, SOFIPO_LAYOUT_DESC/USO/REPORTES, AUDIT_LOG, INVENTARIO_VERSIONES
+ * Tablas: LAYOUT_VERSIONES, QA_ALERTAS, SOFIPO_LAYOUT_DESC/USO/REPORTES, AUDIT_LOG, INVENTARIO_VERSIONES, PROYECTOS
  * Se ejecuta automáticamente al arrancar server.js o manualmente: node db/setup.js
  * Idempotente: IF NOT EXISTS previene errores si se llama múltiples veces.
  */
@@ -266,6 +266,41 @@ async function setup() {
       PRINT 'Migración 1.0.0 completada.'
     END
     ELSE PRINT 'Tabla INVENTARIO_VERSIONES ya existe.'
+  `);
+
+  // ── PROYECTOS ─────────────────────────────────────────────
+  // Un proyecto cuelga de un contrato (CLIENTE → CONTRATOS → PROYECTOS).
+  // Un contrato puede tener varios proyectos. Réplica del Excel del área:
+  // RAG manual, líderes, avance, tipo de actividad, estatus de pagos.
+  await query(`
+    IF NOT EXISTS (
+      SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'PROYECTOS'
+    )
+    BEGIN
+      CREATE TABLE PROYECTOS (
+        ID_PROYECTO             INT IDENTITY(1,1) PRIMARY KEY,
+        CLAVE_CONTRATO          VARCHAR(100)  NOT NULL,   -- contrato padre
+        NOMBRE_PROYECTO         VARCHAR(300)  NOT NULL,
+        TIPO_ACTIVIDAD          VARCHAR(30)   NULL,       -- PROYECTO / CAMBIO_REGULATORIO / SOPORTE / CUSTOMER_S
+        ESTATUS_PAGO            VARCHAR(50)   NULL,
+        FUNCIONAL_NOMBRE        VARCHAR(150)  NULL,
+        TECNICO_NOMBRE          VARCHAR(150)  NULL,
+        RAG_PROYECTO            VARCHAR(10)   NULL,       -- Green / Amber / Red (manual)
+        RAG_COMENTARIO          VARCHAR(500)  NULL,
+        RAG_FECHA               DATETIME      NULL,
+        RAG_USUARIO             VARCHAR(100)  NULL,
+        AVANCE_ESTIMADO         DECIMAL(5,2)  NULL,       -- 0-100
+        FECHA_ESTIMADA_CONCLUIR DATE          NULL,
+        ACTIVO                  BIT           NOT NULL DEFAULT 1,
+        USUARIO_ALTA            VARCHAR(100)  NULL,
+        FECHA_ALTA              DATETIME      NOT NULL DEFAULT GETDATE(),
+        FECHA_MODIFICA          DATETIME      NULL
+      )
+      CREATE INDEX IX_PROY_CONTRATO ON PROYECTOS (CLAVE_CONTRATO)
+      CREATE INDEX IX_PROY_TIPO     ON PROYECTOS (TIPO_ACTIVIDAD)
+      PRINT 'Tabla PROYECTOS creada.'
+    END
+    ELSE PRINT 'Tabla PROYECTOS ya existe.'
   `);
 
   console.log('✅ Setup de tablas completado.');
