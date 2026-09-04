@@ -5882,10 +5882,10 @@
   const proyAbiertos = new Set();
 
   // Panel desplegable con los campos editables restantes del proyecto (sin fetch: usa los datos del tablero).
-  // Los CAMBIO_REGULATORIO llevan menos columnas (como su pestaña del Excel):
-  // sin Pagos ni RAG reportes/validaciones.
+  // CAMBIO_REGULATORIO y SOPORTE llevan menos columnas (sus pestañas del Excel
+  // son idénticas): sin Pagos ni RAG reportes/validaciones.
   function proyDetalleHTML(p, id, avance) {
-    const esRegulatorio = p.TIPO_ACTIVIDAD === 'CAMBIO_REGULATORIO';
+    const esRegulatorio = ['CAMBIO_REGULATORIO', 'SOPORTE'].includes(p.TIPO_ACTIVIDAD);
     const campo = (label, html) => `
       <div style="display:flex;flex-direction:column;gap:3px;">
         <span style="font-size:10px;font-weight:700;color:#7a8794;text-transform:uppercase;">${label}</span>
