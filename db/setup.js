@@ -289,6 +289,8 @@ async function setup() {
         RAG_COMENTARIO          VARCHAR(500)  NULL,
         RAG_FECHA               DATETIME      NULL,
         RAG_USUARIO             VARCHAR(100)  NULL,
+        RAG_REPORTES_MANUAL     VARCHAR(10)   NULL,       -- override manual del semáforo de reportes (NULL = automático)
+        RAG_VALIDACIONES_MANUAL VARCHAR(10)   NULL,       -- override manual del semáforo de validaciones (NULL = automático)
         AVANCE_ESTIMADO         DECIMAL(5,2)  NULL,       -- 0-100
         FECHA_ESTIMADA_CONCLUIR DATE          NULL,
         ACTIVO                  BIT           NOT NULL DEFAULT 1,
@@ -301,6 +303,17 @@ async function setup() {
       PRINT 'Tabla PROYECTOS creada.'
     END
     ELSE PRINT 'Tabla PROYECTOS ya existe.'
+  `);
+
+  // Columnas agregadas después del release inicial de PROYECTOS (idempotente,
+  // por si la tabla ya se creó en producción sin ellas).
+  await query(`
+    IF COL_LENGTH('PROYECTOS', 'RAG_REPORTES_MANUAL') IS NULL
+      ALTER TABLE PROYECTOS ADD RAG_REPORTES_MANUAL VARCHAR(10) NULL
+  `);
+  await query(`
+    IF COL_LENGTH('PROYECTOS', 'RAG_VALIDACIONES_MANUAL') IS NULL
+      ALTER TABLE PROYECTOS ADD RAG_VALIDACIONES_MANUAL VARCHAR(10) NULL
   `);
 
   console.log('✅ Setup de tablas completado.');

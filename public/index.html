@@ -5586,7 +5586,22 @@
       </select>`;
   }
 
-  // Guarda el valor elegido en un dropdown de la tabla.
+  // Dropdown de semáforo (RAG reportes / RAG validaciones): Auto usa el color
+  // calculado por fechas; Green/Amber/Red lo fijan a mano (override).
+  function proyRagSelect(id, campo, manual, calc, tip) {
+    const efectivo = manual || calc;                       // el manual manda
+    const color = efectivo ? PROY_RAG_COLOR[efectivo] : '#b8c2cc';
+    const autoLabel = calc ? `Auto (${calc})` : 'Auto';
+    return `<select onchange="proyGuardarSelect(this, ${id}, '${campo}')" title="${proyEsc(tip || '')}"
+        style="font-size:10px;border:1px solid #d5dce3;border-radius:10px;padding:2px 4px;cursor:pointer;background:${color};color:${efectivo ? '#fff' : '#666'};font-weight:700;">
+        <option value=""${manual ? '' : ' selected'}>${autoLabel}</option>
+        <option value="Green"${manual === 'Green' ? ' selected' : ''}>Green</option>
+        <option value="Amber"${manual === 'Amber' ? ' selected' : ''}>Amber</option>
+        <option value="Red"${manual === 'Red' ? ' selected' : ''}>Red</option>
+      </select>`;
+  }
+
+  // Guarda el valor elegido en un dropdown/input de la tabla.
   async function proyGuardarSelect(sel, id, campo) {
     try {
       const res = await fetch(`/api/proyectos/${id}/info`, {
@@ -5759,7 +5774,7 @@
     const cont = document.getElementById('proy-tabla-wrap');
     if (!rows.length) { cont.innerHTML = '<div class="loading">Sin proyectos con ese filtro. Usa "➕ Nuevo proyecto" para dar de alta.</div>'; return; }
     cont.innerHTML = `
-      <div style="font-size:12px;color:#888;margin-bottom:8px;">${rows.length} proyectos · clic en el círculo RAG para cambiarlo · Pagos/Funcional/Técnico se cambian con el dropdown · doble clic en Proyecto/Tipo/Avance para editar</div>
+      <div style="font-size:12px;color:#888;margin-bottom:8px;">${rows.length} proyectos · clic en el círculo RAG proyecto para cambiarlo · Pagos/Funcional/Técnico/RAG reportes/RAG validaciones/Avance se editan directo en la celda ("Auto" = semáforo calculado por fechas) · doble clic en Proyecto/Tipo para editar</div>
       <table class="data-table">
         <thead><tr>
           <th>Institución</th><th>Cliente</th><th>Proyecto</th><th>Tipo</th><th>Pagos</th>
@@ -5790,9 +5805,15 @@
                 <span onclick="proyCambiarRag(${id})" title="${proyEsc(ragTip)}"
                       style="display:inline-block;width:16px;height:16px;border-radius:50%;background:${ragColor};cursor:pointer;border:2px solid #fff;box-shadow:0 0 0 1px #d5dce3;"></span>
               </td>
-              <td style="text-align:center;">${proyRagCalc(p.RAG_REPORTES, p.REP_VERDES, p.REP_AMBAR, p.REP_ROJOS, p.REP_GRISES, p.REP_TOTAL)}</td>
-              <td style="text-align:center;">${proyRagCalc(p.RAG_VALIDACIONES, p.VAL_VERDES, p.VAL_AMBAR, p.VAL_ROJOS, p.VAL_GRISES, p.VAL_TOTAL)}</td>
-              <td style="text-align:center;font-size:12px;cursor:pointer;" ondblclick="proyEditarCampo(${id},'avance_estimado','${avance ?? ''}')">${avance != null ? avance + '%' : '<span style="color:#ccc;">—</span>'}</td>
+              <td style="text-align:center;">${proyRagSelect(id, 'rag_reportes_manual', p.RAG_REPORTES_MANUAL, p.RAG_REPORTES,
+                  `Calculado — Verde: ${p.REP_VERDES} · Ámbar: ${p.REP_AMBAR} · Rojo: ${p.REP_ROJOS} · Sin fechas: ${p.REP_GRISES} (de ${p.REP_TOTAL})`)}</td>
+              <td style="text-align:center;">${proyRagSelect(id, 'rag_validaciones_manual', p.RAG_VALIDACIONES_MANUAL, p.RAG_VALIDACIONES,
+                  `Calculado — Verde: ${p.VAL_VERDES} · Ámbar: ${p.VAL_AMBAR} · Rojo: ${p.VAL_ROJOS} · Sin fechas: ${p.VAL_GRISES} (de ${p.VAL_TOTAL})`)}</td>
+              <td style="text-align:center;">
+                <input type="number" min="0" max="100" value="${avance ?? ''}" placeholder="—"
+                       onchange="proyGuardarSelect(this, ${id}, 'avance_estimado')"
+                       style="width:52px;font-size:11px;text-align:center;border:1px solid #d5dce3;border-radius:10px;padding:2px 4px;">%
+              </td>
               <td style="white-space:nowrap;">
                 <button onclick="proyToggleDetalle(${id}, ${i})" style="border:none;background:none;cursor:pointer;font-size:14px;" title="Ver reportes y validaciones">📂</button>
                 <button onclick="proyBaja(${id})" style="border:none;background:none;cursor:pointer;font-size:12px;" title="Dar de baja este proyecto">🗑️</button>

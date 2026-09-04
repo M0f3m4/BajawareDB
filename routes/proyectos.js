@@ -110,6 +110,7 @@ router.get('/tablero', requireAuth, async (req, res) => {
       SELECT
         p.ID_PROYECTO, p.NOMBRE_PROYECTO, p.TIPO_ACTIVIDAD, p.ESTATUS_PAGO,
         p.RAG_PROYECTO, p.RAG_COMENTARIO, p.RAG_FECHA, p.RAG_USUARIO,
+        p.RAG_REPORTES_MANUAL, p.RAG_VALIDACIONES_MANUAL,
         p.AVANCE_ESTIMADO, p.FECHA_ESTIMADA_CONCLUIR,
         p.FUNCIONAL_NOMBRE, p.TECNICO_NOMBRE,
         c.CLAVE_CONTRATO, c.NOMBRE_CONTRATO, c.CLAVE_CLIENTE, c.CLAVE_PLATAFORMA,
@@ -147,6 +148,7 @@ router.get('/tablero', requireAuth, async (req, res) => {
     `);
 
     // Se calculan en JS los RAG agregados (peor color manda) para cada renglón.
+    // Si hay override manual (RAG_*_MANUAL) ese color manda sobre el calculado.
     const data = rows.map(row => ({
       ...row,
       RAG_REPORTES:     ragAgregado(row.REP_ROJOS, row.REP_AMBAR, row.REP_VERDES),
@@ -301,7 +303,15 @@ router.put('/:id/info', requireAuth, async (req, res) => {
       fecha_estimada_concluir: 'FECHA_ESTIMADA_CONCLUIR',
       funcional_nombre:        'FUNCIONAL_NOMBRE',
       tecnico_nombre:          'TECNICO_NOMBRE',
+      rag_reportes_manual:     'RAG_REPORTES_MANUAL',
+      rag_validaciones_manual: 'RAG_VALIDACIONES_MANUAL',
     };
+    // Los overrides de semáforo solo aceptan Green/Amber/Red o null (= automático).
+    const RAGS_VALIDOS = [null, '', 'Green', 'Amber', 'Red'];
+    for (const campoRag of ['rag_reportes_manual', 'rag_validaciones_manual']) {
+      if (campoRag in req.body && !RAGS_VALIDOS.includes(req.body[campoRag]))
+        return res.status(400).json({ ok: false, message: `${campoRag} debe ser Green, Amber, Red o vacío` });
+    }
     const sets = [];
     const cambios = {};
     for (const [campo, col] of Object.entries(permitidos)) {
@@ -323,7 +333,7 @@ router.put('/:id/info', requireAuth, async (req, res) => {
     if (!sets.length) return res.status(400).json({ ok: false, message: 'Sin campos para actualizar' });
 
     const [antes] = await query(`
-      SELECT NOMBRE_PROYECTO, TIPO_ACTIVIDAD, ESTATUS_PAGO, AVANCE_ESTIMADO, FECHA_ESTIMADA_CONCLUIR, FUNCIONAL_NOMBRE, TECNICO_NOMBRE
+      SELECT NOMBRE_PROYECTO, TIPO_ACTIVIDAD, ESTATUS_PAGO, AVANCE_ESTIMADO, FECHA_ESTIMADA_CONCLUIR, FUNCIONAL_NOMBRE, TECNICO_NOMBRE, RAG_REPORTES_MANUAL, RAG_VALIDACIONES_MANUAL
       FROM PROYECTOS WHERE ID_PROYECTO = ${id}`);
     if (!antes) return res.status(404).json({ ok: false, message: 'Proyecto no encontrado' });
 
