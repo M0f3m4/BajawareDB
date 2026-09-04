@@ -114,7 +114,8 @@ router.get('/tablero', requireAuth, async (req, res) => {
         p.AVANCE_ESTIMADO, p.FECHA_ESTIMADA_CONCLUIR,
         p.FUNCIONAL_NOMBRE, p.TECNICO_NOMBRE,
         c.CLAVE_CONTRATO, c.NOMBRE_CONTRATO, c.CLAVE_CLIENTE, c.CLAVE_PLATAFORMA,
-        cl.NOMBRE_CLIENTE, cl.TIPO_INSTITUCION,
+        cl.NOMBRE_CLIENTE,
+        ISNULL(p.TIPO_INSTITUCION, cl.TIPO_INSTITUCION) AS TIPO_INSTITUCION,
         ISNULL(r.TOT,0) AS REP_TOTAL, ISNULL(r.VERDES,0) AS REP_VERDES,
         ISNULL(r.AMBAR,0) AS REP_AMBAR, ISNULL(r.ROJOS,0) AS REP_ROJOS, ISNULL(r.GRISES,0) AS REP_GRISES,
         ISNULL(v.TOT,0) AS VAL_TOTAL, ISNULL(v.VERDES,0) AS VAL_VERDES,
@@ -303,6 +304,7 @@ router.put('/:id/info', requireAuth, async (req, res) => {
       fecha_estimada_concluir: 'FECHA_ESTIMADA_CONCLUIR',
       funcional_nombre:        'FUNCIONAL_NOMBRE',
       tecnico_nombre:          'TECNICO_NOMBRE',
+      tipo_institucion:        'TIPO_INSTITUCION',
       rag_reportes_manual:     'RAG_REPORTES_MANUAL',
       rag_validaciones_manual: 'RAG_VALIDACIONES_MANUAL',
     };
@@ -333,7 +335,7 @@ router.put('/:id/info', requireAuth, async (req, res) => {
     if (!sets.length) return res.status(400).json({ ok: false, message: 'Sin campos para actualizar' });
 
     const [antes] = await query(`
-      SELECT NOMBRE_PROYECTO, TIPO_ACTIVIDAD, ESTATUS_PAGO, AVANCE_ESTIMADO, FECHA_ESTIMADA_CONCLUIR, FUNCIONAL_NOMBRE, TECNICO_NOMBRE, RAG_REPORTES_MANUAL, RAG_VALIDACIONES_MANUAL
+      SELECT NOMBRE_PROYECTO, TIPO_ACTIVIDAD, TIPO_INSTITUCION, ESTATUS_PAGO, AVANCE_ESTIMADO, FECHA_ESTIMADA_CONCLUIR, FUNCIONAL_NOMBRE, TECNICO_NOMBRE, RAG_REPORTES_MANUAL, RAG_VALIDACIONES_MANUAL
       FROM PROYECTOS WHERE ID_PROYECTO = ${id}`);
     if (!antes) return res.status(404).json({ ok: false, message: 'Proyecto no encontrado' });
 

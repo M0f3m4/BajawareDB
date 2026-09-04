@@ -282,6 +282,7 @@ async function setup() {
         CLAVE_CONTRATO          VARCHAR(100)  NOT NULL,   -- contrato padre
         NOMBRE_PROYECTO         VARCHAR(300)  NOT NULL,
         TIPO_ACTIVIDAD          VARCHAR(30)   NULL,       -- PROYECTO / CAMBIO_REGULATORIO / SOPORTE / CUSTOMER_S
+        TIPO_INSTITUCION        VARCHAR(50)   NULL,       -- por proyecto; NULL = hereda el del cliente
         ESTATUS_PAGO            VARCHAR(50)   NULL,
         FUNCIONAL_NOMBRE        VARCHAR(150)  NULL,
         TECNICO_NOMBRE          VARCHAR(150)  NULL,
@@ -314,6 +315,10 @@ async function setup() {
   await query(`
     IF COL_LENGTH('PROYECTOS', 'RAG_VALIDACIONES_MANUAL') IS NULL
       ALTER TABLE PROYECTOS ADD RAG_VALIDACIONES_MANUAL VARCHAR(10) NULL
+  `);
+  await query(`
+    IF COL_LENGTH('PROYECTOS', 'TIPO_INSTITUCION') IS NULL
+      ALTER TABLE PROYECTOS ADD TIPO_INSTITUCION VARCHAR(50) NULL
   `);
 
   console.log('✅ Setup de tablas completado.');
