@@ -5775,16 +5775,13 @@
     const cont = document.getElementById('proy-tabla-wrap');
     if (!rows.length) { cont.innerHTML = '<div class="loading">Sin proyectos con ese filtro. Usa "➕ Nuevo proyecto" para dar de alta.</div>'; return; }
     cont.innerHTML = `
-      <div style="font-size:12px;color:#888;margin-bottom:8px;">${rows.length} proyectos · clic en el círculo RAG proyecto para cambiarlo · Pagos/Funcional/Técnico/RAG reportes/RAG validaciones/Avance se editan directo en la celda ("Auto" = semáforo calculado por fechas) · doble clic en Proyecto/Tipo para editar</div>
+      <div style="font-size:12px;color:#888;margin-bottom:8px;">${rows.length} proyectos · clic en el círculo RAG proyecto para cambiarlo · clic en 📂 para ver y editar Pagos/Funcional/Técnico/RAG reportes/RAG validaciones/Avance ("Auto" = semáforo calculado por fechas) · doble clic en Proyecto/Tipo para editar</div>
       <table class="data-table">
         <thead><tr>
-          <th>Institución</th><th>Cliente</th><th>Proyecto</th><th>Tipo</th><th>Pagos</th>
-          <th>Funcional</th><th>Técnico</th>
+          <th>Institución</th><th>Cliente</th><th>Proyecto</th><th>Tipo</th>
           <th>Necesidad</th>
+          <th>Estimado</th>
           <th style="text-align:center;">RAG<br>proyecto</th>
-          <th style="text-align:center;">RAG<br>reportes</th>
-          <th style="text-align:center;">RAG<br>validaciones</th>
-          <th style="text-align:center;">Avance</th>
           <th></th>
         </tr></thead>
         <tbody>
@@ -5800,34 +5797,28 @@
               <td><strong style="color:#1a3558;">${proyEsc(p.NOMBRE_CLIENTE || p.CLAVE_CLIENTE || '—')}</strong></td>
               <td style="font-size:12px;cursor:pointer;" title="Contrato: ${proyEsc(p.NOMBRE_CONTRATO || p.CLAVE_CONTRATO || '')}" ondblclick="proyEditarCampo(${id},'nombre_proyecto','${proyEsc((p.NOMBRE_PROYECTO||'').replace(/'/g,"\\'"))}')">${proyEsc(p.NOMBRE_PROYECTO || '—')}</td>
               <td style="font-size:11px;cursor:pointer;" ondblclick="proyEditarCampo(${id},'tipo_actividad','${p.TIPO_ACTIVIDAD||''}')">${p.TIPO_ACTIVIDAD || '<span style="color:#ccc;">—</span>'}</td>
-              <td>${proySelectCell(id, 'estatus_pago', p.ESTATUS_PAGO, PROY_PAGOS, PROY_PAGO_COLOR)}</td>
-              <td>${proySelectCell(id, 'funcional_nombre', p.FUNCIONAL_NOMBRE, PROY_FUNCIONALES)}</td>
-              <td>${proySelectCell(id, 'tecnico_nombre', p.TECNICO_NOMBRE, PROY_TECNICOS)}</td>
               <td>
                 <input type="date" value="${p.FECHA_NECESIDAD ? String(p.FECHA_NECESIDAD).substring(0,10) : ''}"
                        onchange="proyGuardarSelect(this, ${id}, 'fecha_necesidad')"
                        title="Fecha límite / compromiso del proyecto"
                        style="font-size:10px;border:1px solid #d5dce3;border-radius:10px;padding:2px 4px;width:118px;cursor:pointer;">
               </td>
+              <td>
+                <input type="date" value="${p.FECHA_ESTIMADA_CONCLUIR ? String(p.FECHA_ESTIMADA_CONCLUIR).substring(0,10) : ''}"
+                       onchange="proyGuardarSelect(this, ${id}, 'fecha_estimada_concluir')"
+                       title="Fecha estimada de conclusión del proyecto"
+                       style="font-size:10px;border:1px solid #d5dce3;border-radius:10px;padding:2px 4px;width:118px;cursor:pointer;">
+              </td>
               <td style="text-align:center;">
                 <span onclick="proyCambiarRag(${id})" title="${proyEsc(ragTip)}"
                       style="display:inline-block;width:16px;height:16px;border-radius:50%;background:${ragColor};cursor:pointer;border:2px solid #fff;box-shadow:0 0 0 1px #d5dce3;"></span>
               </td>
-              <td style="text-align:center;">${proyRagSelect(id, 'rag_reportes_manual', p.RAG_REPORTES_MANUAL, p.RAG_REPORTES,
-                  `Calculado — Verde: ${p.REP_VERDES} · Ámbar: ${p.REP_AMBAR} · Rojo: ${p.REP_ROJOS} · Sin fechas: ${p.REP_GRISES} (de ${p.REP_TOTAL})`)}</td>
-              <td style="text-align:center;">${proyRagSelect(id, 'rag_validaciones_manual', p.RAG_VALIDACIONES_MANUAL, p.RAG_VALIDACIONES,
-                  `Calculado — Verde: ${p.VAL_VERDES} · Ámbar: ${p.VAL_AMBAR} · Rojo: ${p.VAL_ROJOS} · Sin fechas: ${p.VAL_GRISES} (de ${p.VAL_TOTAL})`)}</td>
-              <td style="text-align:center;">
-                <input type="number" min="0" max="100" value="${avance ?? ''}" placeholder="—"
-                       onchange="proyGuardarSelect(this, ${id}, 'avance_estimado')"
-                       style="width:52px;font-size:11px;text-align:center;border:1px solid #d5dce3;border-radius:10px;padding:2px 4px;">%
-              </td>
               <td style="white-space:nowrap;">
-                <button onclick="proyToggleDetalle(${id}, ${i})" style="border:none;background:none;cursor:pointer;font-size:14px;" title="Ver reportes y validaciones">📂</button>
+                <button onclick="proyToggleDetalle(${id}, ${i})" style="border:none;background:none;cursor:pointer;font-size:14px;" title="Ver Pagos / Funcional / Técnico / RAG reportes / RAG validaciones / Avance">📂</button>
                 <button onclick="proyBaja(${id})" style="border:none;background:none;cursor:pointer;font-size:12px;" title="Dar de baja este proyecto">🗑️</button>
               </td>
             </tr>
-            <tr id="proy-det-${i}" style="display:none;"><td colspan="13" style="background:#f8fafc;padding:10px 18px;" id="proy-det-cont-${i}"></td></tr>`;
+            <tr id="proy-det-${i}" style="display:${proyAbiertos.has(id) ? '' : 'none'};"><td colspan="8" style="background:#f8fafc;padding:10px 18px;">${proyDetalleHTML(p, id, avance)}</td></tr>`;
           }).join('')}
         </tbody>
       </table>`;
@@ -5887,74 +5878,35 @@
     } catch (e) { alert('Error: ' + e.message); }
   }
 
-  // Muestra/oculta el detalle de un proyecto (reportes y validaciones del contrato padre).
-  async function proyToggleDetalle(id, i) {
-    const tr = document.getElementById('proy-det-' + i);
-    if (tr.style.display !== 'none') { tr.style.display = 'none'; return; }
-    tr.style.display = '';
-    const cont = document.getElementById('proy-det-cont-' + i);
-    cont.innerHTML = '<div class="loading">Cargando detalle...</div>';
-    try {
-      const res  = await fetch(`/api/proyectos/${id}/detalle`);
-      const data = await res.json();
-      if (!data.ok) throw new Error(data.message);
-      const { reportes, validaciones } = data.data;
-      const sem = s => {
-        const c = { VERDE:'#27ae60', AMBAR:'#f39c12', ROJO:'#e74c3c', GRIS:'#b8c2cc' }[s] || '#b8c2cc';
-        return `<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${c};"></span>`;
-      };
-      const fmtF = f => f ? String(f).substring(0,10) : '—';
-      cont.innerHTML = `
-        <div style="font-size:12px;font-weight:700;color:#1a3558;margin-bottom:6px;">Reportes (${reportes.length}) — doble clic en "Necesidad" o "Est. Prod" para capturar fecha</div>
-        ${reportes.length ? `<table class="data-table" style="font-size:11px;">
-          <thead><tr><th></th><th>Reporte</th><th>Necesidad</th><th>Est. QA</th><th>Inst. QA</th><th>Est. Cert</th><th>Certificado</th><th>Est. Prod</th><th>Inst. Prod</th></tr></thead>
-          <tbody>${reportes.map(r => {
-            const rep = (r.CLAVE_REP||'').replace(/'/g, "\\'");
-            return `<tr>
-              <td>${sem(r.SEMAFORO)}</td>
-              <td style="font-family:monospace;">${r.CLAVE_REP}</td>
-              <td style="cursor:pointer;" ondblclick="proyEditarFechaRep(${id},'${rep}','fecha_necesidad','${fmtF(r.FECHA_NECESIDAD) === '—' ? '' : fmtF(r.FECHA_NECESIDAD)}', ${i})">${fmtF(r.FECHA_NECESIDAD)}</td>
-              <td>${fmtF(r.FECHA_ESTIMADA_QA)}</td><td>${fmtF(r.FECHA_INSTALADO_QA)}</td>
-              <td>${fmtF(r.FECHA_ESTIMADA_CERT)}</td><td>${fmtF(r.FECHA_CERTIFICADO)}</td>
-              <td style="cursor:pointer;" ondblclick="proyEditarFechaRep(${id},'${rep}','fecha_estimada_prod','${fmtF(r.FECHA_ESTIMADA_PROD) === '—' ? '' : fmtF(r.FECHA_ESTIMADA_PROD)}', ${i})">${fmtF(r.FECHA_ESTIMADA_PROD)}</td>
-              <td>${fmtF(r.FECHA_INSTALADO_PROD)}</td>
-            </tr>`;
-          }).join('')}</tbody>
-        </table>` : '<div style="font-size:11px;color:#aaa;">Sin reportes ligados.</div>'}
-        <div style="font-size:12px;font-weight:700;color:#1a3558;margin:10px 0 6px;">Validaciones (${validaciones.length})</div>
-        ${validaciones.length ? `<table class="data-table" style="font-size:11px;">
-          <thead><tr><th></th><th>Validación</th><th>Plataforma</th><th>Versión</th><th>Estatus</th><th>Necesidad</th><th>Estimada</th><th>Real</th></tr></thead>
-          <tbody>${validaciones.map(v => `<tr>
-            <td>${sem(v.SEMAFORO)}</td>
-            <td style="font-family:monospace;">${v.CLAVE_VALIDACION}</td>
-            <td>${v.CLAVE_PLATAFORMA || '—'}</td><td>${v.VERSION_CARGA || '—'}</td><td>${v.ESTATUS_PROYECTO || '—'}</td>
-            <td>${fmtF(v.FECHA_NECESIDAD)}</td><td>${fmtF(v.FECHA_ESTIMADA)}</td><td>${fmtF(v.FECHA_REAL)}</td>
-          </tr>`).join('')}</tbody>
-        </table>` : '<div style="font-size:11px;color:#aaa;">Sin validaciones ligadas.</div>'}`;
-    } catch (e) {
-      cont.innerHTML = '<div class="loading">Error: ' + e.message + '</div>';
-    }
+  // IDs de proyectos con el panel de detalle abierto (sobrevive las recargas del tablero).
+  const proyAbiertos = new Set();
+
+  // Panel desplegable con los campos editables restantes del proyecto (sin fetch: usa los datos del tablero).
+  function proyDetalleHTML(p, id, avance) {
+    const campo = (label, html) => `
+      <div style="display:flex;flex-direction:column;gap:3px;">
+        <span style="font-size:10px;font-weight:700;color:#7a8794;text-transform:uppercase;">${label}</span>
+        <span>${html}</span>
+      </div>`;
+    return `<div style="display:flex;flex-wrap:wrap;gap:8px 26px;align-items:flex-end;">
+      ${campo('Pagos', proySelectCell(id, 'estatus_pago', p.ESTATUS_PAGO, PROY_PAGOS, PROY_PAGO_COLOR))}
+      ${campo('Funcional', proySelectCell(id, 'funcional_nombre', p.FUNCIONAL_NOMBRE, PROY_FUNCIONALES))}
+      ${campo('Técnico', proySelectCell(id, 'tecnico_nombre', p.TECNICO_NOMBRE, PROY_TECNICOS))}
+      ${campo('RAG reportes', proyRagSelect(id, 'rag_reportes_manual', p.RAG_REPORTES_MANUAL, p.RAG_REPORTES,
+          `Calculado — Verde: ${p.REP_VERDES} · Ámbar: ${p.REP_AMBAR} · Rojo: ${p.REP_ROJOS} · Sin fechas: ${p.REP_GRISES} (de ${p.REP_TOTAL})`))}
+      ${campo('RAG validaciones', proyRagSelect(id, 'rag_validaciones_manual', p.RAG_VALIDACIONES_MANUAL, p.RAG_VALIDACIONES,
+          `Calculado — Verde: ${p.VAL_VERDES} · Ámbar: ${p.VAL_AMBAR} · Rojo: ${p.VAL_ROJOS} · Sin fechas: ${p.VAL_GRISES} (de ${p.VAL_TOTAL})`))}
+      ${campo('Avance', `<input type="number" min="0" max="100" value="${avance ?? ''}" placeholder="—"
+              onchange="proyGuardarSelect(this, ${id}, 'avance_estimado')"
+              style="width:52px;font-size:11px;text-align:center;border:1px solid #d5dce3;border-radius:10px;padding:2px 4px;">%`)}
+    </div>`;
   }
 
-  // Captura una fecha (necesidad o estimada de prod) de un reporte del contrato del proyecto.
-  async function proyEditarFechaRep(id, claveRep, campo, actual, i) {
-    const label = campo === 'fecha_necesidad' ? 'Fecha de necesidad del cliente' : 'Fecha estimada de instalación en PROD';
-    const f = prompt(`${label} para ${claveRep} (formato AAAA-MM-DD, vacío = quitar):`, actual || '');
-    if (f === null) return;
-    const val = f.trim();
-    if (val && !/^\d{4}-\d{2}-\d{2}$/.test(val)) { alert('Formato inválido. Usa AAAA-MM-DD.'); return; }
-    try {
-      const res = await fetch(`/api/proyectos/${id}/reporte-fechas`, {
-        method: 'PUT', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ clave_rep: claveRep, [campo]: val || null }),
-      });
-      const data = await res.json();
-      if (!data.ok) throw new Error(data.message);
-      // Repinta el detalle abierto y refresca los agregados del tablero.
-      const tr = document.getElementById('proy-det-' + i);
-      if (tr) tr.style.display = 'none';
-      await loadProyTablero();
-    } catch (e) { alert('Error: ' + e.message); }
+  // Muestra/oculta el panel de campos del proyecto.
+  function proyToggleDetalle(id, i) {
+    const tr = document.getElementById('proy-det-' + i);
+    if (proyAbiertos.has(id)) { proyAbiertos.delete(id); tr.style.display = 'none'; }
+    else { proyAbiertos.add(id); tr.style.display = ''; }
   }
 
   // ── BASE CONOCIMIENTO ─────────────────────────────────────
