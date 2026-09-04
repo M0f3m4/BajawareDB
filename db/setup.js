@@ -293,6 +293,7 @@ async function setup() {
         RAG_REPORTES_MANUAL     VARCHAR(10)   NULL,       -- override manual del semáforo de reportes (NULL = automático)
         RAG_VALIDACIONES_MANUAL VARCHAR(10)   NULL,       -- override manual del semáforo de validaciones (NULL = automático)
         AVANCE_ESTIMADO         DECIMAL(5,2)  NULL,       -- 0-100
+        FECHA_NECESIDAD         DATE          NULL,       -- fecha límite/compromiso del proyecto
         FECHA_ESTIMADA_CONCLUIR DATE          NULL,
         ACTIVO                  BIT           NOT NULL DEFAULT 1,
         USUARIO_ALTA            VARCHAR(100)  NULL,
@@ -319,6 +320,10 @@ async function setup() {
   await query(`
     IF COL_LENGTH('PROYECTOS', 'TIPO_INSTITUCION') IS NULL
       ALTER TABLE PROYECTOS ADD TIPO_INSTITUCION VARCHAR(50) NULL
+  `);
+  await query(`
+    IF COL_LENGTH('PROYECTOS', 'FECHA_NECESIDAD') IS NULL
+      ALTER TABLE PROYECTOS ADD FECHA_NECESIDAD DATE NULL
   `);
 
   console.log('✅ Setup de tablas completado.');

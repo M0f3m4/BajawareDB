@@ -5780,6 +5780,7 @@
         <thead><tr>
           <th>Institución</th><th>Cliente</th><th>Proyecto</th><th>Tipo</th><th>Pagos</th>
           <th>Funcional</th><th>Técnico</th>
+          <th>Necesidad</th>
           <th style="text-align:center;">RAG<br>proyecto</th>
           <th style="text-align:center;">RAG<br>reportes</th>
           <th style="text-align:center;">RAG<br>validaciones</th>
@@ -5802,6 +5803,12 @@
               <td>${proySelectCell(id, 'estatus_pago', p.ESTATUS_PAGO, PROY_PAGOS, PROY_PAGO_COLOR)}</td>
               <td>${proySelectCell(id, 'funcional_nombre', p.FUNCIONAL_NOMBRE, PROY_FUNCIONALES)}</td>
               <td>${proySelectCell(id, 'tecnico_nombre', p.TECNICO_NOMBRE, PROY_TECNICOS)}</td>
+              <td>
+                <input type="date" value="${p.FECHA_NECESIDAD ? String(p.FECHA_NECESIDAD).substring(0,10) : ''}"
+                       onchange="proyGuardarSelect(this, ${id}, 'fecha_necesidad')"
+                       title="Fecha límite / compromiso del proyecto"
+                       style="font-size:10px;border:1px solid #d5dce3;border-radius:10px;padding:2px 4px;width:118px;cursor:pointer;">
+              </td>
               <td style="text-align:center;">
                 <span onclick="proyCambiarRag(${id})" title="${proyEsc(ragTip)}"
                       style="display:inline-block;width:16px;height:16px;border-radius:50%;background:${ragColor};cursor:pointer;border:2px solid #fff;box-shadow:0 0 0 1px #d5dce3;"></span>
@@ -5820,7 +5827,7 @@
                 <button onclick="proyBaja(${id})" style="border:none;background:none;cursor:pointer;font-size:12px;" title="Dar de baja este proyecto">🗑️</button>
               </td>
             </tr>
-            <tr id="proy-det-${i}" style="display:none;"><td colspan="12" style="background:#f8fafc;padding:10px 18px;" id="proy-det-cont-${i}"></td></tr>`;
+            <tr id="proy-det-${i}" style="display:none;"><td colspan="13" style="background:#f8fafc;padding:10px 18px;" id="proy-det-cont-${i}"></td></tr>`;
           }).join('')}
         </tbody>
       </table>`;

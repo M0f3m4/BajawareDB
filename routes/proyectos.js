@@ -111,7 +111,7 @@ router.get('/tablero', requireAuth, async (req, res) => {
         p.ID_PROYECTO, p.NOMBRE_PROYECTO, p.TIPO_ACTIVIDAD, p.ESTATUS_PAGO,
         p.RAG_PROYECTO, p.RAG_COMENTARIO, p.RAG_FECHA, p.RAG_USUARIO,
         p.RAG_REPORTES_MANUAL, p.RAG_VALIDACIONES_MANUAL,
-        p.AVANCE_ESTIMADO, p.FECHA_ESTIMADA_CONCLUIR,
+        p.AVANCE_ESTIMADO, p.FECHA_NECESIDAD, p.FECHA_ESTIMADA_CONCLUIR,
         p.FUNCIONAL_NOMBRE, p.TECNICO_NOMBRE,
         c.CLAVE_CONTRATO, c.NOMBRE_CONTRATO, c.CLAVE_CLIENTE, c.CLAVE_PLATAFORMA,
         cl.NOMBRE_CLIENTE,
@@ -301,6 +301,7 @@ router.put('/:id/info', requireAuth, async (req, res) => {
       tipo_actividad:          'TIPO_ACTIVIDAD',
       estatus_pago:            'ESTATUS_PAGO',
       avance_estimado:         'AVANCE_ESTIMADO',
+      fecha_necesidad:         'FECHA_NECESIDAD',
       fecha_estimada_concluir: 'FECHA_ESTIMADA_CONCLUIR',
       funcional_nombre:        'FUNCIONAL_NOMBRE',
       tecnico_nombre:          'TECNICO_NOMBRE',
@@ -335,7 +336,7 @@ router.put('/:id/info', requireAuth, async (req, res) => {
     if (!sets.length) return res.status(400).json({ ok: false, message: 'Sin campos para actualizar' });
 
     const [antes] = await query(`
-      SELECT NOMBRE_PROYECTO, TIPO_ACTIVIDAD, TIPO_INSTITUCION, ESTATUS_PAGO, AVANCE_ESTIMADO, FECHA_ESTIMADA_CONCLUIR, FUNCIONAL_NOMBRE, TECNICO_NOMBRE, RAG_REPORTES_MANUAL, RAG_VALIDACIONES_MANUAL
+      SELECT NOMBRE_PROYECTO, TIPO_ACTIVIDAD, TIPO_INSTITUCION, ESTATUS_PAGO, AVANCE_ESTIMADO, FECHA_NECESIDAD, FECHA_ESTIMADA_CONCLUIR, FUNCIONAL_NOMBRE, TECNICO_NOMBRE, RAG_REPORTES_MANUAL, RAG_VALIDACIONES_MANUAL
       FROM PROYECTOS WHERE ID_PROYECTO = ${id}`);
     if (!antes) return res.status(404).json({ ok: false, message: 'Proyecto no encontrado' });
 
