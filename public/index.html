@@ -5728,7 +5728,7 @@
             <div>
               <label style="font-size:11px;color:#888;display:block;">Tipo</label>
               <select id="proy-alta-tipo" style="padding:6px;border:1px solid #d5dce3;border-radius:6px;font-size:12px;">
-                ${PROY_TIPOS.filter(t => t[0]).map(([val,label]) => `<option value="${val}">${label}</option>`).join('')}
+                ${PROY_TIPOS.filter(t => t[0]).map(([val,label]) => `<option value="${val}"${val === proyFiltroTipo ? ' selected' : ''}>${label}</option>`).join('')}
               </select>
             </div>
             <button onclick="proyGuardarAlta()" style="padding:7px 16px;border:none;border-radius:6px;background:#27ae60;color:#fff;font-size:12px;cursor:pointer;">Crear</button>
@@ -5882,19 +5882,22 @@
   const proyAbiertos = new Set();
 
   // Panel desplegable con los campos editables restantes del proyecto (sin fetch: usa los datos del tablero).
+  // Los CAMBIO_REGULATORIO llevan menos columnas (como su pestaña del Excel):
+  // sin Pagos ni RAG reportes/validaciones.
   function proyDetalleHTML(p, id, avance) {
+    const esRegulatorio = p.TIPO_ACTIVIDAD === 'CAMBIO_REGULATORIO';
     const campo = (label, html) => `
       <div style="display:flex;flex-direction:column;gap:3px;">
         <span style="font-size:10px;font-weight:700;color:#7a8794;text-transform:uppercase;">${label}</span>
         <span>${html}</span>
       </div>`;
     return `<div style="display:flex;flex-wrap:wrap;gap:8px 26px;align-items:flex-end;">
-      ${campo('Pagos', proySelectCell(id, 'estatus_pago', p.ESTATUS_PAGO, PROY_PAGOS, PROY_PAGO_COLOR))}
+      ${esRegulatorio ? '' : campo('Pagos', proySelectCell(id, 'estatus_pago', p.ESTATUS_PAGO, PROY_PAGOS, PROY_PAGO_COLOR))}
       ${campo('Funcional', proySelectCell(id, 'funcional_nombre', p.FUNCIONAL_NOMBRE, PROY_FUNCIONALES))}
       ${campo('Técnico', proySelectCell(id, 'tecnico_nombre', p.TECNICO_NOMBRE, PROY_TECNICOS))}
-      ${campo('RAG reportes', proyRagSelect(id, 'rag_reportes_manual', p.RAG_REPORTES_MANUAL, p.RAG_REPORTES,
+      ${esRegulatorio ? '' : campo('RAG reportes', proyRagSelect(id, 'rag_reportes_manual', p.RAG_REPORTES_MANUAL, p.RAG_REPORTES,
           `Calculado — Verde: ${p.REP_VERDES} · Ámbar: ${p.REP_AMBAR} · Rojo: ${p.REP_ROJOS} · Sin fechas: ${p.REP_GRISES} (de ${p.REP_TOTAL})`))}
-      ${campo('RAG validaciones', proyRagSelect(id, 'rag_validaciones_manual', p.RAG_VALIDACIONES_MANUAL, p.RAG_VALIDACIONES,
+      ${esRegulatorio ? '' : campo('RAG validaciones', proyRagSelect(id, 'rag_validaciones_manual', p.RAG_VALIDACIONES_MANUAL, p.RAG_VALIDACIONES,
           `Calculado — Verde: ${p.VAL_VERDES} · Ámbar: ${p.VAL_AMBAR} · Rojo: ${p.VAL_ROJOS} · Sin fechas: ${p.VAL_GRISES} (de ${p.VAL_TOTAL})`))}
       ${campo('Avance', `<input type="number" min="0" max="100" value="${avance ?? ''}" placeholder="—"
               onchange="proyGuardarSelect(this, ${id}, 'avance_estimado')"
