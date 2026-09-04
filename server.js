@@ -17,6 +17,7 @@ const usersRoutes   = require('./routes/users');
 const layoutsRoutes   = require('./routes/layouts');
 const reportesRoutes  = require('./routes/reportes');
 const contratosRoutes = require('./routes/contratos');
+const proyectosRoutes = require('./routes/proyectos');
 const monitor        = require('./services/monitor');
 const respaldos      = require('./services/respaldos');
 const { setup }     = require('./db/setup');
@@ -51,6 +52,7 @@ app.use('/api/layouts',    layoutsRoutes);
 app.use('/api/reportes',   reportesRoutes);
 app.use('/api/contratos',  contratosRoutes);
 app.use('/api/inventario', contratosRoutes);
+app.use('/api/proyectos',  proyectosRoutes);
 
 // ── Fallback → SPA ────────────────────────────────────────
 // Ruta comodín: redirige todas las demás rutas a index.html (Single Page App)

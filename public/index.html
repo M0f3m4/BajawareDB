@@ -671,6 +671,10 @@
         <div class="nav-item-left"><span class="nav-icon">📦</span> Paquetes</div>
       </div>
 
+      <div class="nav-item" onclick="showSection('proy-tablero')">
+        <div class="nav-item-left"><span class="nav-icon">🚦</span> Proyectos</div>
+      </div>
+
       <div class="nav-item" onclick="toggleMenu('bc')">
         <div class="nav-item-left"><span class="nav-icon">📋</span> Base Conocimiento</div>
         <span class="nav-arrow" id="arr-bc">▼</span>
@@ -1345,6 +1349,11 @@
       <div class="content-section" id="sec-chi-proyectos">
         <h2 class="section-title">CHI — Proyectos</h2>
         <div id="chi-proyectos-content"><div class="loading">Cargando...</div></div>
+      </div>
+      <!-- Proyectos — Tablero RAG (réplica viva del Excel "PROYECTOS ACTIVOS") -->
+      <div class="content-section" id="sec-proy-tablero">
+        <h2 class="section-title">Proyectos — Tablero</h2>
+        <div id="proy-content"><div class="loading">Cargando...</div></div>
       </div>
       <!-- Sprints — Historial -->
       <div class="content-section" id="sec-spr-historial">
@@ -5526,6 +5535,257 @@
     }
   }
 
+  // ── PROYECTOS (Tablero RAG) ───────────────────────────────
+  // Réplica viva de la hoja "Proyectos" del Excel del área: un renglón por
+  // contrato/proyecto con RAG manual (editable) y RAG de reportes y
+  // validaciones calculados en el backend a partir de fechas reales.
+  let proyData = [];          // datos crudos del tablero
+  let proyFiltroTipo = '';    // pestaña activa (TIPO_ACTIVIDAD) — '' = todos
+  let proyFiltroTexto = '';   // búsqueda libre
+
+  // Etiquetas de las pestañas por tipo de actividad (mismas "hojas" del Excel).
+  const PROY_TIPOS = [
+    ['', 'Todos'],
+    ['PROYECTO', 'Proyectos'],
+    ['CAMBIO_REGULATORIO', 'Cambios regulatorios'],
+    ['SOPORTE', 'Soporte'],
+    ['CUSTOMER_S', 'Customer S'],
+  ];
+
+  // Colores de semáforo (mismos que el resto de la app).
+  const PROY_RAG_COLOR = { Green:'#27ae60', Amber:'#f39c12', Red:'#e74c3c' };
+
+  // Badge de RAG calculado con desglose en tooltip. null = sin datos (gris).
+  function proyRagCalc(rag, verdes, ambar, rojos, grises, total) {
+    if (!total) return '<span style="color:#ccc;font-size:11px;">—</span>';
+    const color = rag ? PROY_RAG_COLOR[rag] : '#b8c2cc';
+    const tip = `Verde: ${verdes} · Ámbar: ${ambar} · Rojo: ${rojos} · Sin fechas: ${grises} (de ${total})`;
+    return `<span title="${tip}" style="display:inline-block;width:14px;height:14px;border-radius:50%;background:${color};vertical-align:middle;"></span>
+            <span style="font-size:10px;color:#888;vertical-align:middle;">${rojos ? rojos + '⛔' : ''}</span>`;
+  }
+
+  // Carga inicial del tablero desde el backend.
+  async function loadProyTablero() {
+    const wrap = document.getElementById('proy-content');
+    wrap.innerHTML = '<div class="loading">Cargando proyectos...</div>';
+    try {
+      const res  = await fetch('/api/proyectos/tablero');
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.message);
+      proyData = data.data;
+      proyRender();
+    } catch (e) {
+      wrap.innerHTML = '<div class="loading">Error: ' + e.message + '</div>';
+    }
+  }
+
+  // Renderiza pestañas, filtro y tabla a partir de proyData (sin refetch).
+  function proyRender() {
+    const wrap = document.getElementById('proy-content');
+    const filtered = proyData.filter(p => {
+      if (proyFiltroTipo && (p.TIPO_ACTIVIDAD || '') !== proyFiltroTipo) return false;
+      if (proyFiltroTexto) {
+        const t = proyFiltroTexto.toLowerCase();
+        const blob = `${p.NOMBRE_CLIENTE||''} ${p.NOMBRE_CONTRATO||''} ${p.CLAVE_CONTRATO||''} ${p.FUNCIONAL_NOMBRE||''} ${p.TECNICO_NOMBRE||''}`.toLowerCase();
+        if (!blob.includes(t)) return false;
+      }
+      return true;
+    });
+
+    const tabs = PROY_TIPOS.map(([val, label]) => {
+      const activo = proyFiltroTipo === val;
+      const n = val ? proyData.filter(p => (p.TIPO_ACTIVIDAD||'') === val).length : proyData.length;
+      return `<button onclick="proySetTipo('${val}')" style="padding:6px 14px;border:1px solid ${activo?'#1a3558':'#d5dce3'};border-radius:16px;background:${activo?'#1a3558':'#fff'};color:${activo?'#fff':'#1a3558'};font-size:12px;cursor:pointer;">${label} (${n})</button>`;
+    }).join(' ');
+
+    wrap.innerHTML = `
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px;">
+        ${tabs}
+        <input id="proy-buscar" placeholder="Buscar cliente, proyecto, líder..." value="${proyFiltroTexto}"
+               oninput="proyFiltroTexto=this.value;proyRenderSoloTabla();"
+               style="margin-left:auto;padding:6px 10px;border:1px solid #d5dce3;border-radius:6px;font-size:12px;min-width:220px;">
+        <button onclick="loadProyTablero()" title="Recargar" style="padding:6px 10px;border:1px solid #d5dce3;border-radius:6px;background:#fff;cursor:pointer;">⟳</button>
+      </div>
+      <div id="proy-tabla-wrap"></div>`;
+    proyPintarTabla(filtered);
+  }
+
+  // Cambia la pestaña activa y repinta.
+  function proySetTipo(val) { proyFiltroTipo = val; proyRender(); }
+
+  // Repinta solo la tabla (para no perder el foco del input de búsqueda).
+  function proyRenderSoloTabla() {
+    const filtered = proyData.filter(p => {
+      if (proyFiltroTipo && (p.TIPO_ACTIVIDAD || '') !== proyFiltroTipo) return false;
+      if (proyFiltroTexto) {
+        const t = proyFiltroTexto.toLowerCase();
+        const blob = `${p.NOMBRE_CLIENTE||''} ${p.NOMBRE_CONTRATO||''} ${p.CLAVE_CONTRATO||''} ${p.FUNCIONAL_NOMBRE||''} ${p.TECNICO_NOMBRE||''}`.toLowerCase();
+        if (!blob.includes(t)) return false;
+      }
+      return true;
+    });
+    proyPintarTabla(filtered);
+  }
+
+  // Pinta la tabla principal del tablero.
+  function proyPintarTabla(rows) {
+    const cont = document.getElementById('proy-tabla-wrap');
+    if (!rows.length) { cont.innerHTML = '<div class="loading">Sin proyectos con ese filtro.</div>'; return; }
+    cont.innerHTML = `
+      <div style="font-size:12px;color:#888;margin-bottom:8px;">${rows.length} proyectos · clic en el círculo RAG para cambiarlo · doble clic en Pagos/Avance/Funcional/Técnico/Tipo para editar</div>
+      <table class="data-table">
+        <thead><tr>
+          <th>Institución</th><th>Cliente</th><th>Proyecto</th><th>Tipo</th><th>Pagos</th>
+          <th>Funcional</th><th>Técnico</th>
+          <th style="text-align:center;">RAG<br>proyecto</th>
+          <th style="text-align:center;">RAG<br>reportes</th>
+          <th style="text-align:center;">RAG<br>validaciones</th>
+          <th style="text-align:center;">Avance</th>
+          <th></th>
+        </tr></thead>
+        <tbody>
+          ${rows.map((p, i) => {
+            const clave = (p.CLAVE_CONTRATO || '').replace(/'/g, "\\'");
+            const ragColor = p.RAG_PROYECTO ? PROY_RAG_COLOR[p.RAG_PROYECTO] : '#b8c2cc';
+            const ragTip = p.RAG_PROYECTO
+              ? `${p.RAG_PROYECTO}${p.RAG_COMENTARIO ? ' — ' + p.RAG_COMENTARIO : ''}${p.RAG_USUARIO ? ' (' + p.RAG_USUARIO + ')' : ''}`
+              : 'Sin RAG — clic para asignar';
+            const avance = p.AVANCE_ESTIMADO != null ? Math.round(p.AVANCE_ESTIMADO) : null;
+            return `<tr>
+              <td style="font-size:11px;">${p.TIPO_INSTITUCION || '<span style="color:#ccc;">—</span>'}</td>
+              <td><strong style="color:#1a3558;">${p.NOMBRE_CLIENTE || p.CLAVE_CLIENTE || '—'}</strong></td>
+              <td style="font-size:12px;" title="${p.CLAVE_CONTRATO}">${p.NOMBRE_CONTRATO || '—'}</td>
+              <td style="font-size:11px;cursor:pointer;" ondblclick="proyEditarCampo('${clave}','tipo_actividad','${p.TIPO_ACTIVIDAD||''}')">${p.TIPO_ACTIVIDAD || '<span style="color:#ccc;">—</span>'}</td>
+              <td style="font-size:11px;cursor:pointer;" ondblclick="proyEditarCampo('${clave}','estatus_pago','${(p.ESTATUS_PAGO||'').replace(/'/g,"\\'")}')">${p.ESTATUS_PAGO || '<span style="color:#ccc;">—</span>'}</td>
+              <td style="font-size:11px;cursor:pointer;" ondblclick="proyEditarCampo('${clave}','funcional_nombre','${(p.FUNCIONAL_NOMBRE||'').replace(/'/g,"\\'")}')">${p.FUNCIONAL_NOMBRE || '<span style="color:#ccc;">—</span>'}</td>
+              <td style="font-size:11px;cursor:pointer;" ondblclick="proyEditarCampo('${clave}','tecnico_nombre','${(p.TECNICO_NOMBRE||'').replace(/'/g,"\\'")}')">${p.TECNICO_NOMBRE || '<span style="color:#ccc;">—</span>'}</td>
+              <td style="text-align:center;">
+                <span onclick="proyCambiarRag('${clave}')" title="${ragTip.replace(/"/g,'&quot;')}"
+                      style="display:inline-block;width:16px;height:16px;border-radius:50%;background:${ragColor};cursor:pointer;border:2px solid #fff;box-shadow:0 0 0 1px #d5dce3;"></span>
+              </td>
+              <td style="text-align:center;">${proyRagCalc(p.RAG_REPORTES, p.REP_VERDES, p.REP_AMBAR, p.REP_ROJOS, p.REP_GRISES, p.REP_TOTAL)}</td>
+              <td style="text-align:center;">${proyRagCalc(p.RAG_VALIDACIONES, p.VAL_VERDES, p.VAL_AMBAR, p.VAL_ROJOS, p.VAL_GRISES, p.VAL_TOTAL)}</td>
+              <td style="text-align:center;font-size:12px;cursor:pointer;" ondblclick="proyEditarCampo('${clave}','avance_estimado','${avance ?? ''}')">${avance != null ? avance + '%' : '<span style="color:#ccc;">—</span>'}</td>
+              <td><button onclick="proyToggleDetalle('${clave}', ${i})" style="border:none;background:none;cursor:pointer;font-size:14px;" title="Ver reportes y validaciones">📂</button></td>
+            </tr>
+            <tr id="proy-det-${i}" style="display:none;"><td colspan="12" style="background:#f8fafc;padding:10px 18px;" id="proy-det-cont-${i}"></td></tr>`;
+          }).join('')}
+        </tbody>
+      </table>`;
+  }
+
+  // Cambia el RAG manual del proyecto: pide color y comentario, guarda y recarga.
+  async function proyCambiarRag(clave) {
+    const rag = prompt('RAG del proyecto (Green / Amber / Red, vacío = quitar):');
+    if (rag === null) return; // canceló
+    const val = rag.trim();
+    const norm = { green:'Green', amber:'Amber', red:'Red', '':'' }[val.toLowerCase()];
+    if (norm === undefined) { alert('Valor inválido. Usa Green, Amber o Red.'); return; }
+    const comentario = norm ? (prompt('Comentario / razón del color (opcional):') || '') : '';
+    try {
+      const res = await fetch(`/api/proyectos/${encodeURIComponent(clave)}/rag`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rag: norm || null, comentario }),
+      });
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.message);
+      loadProyTablero();
+    } catch (e) { alert('Error: ' + e.message); }
+  }
+
+  // Edita un campo simple del proyecto vía prompt y lo guarda.
+  async function proyEditarCampo(clave, campo, actual) {
+    const labels = {
+      tipo_actividad:  'Tipo de actividad (PROYECTO / CAMBIO_REGULATORIO / SOPORTE / CUSTOMER_S):',
+      estatus_pago:    'Estatus de pagos (ej. "Pago completado"):',
+      funcional_nombre:'Líder funcional:',
+      tecnico_nombre:  'Líder técnico:',
+      avance_estimado: 'Avance estimado (0-100):',
+    };
+    const nuevo = prompt(labels[campo] || campo, actual || '');
+    if (nuevo === null) return;
+    try {
+      const res = await fetch(`/api/proyectos/${encodeURIComponent(clave)}/info`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ [campo]: nuevo.trim() === '' ? null : nuevo.trim() }),
+      });
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.message);
+      loadProyTablero();
+    } catch (e) { alert('Error: ' + e.message); }
+  }
+
+  // Muestra/oculta el detalle de un proyecto (reportes y validaciones con semáforo).
+  async function proyToggleDetalle(clave, i) {
+    const tr = document.getElementById('proy-det-' + i);
+    if (tr.style.display !== 'none') { tr.style.display = 'none'; return; }
+    tr.style.display = '';
+    const cont = document.getElementById('proy-det-cont-' + i);
+    cont.innerHTML = '<div class="loading">Cargando detalle...</div>';
+    try {
+      const res  = await fetch(`/api/proyectos/${encodeURIComponent(clave)}/detalle`);
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.message);
+      const { reportes, validaciones } = data.data;
+      const sem = s => {
+        const c = { VERDE:'#27ae60', AMBAR:'#f39c12', ROJO:'#e74c3c', GRIS:'#b8c2cc' }[s] || '#b8c2cc';
+        return `<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${c};"></span>`;
+      };
+      const fmtF = f => f ? String(f).substring(0,10) : '—';
+      const claveJs = clave.replace(/'/g, "\\'");
+      cont.innerHTML = `
+        <div style="font-size:12px;font-weight:700;color:#1a3558;margin-bottom:6px;">Reportes (${reportes.length}) — doble clic en "Necesidad" o "Est. Prod" para capturar fecha</div>
+        ${reportes.length ? `<table class="data-table" style="font-size:11px;">
+          <thead><tr><th></th><th>Reporte</th><th>Necesidad</th><th>Est. QA</th><th>Inst. QA</th><th>Est. Cert</th><th>Certificado</th><th>Est. Prod</th><th>Inst. Prod</th></tr></thead>
+          <tbody>${reportes.map(r => {
+            const rep = (r.CLAVE_REP||'').replace(/'/g, "\\'");
+            return `<tr>
+              <td>${sem(r.SEMAFORO)}</td>
+              <td style="font-family:monospace;">${r.CLAVE_REP}</td>
+              <td style="cursor:pointer;" ondblclick="proyEditarFechaRep('${claveJs}','${rep}','fecha_necesidad','${fmtF(r.FECHA_NECESIDAD) === '—' ? '' : fmtF(r.FECHA_NECESIDAD)}', ${i})">${fmtF(r.FECHA_NECESIDAD)}</td>
+              <td>${fmtF(r.FECHA_ESTIMADA_QA)}</td><td>${fmtF(r.FECHA_INSTALADO_QA)}</td>
+              <td>${fmtF(r.FECHA_ESTIMADA_CERT)}</td><td>${fmtF(r.FECHA_CERTIFICADO)}</td>
+              <td style="cursor:pointer;" ondblclick="proyEditarFechaRep('${claveJs}','${rep}','fecha_estimada_prod','${fmtF(r.FECHA_ESTIMADA_PROD) === '—' ? '' : fmtF(r.FECHA_ESTIMADA_PROD)}', ${i})">${fmtF(r.FECHA_ESTIMADA_PROD)}</td>
+              <td>${fmtF(r.FECHA_INSTALADO_PROD)}</td>
+            </tr>`;
+          }).join('')}</tbody>
+        </table>` : '<div style="font-size:11px;color:#aaa;">Sin reportes ligados.</div>'}
+        <div style="font-size:12px;font-weight:700;color:#1a3558;margin:10px 0 6px;">Validaciones (${validaciones.length})</div>
+        ${validaciones.length ? `<table class="data-table" style="font-size:11px;">
+          <thead><tr><th></th><th>Validación</th><th>Plataforma</th><th>Versión</th><th>Estatus</th><th>Necesidad</th><th>Estimada</th><th>Real</th></tr></thead>
+          <tbody>${validaciones.map(v => `<tr>
+            <td>${sem(v.SEMAFORO)}</td>
+            <td style="font-family:monospace;">${v.CLAVE_VALIDACION}</td>
+            <td>${v.CLAVE_PLATAFORMA || '—'}</td><td>${v.VERSION_CARGA || '—'}</td><td>${v.ESTATUS_PROYECTO || '—'}</td>
+            <td>${fmtF(v.FECHA_NECESIDAD)}</td><td>${fmtF(v.FECHA_ESTIMADA)}</td><td>${fmtF(v.FECHA_REAL)}</td>
+          </tr>`).join('')}</tbody>
+        </table>` : '<div style="font-size:11px;color:#aaa;">Sin validaciones ligadas.</div>'}`;
+    } catch (e) {
+      cont.innerHTML = '<div class="loading">Error: ' + e.message + '</div>';
+    }
+  }
+
+  // Captura una fecha (necesidad o estimada de prod) de un reporte del proyecto.
+  async function proyEditarFechaRep(clave, claveRep, campo, actual, i) {
+    const label = campo === 'fecha_necesidad' ? 'Fecha de necesidad del cliente' : 'Fecha estimada de instalación en PROD';
+    const f = prompt(`${label} para ${claveRep} (formato AAAA-MM-DD, vacío = quitar):`, actual || '');
+    if (f === null) return;
+    const val = f.trim();
+    if (val && !/^\d{4}-\d{2}-\d{2}$/.test(val)) { alert('Formato inválido. Usa AAAA-MM-DD.'); return; }
+    try {
+      const res = await fetch(`/api/proyectos/${encodeURIComponent(clave)}/reporte-fechas`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clave_rep: claveRep, [campo]: val || null }),
+      });
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.message);
+      // Repinta el detalle abierto y refresca los agregados del tablero.
+      const tr = document.getElementById('proy-det-' + i);
+      if (tr) tr.style.display = 'none';
+      await loadProyTablero();
+    } catch (e) { alert('Error: ' + e.message); }
+  }
+
   // ── BASE CONOCIMIENTO ─────────────────────────────────────
   let bcRepData = [];
 
@@ -8525,6 +8785,7 @@
     'sop-fixes':      () => initSoporte('sop-fixes'),
     'actividad':      initActividad,
     'bitacora':       loadBitacora,
+    'proy-tablero':   loadProyTablero,
     'chi-clientes':   loadChiClientes,
     'chi-proyectos':  loadChiProyectos,
     'qa-alertas':       loadQaAlertas,
