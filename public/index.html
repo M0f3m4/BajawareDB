@@ -5559,6 +5559,7 @@
   const PROY_RAG_COLOR = { Green:'#27ae60', Amber:'#f39c12', Red:'#e74c3c' };
 
   // Catálogos para los dropdowns de la tabla (mismas listas que el Excel).
+  const PROY_INSTITUCIONES = ['Banca Múltiple', 'Banca de Desarrollo', 'SOFIPO', 'SOFOM', 'SOCAP', 'Fintech', 'Operadora de Fondos'];
   const PROY_PAGOS = ['Sin iniciar', 'Sin inicio de pagos', 'Pago parcial', 'Pago completado', 'Detenido', 'No Aplica'];
   const PROY_FUNCIONALES = ['Gisela Escalante', 'Francisco Sánchez', 'Dante Suárez'];
   const PROY_TECNICOS = ['Eduardo Ibarra', 'Karen Palomares', 'Oswaldo Casasola', 'Hugo Salazar', 'Ezequiel Lara'];
@@ -5584,6 +5585,36 @@
         <option value=""${val ? '' : ' selected'}>—</option>
         ${lista.map(o => `<option value="${proyEsc(o)}"${o === val ? ' selected' : ''}>${proyEsc(o)}</option>`).join('')}
       </select>`;
+  }
+
+  // Dropdown de tipo de institución: es dato del CLIENTE (no del proyecto),
+  // así que se guarda con su propio endpoint y aplica a todos los renglones
+  // de ese cliente al recargar. La clave viaja en data-clave para soportar
+  // claves con comillas/paréntesis.
+  function proyInstSelect(claveCliente, actual) {
+    if (!claveCliente) return '<span style="color:#ccc;">—</span>';
+    const val = actual || '';
+    const lista = PROY_INSTITUCIONES.includes(val) || !val ? PROY_INSTITUCIONES : [val, ...PROY_INSTITUCIONES];
+    return `<select onchange="proyGuardarInstitucion(this)" data-clave="${proyEsc(claveCliente)}"
+        title="Tipo de institución del cliente — aplica a todos sus proyectos"
+        style="font-size:10px;border:1px solid #d5dce3;border-radius:10px;padding:2px 4px;max-width:120px;cursor:pointer;background:#fff;color:#333;">
+        <option value=""${val ? '' : ' selected'}>—</option>
+        ${lista.map(o => `<option value="${proyEsc(o)}"${o === val ? ' selected' : ''}>${proyEsc(o)}</option>`).join('')}
+      </select>`;
+  }
+
+  // Guarda el tipo de institución del cliente.
+  async function proyGuardarInstitucion(sel) {
+    try {
+      const clave = sel.getAttribute('data-clave');
+      const res = await fetch(`/api/proyectos/cliente/${encodeURIComponent(clave)}/tipo-institucion`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tipo_institucion: sel.value || null }),
+      });
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.message);
+      loadProyTablero();
+    } catch (e) { alert('Error: ' + e.message); loadProyTablero(); }
   }
 
   // Dropdown de semáforo (RAG reportes / RAG validaciones): Auto usa el color
@@ -5794,7 +5825,7 @@
               : 'Sin RAG — clic para asignar';
             const avance = p.AVANCE_ESTIMADO != null ? Math.round(p.AVANCE_ESTIMADO) : null;
             return `<tr>
-              <td style="font-size:11px;">${p.TIPO_INSTITUCION || '<span style="color:#ccc;">—</span>'}</td>
+              <td>${proyInstSelect(p.CLAVE_CLIENTE, p.TIPO_INSTITUCION)}</td>
               <td><strong style="color:#1a3558;">${proyEsc(p.NOMBRE_CLIENTE || p.CLAVE_CLIENTE || '—')}</strong></td>
               <td style="font-size:12px;cursor:pointer;" title="Contrato: ${proyEsc(p.NOMBRE_CONTRATO || p.CLAVE_CONTRATO || '')}" ondblclick="proyEditarCampo(${id},'nombre_proyecto','${proyEsc((p.NOMBRE_PROYECTO||'').replace(/'/g,"\\'"))}')">${proyEsc(p.NOMBRE_PROYECTO || '—')}</td>
               <td style="font-size:11px;cursor:pointer;" ondblclick="proyEditarCampo(${id},'tipo_actividad','${p.TIPO_ACTIVIDAD||''}')">${p.TIPO_ACTIVIDAD || '<span style="color:#ccc;">—</span>'}</td>
