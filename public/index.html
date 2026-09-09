@@ -5902,7 +5902,23 @@
       ${campo('Avance', `<input type="number" min="0" max="100" value="${avance ?? ''}" placeholder="—"
               onchange="proyGuardarSelect(this, ${id}, 'avance_estimado')"
               style="width:52px;font-size:11px;text-align:center;border:1px solid #d5dce3;border-radius:10px;padding:2px 4px;">%`)}
+      ${campo('Producto', `<a href="#" onclick="proyIrEstatusContrato('${proyEsc(p.CLAVE_CLIENTE)}','${proyEsc(p.CLAVE_CONTRATO)}');return false;"
+              title="Ver el estatus de reportes del contrato ${proyEsc(p.CLAVE_CONTRATO)}"
+              style="font-size:11px;color:#1a3558;font-weight:700;text-decoration:none;border:1px solid #d5dce3;border-radius:10px;padding:3px 10px;display:inline-block;background:#fff;">📋 Estatus por contrato →</a>`)}
     </div>`;
+  }
+
+  // Brinca a la pantalla "Estatus por Contrato" con el cliente y contrato del
+  // proyecto ya preseleccionados y con los reportes cargados.
+  async function proyIrEstatusContrato(claveCliente, claveContrato) {
+    showSection('bc-consulta-rep');
+    try {
+      await initBC();                                        // llena el select de clientes
+      document.getElementById('bc-rep-cliente').value = claveCliente;
+      await loadContratosRep();                              // llena los contratos del cliente
+      document.getElementById('bc-rep-contrato').value = claveContrato;
+      await loadReportesContrato();                          // carga los reportes del contrato
+    } catch (e) { console.error('proyIrEstatusContrato:', e); }
   }
 
   // Muestra/oculta el panel de campos del proyecto.
