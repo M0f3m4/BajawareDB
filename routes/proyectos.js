@@ -146,14 +146,16 @@ router.get('/tablero', requireAuth, async (req, res) => {
         GROUP BY cv.CLAVE_CONTRATO
       ) v ON v.CLAVE_CONTRATO = c.CLAVE_CONTRATO
       LEFT JOIN (
-        -- RAG de producto: cuenta los reportes del contrato cuyo ESTATUS (el
-        -- mismo campo que muestra la pantalla "Estatus por Contrato") es
-        -- CERTIFICADO. El color sale del %: <80 Rojo, 80-99 Ámbar, 100 Verde.
+        -- RAG de producto: cuenta los renglones de la pantalla "Estatus por
+        -- Contrato" (mismo join: CLAVE_REP_GENERAL + plataforma del contrato)
+        -- y cuántos tienen ESTATUS = CERTIFICADO. %: <80 Rojo, 80-99 Ámbar, 100 Verde.
         SELECT cr.CLAVE_CONTRATO,
-               COUNT(cr.CLAVE_REP) AS TOT,
+               COUNT(er.ID_ESTATUS_REP) AS TOT,
                SUM(CASE WHEN er.ESTATUS = 'CERTIFICADO' THEN 1 ELSE 0 END) AS CERTIFICADOS
         FROM CONTRATOS_REPORTES cr
-        LEFT JOIN ESTATUS_REPORTE er ON er.CLAVE_REP = cr.CLAVE_REP
+        INNER JOIN CONTRATOS cc ON cc.CLAVE_CONTRATO = cr.CLAVE_CONTRATO
+        LEFT JOIN ESTATUS_REPORTE er ON er.CLAVE_REP_GENERAL = cr.CLAVE_REP
+                                    AND er.CLAVE_PLATAFORMA  = cc.CLAVE_PLATAFORMA
         WHERE cr.ACTIVO = 1
         GROUP BY cr.CLAVE_CONTRATO
       ) prod ON prod.CLAVE_CONTRATO = c.CLAVE_CONTRATO
