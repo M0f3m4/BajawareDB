@@ -215,6 +215,41 @@ router.get('/snapshot/ultimo', requireAuth, async (req, res) => {
   } catch(e) { res.json({ ok: true, data: { ultimo: null } }); }
 });
 
+// ── GET /snapshot/lista
+// Descripción: snapshots disponibles de PROYECTOS_RESPALDO para el comparativo.
+// Cada snapshot se identifica por su fecha exacta como string (formato 121,
+// yyyy-mm-dd hh:mi:ss.mmm) para evitar líos de zona horaria al reconsultar.
+// Respuesta: [{CLAVE_SNAP, FECHA_RESPALDO, MOTIVO, FILAS}]. Sin bitácora.
+router.get('/snapshot/lista', requireAuth, async (req, res) => {
+  try {
+    const rows = await query(`
+      SELECT CONVERT(VARCHAR(23), FECHA_RESPALDO, 121) AS CLAVE_SNAP,
+             FECHA_RESPALDO, MOTIVO, COUNT(*) AS FILAS
+      FROM PROYECTOS_RESPALDO
+      WHERE MOTIVO IN ('SEMANAL', 'MANUAL')
+      GROUP BY CONVERT(VARCHAR(23), FECHA_RESPALDO, 121), FECHA_RESPALDO, MOTIVO
+      ORDER BY FECHA_RESPALDO DESC
+    `);
+    res.json({ ok: true, data: rows });
+  } catch(e) { res.json({ ok: true, data: [] }); }
+});
+
+// ── GET /snapshot/detalle?clave=yyyy-mm-dd hh:mi:ss.mmm
+// Descripción: filas completas de un snapshot (para comparar contra el tablero
+// actual en el frontend). La clave es el CLAVE_SNAP de /snapshot/lista.
+// Sin bitácora (consulta de solo lectura).
+router.get('/snapshot/detalle', requireAuth, async (req, res) => {
+  try {
+    const clave = String(req.query.clave || '').trim();
+    if (!clave) return res.status(400).json({ ok: false, message: 'Falta clave del snapshot' });
+    const rows = await query(`
+      SELECT * FROM PROYECTOS_RESPALDO
+      WHERE CONVERT(VARCHAR(23), FECHA_RESPALDO, 121) = ${esc(clave)}
+    `);
+    res.json({ ok: true, data: rows });
+  } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
+});
+
 // ── POST /
 // Descripción: alta de proyecto en cascada. Body: clave_contrato (obligatorio),
 // nombre_proyecto (obligatorio) y opcionales tipo_actividad, estatus_pago,

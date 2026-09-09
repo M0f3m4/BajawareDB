@@ -5679,7 +5679,8 @@
       : '🕒 Aún sin snapshot semanal';
 
     wrap.innerHTML = `
-      <div style="font-size:11px;color:#7a8794;margin-bottom:6px;" title="Cada viernes a las 8:00 pm hora Pacífico se guarda una foto completa del tablero (PROYECTOS_RESPALDO) para comparar qué cambió en la semana.">${snapTxt} · respaldo automático cada viernes 8:00 pm PT</div>
+      <div style="font-size:11px;color:#7a8794;margin-bottom:6px;" title="Cada viernes a las 8:00 pm hora Pacífico se guarda una foto completa del tablero (PROYECTOS_RESPALDO) para comparar qué cambió en la semana.">${snapTxt} · respaldo automático cada viernes 8:00 pm PT${proyUltimoSnapshot ? ' · <a href="#" onclick="proyToggleSnapPanel();return false;" style="color:#1a3558;font-weight:600;">🔍 ver comparativo</a>' : ''}</div>
+      <div id="proy-snap-panel" style="display:none;"></div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px;">
         ${tabs}
         <input id="proy-buscar" placeholder="Buscar cliente, proyecto, líder..." value="${proyEsc(proyFiltroTexto)}"
@@ -5698,6 +5699,126 @@
 
   // Repinta solo la tabla (para no perder el foco del input de búsqueda).
   function proyRenderSoloTabla() { proyPintarTabla(proyFiltrar()); }
+
+  // ── Comparativo contra snapshot semanal ─────────────────────
+  // Campos que se comparan entre el snapshot y el tablero actual.
+  const PROY_SNAP_CAMPOS = [
+    ['NOMBRE_PROYECTO',         'Proyecto'],
+    ['TIPO_ACTIVIDAD',          'Tipo'],
+    ['ESTATUS_PAGO',            'Pagos'],
+    ['FUNCIONAL_NOMBRE',        'Funcional'],
+    ['TECNICO_NOMBRE',          'Técnico'],
+    ['RAG_PROYECTO',            'RAG proyecto'],
+    ['AVANCE_ESTIMADO',         'Avance'],
+    ['FECHA_NECESIDAD',         'Necesidad'],
+    ['FECHA_ESTIMADA_CONCLUIR', 'Estimado'],
+  ];
+
+  // Normaliza un valor para comparar: fechas a yyyy-mm-dd, números a número,
+  // null/'' equivalentes. Así "50.00" vs 50 o la hora de una fecha no marcan
+  // cambios falsos.
+  function proySnapNorm(campo, v) {
+    if (v === null || v === undefined || v === '') return '';
+    if (campo.startsWith('FECHA')) return String(v).slice(0, 10);
+    if (campo === 'AVANCE_ESTIMADO') return String(Number(v));
+    return String(v).trim();
+  }
+  // Valor legible para mostrar en la tabla de cambios.
+  function proySnapVer(campo, v) {
+    const n = proySnapNorm(campo, v);
+    if (n === '') return '<span style="color:#bbb;">—</span>';
+    if (campo === 'AVANCE_ESTIMADO') return proyEsc(n) + '%';
+    return proyEsc(n);
+  }
+
+  // Abre/cierra el panel de comparativo; carga la lista de snapshots.
+  async function proyToggleSnapPanel() {
+    const panel = document.getElementById('proy-snap-panel');
+    if (panel.style.display !== 'none') { panel.style.display = 'none'; return; }
+    panel.style.display = '';
+    panel.innerHTML = '<div class="loading">Cargando snapshots...</div>';
+    try {
+      const res  = await fetch('/api/proyectos/snapshot/lista');
+      const data = await res.json();
+      if (!data.data.length) { panel.innerHTML = '<div class="loading">No hay snapshots todavía.</div>'; return; }
+      const ops = data.data.map(s => {
+        const f = new Date(s.FECHA_RESPALDO).toLocaleString('es-MX', { weekday:'short', day:'numeric', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' });
+        return `<option value="${proyEsc(s.CLAVE_SNAP)}">${f} · ${s.FILAS} proyectos${s.MOTIVO === 'MANUAL' ? ' (manual)' : ''}</option>`;
+      }).join('');
+      panel.innerHTML = `
+        <div style="border:1px solid #d5dce3;border-radius:8px;background:#f8fafc;padding:12px;margin-bottom:12px;">
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+            <span style="font-size:12px;font-weight:700;color:#1a3558;">Comparar el tablero actual contra:</span>
+            <select id="proy-snap-sel" style="padding:5px 8px;border:1px solid #d5dce3;border-radius:6px;font-size:12px;">${ops}</select>
+            <button onclick="proyCompararSnapshot()" style="padding:5px 12px;border:none;border-radius:6px;background:#1a3558;color:#fff;font-size:12px;cursor:pointer;">Comparar</button>
+          </div>
+          <div id="proy-snap-resultado" style="margin-top:10px;"></div>
+        </div>`;
+      proyCompararSnapshot(); // comparar de una vez contra el más reciente
+    } catch (e) {
+      panel.innerHTML = '<div class="loading">Error: ' + e.message + '</div>';
+    }
+  }
+
+  // Trae el snapshot elegido y lo compara contra proyData (el tablero actual).
+  async function proyCompararSnapshot() {
+    const out = document.getElementById('proy-snap-resultado');
+    out.innerHTML = '<div class="loading">Comparando...</div>';
+    try {
+      const clave = document.getElementById('proy-snap-sel').value;
+      const res   = await fetch('/api/proyectos/snapshot/detalle?clave=' + encodeURIComponent(clave));
+      const data  = await res.json();
+      if (!data.ok) throw new Error(data.message);
+      // Solo filas activas de ambos lados (el tablero ya viene solo con activos)
+      const antes = new Map(data.data.filter(s => s.ACTIVO === true || s.ACTIVO === 1).map(s => [s.ID_PROYECTO, s]));
+      const ahora = new Map(proyData.map(p => [p.ID_PROYECTO, p]));
+
+      const nuevos  = [...ahora.values()].filter(p => !antes.has(p.ID_PROYECTO));
+      const bajas   = [...antes.values()].filter(s => !ahora.has(s.ID_PROYECTO));
+      const cambios = [];
+      for (const [id, p] of ahora) {
+        const s = antes.get(id);
+        if (!s) continue;
+        for (const [campo, label] of PROY_SNAP_CAMPOS) {
+          if (proySnapNorm(campo, s[campo]) !== proySnapNorm(campo, p[campo])) {
+            cambios.push({ p, campo, label, antes: s[campo], ahora: p[campo] });
+          }
+        }
+      }
+
+      const nombre = p => `${proyEsc(p.NOMBRE_CLIENTE || '')} · ${proyEsc(p.NOMBRE_PROYECTO || '')}`;
+      let html = `<div style="font-size:12px;color:#556;margin-bottom:8px;">
+        Nuevos: <b>${nuevos.length}</b> · Dados de baja: <b>${bajas.length}</b> · Campos cambiados: <b>${cambios.length}</b></div>`;
+      if (!nuevos.length && !bajas.length && !cambios.length) {
+        html += '<div style="font-size:12px;color:#27ae60;">Sin cambios desde ese snapshot. ✓</div>';
+      }
+      if (nuevos.length) {
+        html += `<div style="font-size:11px;font-weight:700;color:#27ae60;margin:6px 0 2px;">➕ NUEVOS</div>`
+              + nuevos.map(p => `<div style="font-size:12px;padding:2px 0;">${nombre(p)} <span style="color:#888;">(${proyEsc(p.TIPO_ACTIVIDAD || 's/tipo')})</span></div>`).join('');
+      }
+      if (bajas.length) {
+        html += `<div style="font-size:11px;font-weight:700;color:#c0392b;margin:6px 0 2px;">🗑️ DADOS DE BAJA</div>`
+              + bajas.map(s => `<div style="font-size:12px;padding:2px 0;">${proyEsc(s.NOMBRE_PROYECTO)} <span style="color:#888;">(${proyEsc(s.CLAVE_CONTRATO)})</span></div>`).join('');
+      }
+      if (cambios.length) {
+        html += `<div style="font-size:11px;font-weight:700;color:#1a3558;margin:8px 0 2px;">✏️ CAMBIOS</div>
+          <table style="width:100%;border-collapse:collapse;font-size:12px;">
+            <thead><tr style="color:#7a8794;font-size:10px;text-transform:uppercase;">
+              <th style="text-align:left;padding:3px 6px;">Proyecto</th><th style="text-align:left;padding:3px 6px;">Campo</th>
+              <th style="text-align:left;padding:3px 6px;">Antes</th><th style="text-align:left;padding:3px 6px;">Ahora</th></tr></thead>
+            <tbody>` + cambios.map(c => `
+              <tr style="border-top:1px solid #e8edf2;">
+                <td style="padding:3px 6px;">${nombre(c.p)}</td>
+                <td style="padding:3px 6px;color:#556;">${c.label}</td>
+                <td style="padding:3px 6px;">${proySnapVer(c.campo, c.antes)}</td>
+                <td style="padding:3px 6px;font-weight:600;">${proySnapVer(c.campo, c.ahora)}</td>
+              </tr>`).join('') + '</tbody></table>';
+      }
+      out.innerHTML = html;
+    } catch (e) {
+      out.innerHTML = '<div class="loading">Error: ' + e.message + '</div>';
+    }
+  }
 
   // ── Alta en cascada: cliente → contrato → nombre del proyecto ──
   // Abre el panel de alta; carga el catálogo cliente/contratos la primera vez.
