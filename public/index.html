@@ -5670,7 +5670,7 @@
         <input id="proy-buscar" placeholder="Buscar cliente, proyecto, líder..." value="${proyEsc(proyFiltroTexto)}"
                oninput="proyFiltroTexto=this.value;proyRenderSoloTabla();"
                style="margin-left:auto;padding:6px 10px;border:1px solid #d5dce3;border-radius:6px;font-size:12px;min-width:220px;">
-        <button onclick="proyAbrirAlta()" style="padding:6px 12px;border:none;border-radius:6px;background:#1a3558;color:#fff;font-size:12px;cursor:pointer;">➕ Nuevo proyecto</button>
+        <button onclick="proyAbrirAlta()" style="padding:6px 12px;border:none;border-radius:6px;background:#1a3558;color:#fff;font-size:12px;cursor:pointer;">➕ Nuevo</button>
         <button onclick="loadProyTablero()" title="Recargar" style="padding:6px 10px;border:1px solid #d5dce3;border-radius:6px;background:#fff;cursor:pointer;">⟳</button>
       </div>
       <div id="proy-alta-panel" style="display:none;"></div>
@@ -5706,7 +5706,7 @@
       });
       panel.innerHTML = `
         <div style="border:1px solid #d5dce3;border-radius:8px;padding:14px;margin-bottom:14px;background:#f8fafc;">
-          <div style="font-size:13px;font-weight:700;color:#1a3558;margin-bottom:10px;">Nuevo proyecto — elige en cascada</div>
+          <div style="font-size:13px;font-weight:700;color:#1a3558;margin-bottom:10px;">Nueva entrada</div>
           <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;">
             <div>
               <label style="font-size:11px;color:#888;display:block;">1. Cliente</label>
@@ -5773,7 +5773,7 @@
   // Pinta la tabla principal del tablero.
   function proyPintarTabla(rows) {
     const cont = document.getElementById('proy-tabla-wrap');
-    if (!rows.length) { cont.innerHTML = '<div class="loading">Sin proyectos con ese filtro. Usa "➕ Nuevo proyecto" para dar de alta.</div>'; return; }
+    if (!rows.length) { cont.innerHTML = '<div class="loading">Sin proyectos con ese filtro. Usa "➕ Nuevo" para dar de alta.</div>'; return; }
     cont.innerHTML = `
       <div style="font-size:12px;color:#888;margin-bottom:8px;">${rows.length} proyectos · clic en el círculo RAG proyecto para cambiarlo · clic en 📂 para ver y editar Pagos/Funcional/Técnico/RAG reportes/RAG validaciones/Avance ("Auto" = semáforo calculado por fechas) · doble clic en Proyecto/Tipo para editar</div>
       <table class="data-table">
