@@ -2428,11 +2428,12 @@ router.get('/contratos/:clave/resumen', requireAuth, async (req, res) => {
     // Mismo join que GET /contratos/:clave/reportes (la tabla de la pantalla):
     // CLAVE_REP_GENERAL + plataforma del contrato. El join viejo por CLAVE_REP
     // directo no encontraba registros y los badges siempre marcaban 0.
+    // Ojo: los hitos guardan 'SI'/'NO' (no 'S'), por eso se compara con 'SI'.
     const rows = await query(`
       SELECT
-        SUM(CASE WHEN er.DOCUMENTADO='S' THEN 1 ELSE 0 END) AS documentados,
-        SUM(CASE WHEN er.PROGRAMADO='S'  THEN 1 ELSE 0 END) AS programados,
-        SUM(CASE WHEN er.CERTIFICADO='S' THEN 1 ELSE 0 END) AS certificados,
+        SUM(CASE WHEN er.DOCUMENTADO='SI' THEN 1 ELSE 0 END) AS documentados,
+        SUM(CASE WHEN er.PROGRAMADO='SI'  THEN 1 ELSE 0 END) AS programados,
+        SUM(CASE WHEN er.CERTIFICADO='SI' THEN 1 ELSE 0 END) AS certificados,
         COUNT(er.ID_ESTATUS_REP) AS total
       FROM CONTRATOS_REPORTES cr
       INNER JOIN CONTRATOS c ON c.CLAVE_CONTRATO = cr.CLAVE_CONTRATO
