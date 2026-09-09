@@ -2425,14 +2425,19 @@ router.get('/inventario/reportes', requireAuth, async (req, res) => {
 // Sin bitácora (consulta de solo lectura).
 router.get('/contratos/:clave/resumen', requireAuth, async (req, res) => {
   try {
+    // Mismo join que GET /contratos/:clave/reportes (la tabla de la pantalla):
+    // CLAVE_REP_GENERAL + plataforma del contrato. El join viejo por CLAVE_REP
+    // directo no encontraba registros y los badges siempre marcaban 0.
     const rows = await query(`
       SELECT
         SUM(CASE WHEN er.DOCUMENTADO='S' THEN 1 ELSE 0 END) AS documentados,
         SUM(CASE WHEN er.PROGRAMADO='S'  THEN 1 ELSE 0 END) AS programados,
         SUM(CASE WHEN er.CERTIFICADO='S' THEN 1 ELSE 0 END) AS certificados,
-        COUNT(cr.CLAVE_REP) AS total
+        COUNT(er.ID_ESTATUS_REP) AS total
       FROM CONTRATOS_REPORTES cr
-      LEFT JOIN ESTATUS_REPORTE er ON er.CLAVE_REP = cr.CLAVE_REP
+      INNER JOIN CONTRATOS c ON c.CLAVE_CONTRATO = cr.CLAVE_CONTRATO
+      LEFT JOIN ESTATUS_REPORTE er ON er.CLAVE_REP_GENERAL = cr.CLAVE_REP
+                                  AND er.CLAVE_PLATAFORMA  = c.CLAVE_PLATAFORMA
       WHERE cr.CLAVE_CONTRATO=${esc(req.params.clave)}
     `);
     res.json({ ok: true, data: rows[0] });
