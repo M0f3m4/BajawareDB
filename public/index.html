@@ -5543,6 +5543,7 @@
   // fechas del contrato padre.
   let proyData = [];          // datos crudos del tablero
   let proyFiltroTipo = '';    // pestaña activa (TIPO_ACTIVIDAD) — '' = todos
+  let proyUltimoSnapshot = null; // fecha del último snapshot semanal (viernes 8pm PT)
   let proyFiltroTexto = '';   // búsqueda libre
   let proyCatalogo = [];      // catálogo cliente→contratos para el alta en cascada
 
@@ -5632,10 +5633,18 @@
     const wrap = document.getElementById('proy-content');
     wrap.innerHTML = '<div class="loading">Cargando proyectos...</div>';
     try {
-      const res  = await fetch('/api/proyectos/tablero');
+      const [res, resSnap] = await Promise.all([
+        fetch('/api/proyectos/tablero'),
+        fetch('/api/proyectos/snapshot/ultimo'),
+      ]);
       const data = await res.json();
       if (!data.ok) throw new Error(data.message);
       proyData = data.data;
+      // Fecha del último snapshot semanal (si falla, solo se omite la leyenda)
+      try {
+        const snap = await resSnap.json();
+        proyUltimoSnapshot = snap.ok ? snap.data.ultimo : null;
+      } catch (_) { proyUltimoSnapshot = null; }
       proyRender();
     } catch (e) {
       wrap.innerHTML = '<div class="loading">Error: ' + e.message + '</div>';
@@ -5664,7 +5673,13 @@
       return `<button onclick="proySetTipo('${val}')" style="padding:6px 14px;border:1px solid ${activo?'#1a3558':'#d5dce3'};border-radius:16px;background:${activo?'#1a3558':'#fff'};color:${activo?'#fff':'#1a3558'};font-size:12px;cursor:pointer;">${label} (${n})</button>`;
     }).join(' ');
 
+    // Leyenda del snapshot semanal (viernes 8:00 pm hora Pacífico)
+    const snapTxt = proyUltimoSnapshot
+      ? `🕒 Último snapshot: ${new Date(proyUltimoSnapshot).toLocaleString('es-MX', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}`
+      : '🕒 Aún sin snapshot semanal';
+
     wrap.innerHTML = `
+      <div style="font-size:11px;color:#7a8794;margin-bottom:6px;" title="Cada viernes a las 8:00 pm hora Pacífico se guarda una foto completa del tablero (PROYECTOS_RESPALDO) para comparar qué cambió en la semana.">${snapTxt} · respaldo automático cada viernes 8:00 pm PT</div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px;">
         ${tabs}
         <input id="proy-buscar" placeholder="Buscar cliente, proyecto, líder..." value="${proyEsc(proyFiltroTexto)}"

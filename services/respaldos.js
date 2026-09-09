@@ -150,13 +150,54 @@ async function respaldoDiario() {
   }
 }
 
+// ── Snapshot semanal de PROYECTOS ─────────────────────────
+// Foto completa del tablero de proyectos cada viernes a las 20:00 hora
+// Pacífico (America/Tijuana), para comparar qué cambió semana contra semana.
+// Se revisa cada 30 minutos; solo dispara en la ventana viernes 20:00-23:59 PT
+// y se deduplica (máximo un SEMANAL por semana). Reutiliza el motor
+// respaldarTabla → PROYECTOS_RESPALDO (la crea db/setup.js al arrancar).
+// Los snapshots SEMANAL se conservan indefinidamente (sin purga).
+const TZ_PACIFICO = 'America/Tijuana';
+const INTERVALO_SEMANAL_MS = 30 * 60 * 1000; // revisa cada 30 min
+
+// Fecha/hora actual convertida a hora Pacífico (independiente de la TZ del server)
+function _ahoraPT() {
+  return new Date(new Date().toLocaleString('en-US', { timeZone: TZ_PACIFICO }));
+}
+
+// ¿Ya hay snapshot SEMANAL en los últimos 6 días? (evita duplicados si el
+// chequeo corre varias veces dentro de la misma ventana del viernes)
+async function _yaHaySnapshotSemanal() {
+  const r = await query(`
+    SELECT TOP 1 1 AS x FROM PROYECTOS_RESPALDO
+    WHERE MOTIVO = 'SEMANAL'
+      AND FECHA_RESPALDO >= DATEADD(DAY, -6, CAST(GETDATE() AS DATE))`);
+  return r.length > 0;
+}
+
+async function snapshotSemanalProyectos() {
+  try {
+    const pt = _ahoraPT();
+    if (pt.getDay() !== 5 || pt.getHours() < 20) return; // solo viernes 20:00+ PT
+    if (await _yaHaySnapshotSemanal()) return;
+    await respaldarTabla('PROYECTOS', 'SEMANAL', 'sistema');
+    console.log('✔ Snapshot semanal de PROYECTOS listo');
+  } catch (e) {
+    // Avisar pero no tronar (misma filosofía que el respaldo diario)
+    console.warn('⚠ Snapshot semanal de PROYECTOS:', e.message);
+  }
+}
+
 // Inicializa el sistema de respaldos automáticos.
 // Ejecuta respaldo diario al arrancar y programa verificaciones periódicas cada 6 horas.
 // (Intervalo largo por si el servidor se reinicia; la función _yaHayRespaldoHoy
 // evita duplicados en caso de múltiples ejecuciones el mismo día.)
+// El snapshot semanal de PROYECTOS se revisa cada 30 min (ventana corta del viernes).
 function iniciar() {
   respaldoDiario();
   setInterval(respaldoDiario, INTERVALO_MS);
+  snapshotSemanalProyectos();
+  setInterval(snapshotSemanalProyectos, INTERVALO_SEMANAL_MS);
 }
 
-module.exports = { iniciar, respaldoDiario, respaldarAntesDeCarga };
+module.exports = { iniciar, respaldoDiario, respaldarAntesDeCarga, snapshotSemanalProyectos };

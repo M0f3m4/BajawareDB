@@ -198,6 +198,23 @@ router.get('/catalogo-alta', requireAuth, async (req, res) => {
   } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
 });
 
+// ── GET /snapshot/ultimo
+// Descripción: fecha del último snapshot semanal de PROYECTOS (viernes 20:00
+// hora Pacífico, ver services/respaldos.js). Para la leyenda del tablero.
+// Respuesta: {ultimo: datetime|null}. Si la tabla PROYECTOS_RESPALDO todavía
+// no existe (server sin reiniciar), regresa null sin tronar.
+// Sin bitácora (consulta de solo lectura).
+router.get('/snapshot/ultimo', requireAuth, async (req, res) => {
+  try {
+    const rows = await query(`
+      SELECT MAX(FECHA_RESPALDO) AS ultimo
+      FROM PROYECTOS_RESPALDO
+      WHERE MOTIVO IN ('SEMANAL', 'MANUAL')
+    `);
+    res.json({ ok: true, data: { ultimo: rows.length ? rows[0].ultimo : null } });
+  } catch(e) { res.json({ ok: true, data: { ultimo: null } }); }
+});
+
 // ── POST /
 // Descripción: alta de proyecto en cascada. Body: clave_contrato (obligatorio),
 // nombre_proyecto (obligatorio) y opcionales tipo_actividad, estatus_pago,

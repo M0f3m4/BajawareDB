@@ -326,6 +326,51 @@ async function setup() {
       ALTER TABLE PROYECTOS ADD FECHA_NECESIDAD DATE NULL
   `);
 
+  // ── PROYECTOS_RESPALDO ────────────────────────────────────
+  // Snapshots del tablero de proyectos para comparar semana contra semana.
+  // El servicio de respaldos toma una foto completa cada viernes a las
+  // 20:00 hora Pacífico (motivo='SEMANAL'). Misma estructura que PROYECTOS
+  // más los metadatos estándar del motor de respaldos. Se conservan
+  // indefinidamente (≈40 filas por semana).
+  await query(`
+    IF NOT EXISTS (
+      SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'PROYECTOS_RESPALDO'
+    )
+    BEGIN
+      CREATE TABLE PROYECTOS_RESPALDO (
+        ID_RESPALDO             INT IDENTITY(1,1) PRIMARY KEY,
+        ID_PROYECTO             INT           NOT NULL,     -- ID original (sin identity)
+        CLAVE_CONTRATO          VARCHAR(100)  NOT NULL,
+        NOMBRE_PROYECTO         VARCHAR(300)  NOT NULL,
+        TIPO_ACTIVIDAD          VARCHAR(30)   NULL,
+        TIPO_INSTITUCION        VARCHAR(50)   NULL,
+        ESTATUS_PAGO            VARCHAR(50)   NULL,
+        FUNCIONAL_NOMBRE        VARCHAR(150)  NULL,
+        TECNICO_NOMBRE          VARCHAR(150)  NULL,
+        RAG_PROYECTO            VARCHAR(10)   NULL,
+        RAG_COMENTARIO          VARCHAR(500)  NULL,
+        RAG_FECHA               DATETIME      NULL,
+        RAG_USUARIO             VARCHAR(100)  NULL,
+        RAG_REPORTES_MANUAL     VARCHAR(10)   NULL,
+        RAG_VALIDACIONES_MANUAL VARCHAR(10)   NULL,
+        AVANCE_ESTIMADO         DECIMAL(5,2)  NULL,
+        FECHA_NECESIDAD         DATE          NULL,
+        FECHA_ESTIMADA_CONCLUIR DATE          NULL,
+        ACTIVO                  BIT           NOT NULL DEFAULT 1,
+        USUARIO_ALTA            VARCHAR(100)  NULL,
+        FECHA_ALTA              DATETIME      NULL,
+        FECHA_MODIFICA          DATETIME      NULL,
+        -- Metadatos estándar del motor de respaldos
+        FECHA_RESPALDO          DATETIME      NOT NULL DEFAULT GETDATE(),
+        MOTIVO                  VARCHAR(200)  NULL,
+        USUARIO_RESPALDO        VARCHAR(100)  NULL
+      )
+      CREATE INDEX IX_PROYRESP_FECHA ON PROYECTOS_RESPALDO (FECHA_RESPALDO)
+      PRINT 'Tabla PROYECTOS_RESPALDO creada.'
+    END
+    ELSE PRINT 'Tabla PROYECTOS_RESPALDO ya existe.'
+  `);
+
   console.log('✅ Setup de tablas completado.');
 }
 
