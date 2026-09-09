@@ -119,7 +119,8 @@ router.get('/tablero', requireAuth, async (req, res) => {
         ISNULL(r.TOT,0) AS REP_TOTAL, ISNULL(r.VERDES,0) AS REP_VERDES,
         ISNULL(r.AMBAR,0) AS REP_AMBAR, ISNULL(r.ROJOS,0) AS REP_ROJOS, ISNULL(r.GRISES,0) AS REP_GRISES,
         ISNULL(v.TOT,0) AS VAL_TOTAL, ISNULL(v.VERDES,0) AS VAL_VERDES,
-        ISNULL(v.AMBAR,0) AS VAL_AMBAR, ISNULL(v.ROJOS,0) AS VAL_ROJOS, ISNULL(v.GRISES,0) AS VAL_GRISES
+        ISNULL(v.AMBAR,0) AS VAL_AMBAR, ISNULL(v.ROJOS,0) AS VAL_ROJOS, ISNULL(v.GRISES,0) AS VAL_GRISES,
+        ISNULL(prod.TOT,0) AS PROD_TOTAL, ISNULL(prod.CERTIFICADOS,0) AS PROD_CERTIFICADOS
       FROM PROYECTOS p
       INNER JOIN CONTRATOS c ON c.CLAVE_CONTRATO = p.CLAVE_CONTRATO
       LEFT JOIN CLIENTE cl ON cl.CLAVE_CLIENTE = c.CLAVE_CLIENTE
@@ -144,17 +145,36 @@ router.get('/tablero', requireAuth, async (req, res) => {
         FROM CONTRATOS_VALIDACION_ESTATUS cv
         GROUP BY cv.CLAVE_CONTRATO
       ) v ON v.CLAVE_CONTRATO = c.CLAVE_CONTRATO
+      LEFT JOIN (
+        -- RAG de producto: cuenta los reportes del contrato cuyo ESTATUS (el
+        -- mismo campo que muestra la pantalla "Estatus por Contrato") es
+        -- CERTIFICADO. El color sale del %: <80 Rojo, 80-99 Ámbar, 100 Verde.
+        SELECT cr.CLAVE_CONTRATO,
+               COUNT(cr.CLAVE_REP) AS TOT,
+               SUM(CASE WHEN er.ESTATUS = 'CERTIFICADO' THEN 1 ELSE 0 END) AS CERTIFICADOS
+        FROM CONTRATOS_REPORTES cr
+        LEFT JOIN ESTATUS_REPORTE er ON er.CLAVE_REP = cr.CLAVE_REP
+        WHERE cr.ACTIVO = 1
+        GROUP BY cr.CLAVE_CONTRATO
+      ) prod ON prod.CLAVE_CONTRATO = c.CLAVE_CONTRATO
       ${where}
       ORDER BY cl.NOMBRE_CLIENTE, p.NOMBRE_PROYECTO
     `);
 
     // Se calculan en JS los RAG agregados (peor color manda) para cada renglón.
     // Si hay override manual (RAG_*_MANUAL) ese color manda sobre el calculado.
-    const data = rows.map(row => ({
-      ...row,
-      RAG_REPORTES:     ragAgregado(row.REP_ROJOS, row.REP_AMBAR, row.REP_VERDES),
-      RAG_VALIDACIONES: ragAgregado(row.VAL_ROJOS, row.VAL_AMBAR, row.VAL_VERDES),
-    }));
+    const data = rows.map(row => {
+      // RAG de producto por % de reportes CERTIFICADOS: <80 Rojo, 80-99 Ámbar,
+      // 100 Verde. Sin reportes ligados = null (sin dato, gris en la UI).
+      const pct = row.PROD_TOTAL > 0 ? (row.PROD_CERTIFICADOS / row.PROD_TOTAL) * 100 : null;
+      return {
+        ...row,
+        RAG_REPORTES:     ragAgregado(row.REP_ROJOS, row.REP_AMBAR, row.REP_VERDES),
+        RAG_VALIDACIONES: ragAgregado(row.VAL_ROJOS, row.VAL_AMBAR, row.VAL_VERDES),
+        PROD_PCT:         pct === null ? null : Math.round(pct * 10) / 10,
+        RAG_PRODUCTO:     pct === null ? null : (pct >= 100 ? 'Green' : (pct >= 80 ? 'Amber' : 'Red')),
+      };
+    });
     res.json({ ok: true, umbral_ambar: UMBRAL_AMBAR, data });
   } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
 });
