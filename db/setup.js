@@ -325,6 +325,14 @@ async function setup() {
     IF COL_LENGTH('PROYECTOS', 'FECHA_NECESIDAD') IS NULL
       ALTER TABLE PROYECTOS ADD FECHA_NECESIDAD DATE NULL
   `);
+  // CLIENTE.TIPO_INSTITUCION: fallback del tipo de institución por cliente
+  // (el tablero de proyectos hace ISNULL(p.TIPO_INSTITUCION, cl.TIPO_INSTITUCION)).
+  // En dev se agregó con un ALTER manual y nunca quedó aquí — en prod no existía
+  // y el tablero tronaba con "Invalid column name 'TIPO_INSTITUCION'".
+  await query(`
+    IF COL_LENGTH('CLIENTE', 'TIPO_INSTITUCION') IS NULL
+      ALTER TABLE CLIENTE ADD TIPO_INSTITUCION VARCHAR(50) NULL
+  `);
 
   // ── PROYECTOS_RESPALDO ────────────────────────────────────
   // Snapshots del tablero de proyectos para comparar semana contra semana.
