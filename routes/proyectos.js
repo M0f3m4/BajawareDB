@@ -112,7 +112,7 @@ router.get('/tablero', requireAuth, async (req, res) => {
         p.RAG_PROYECTO, p.RAG_COMENTARIO, p.RAG_FECHA, p.RAG_USUARIO,
         p.RAG_REPORTES_MANUAL, p.RAG_VALIDACIONES_MANUAL,
         p.AVANCE_ESTIMADO, p.FECHA_NECESIDAD, p.FECHA_ESTIMADA_CONCLUIR,
-        p.FUNCIONAL_NOMBRE, p.TECNICO_NOMBRE,
+        p.FUNCIONAL_NOMBRE, p.TECNICO_NOMBRE, p.RAG_PRODUCTO_ULTIMO,
         c.CLAVE_CONTRATO, c.NOMBRE_CONTRATO, c.CLAVE_CLIENTE, c.CLAVE_PLATAFORMA,
         cl.NOMBRE_CLIENTE,
         ISNULL(p.TIPO_INSTITUCION, cl.TIPO_INSTITUCION) AS TIPO_INSTITUCION,
@@ -177,7 +177,80 @@ router.get('/tablero', requireAuth, async (req, res) => {
         RAG_PRODUCTO:     pct === null ? null : (pct >= 100 ? 'Green' : (pct >= 80 ? 'Amber' : 'Red')),
       };
     });
+    // Detección de cambios de semáforo en RAG producto → alertas.
+    // Compara el color calculado contra el último observado (RAG_PRODUCTO_ULTIMO):
+    //  - color → color distinto: genera alerta y actualiza el testigo.
+    //  - null → color (primera vez con datos) o color → null: solo actualiza el
+    //    testigo en silencio (no es un cambio de semáforo real).
+    // En try aparte: si la tabla de alertas aún no existe, el tablero no truena.
+    try {
+      for (const row of data) {
+        const previo = row.RAG_PRODUCTO_ULTIMO || null;
+        const actual = row.RAG_PRODUCTO || null;
+        if (actual === previo) continue;
+        if (previo !== null && actual !== null) {
+          await query(`
+            INSERT INTO PROY_RAG_ALERTAS (ID_PROYECTO, RAG_ANTERIOR, RAG_NUEVO, PCT_NUEVO)
+            VALUES (${row.ID_PROYECTO}, ${esc(previo)}, ${esc(actual)}, ${row.PROD_PCT === null ? 'NULL' : Number(row.PROD_PCT)})
+          `);
+        }
+        await query(`UPDATE PROYECTOS SET RAG_PRODUCTO_ULTIMO = ${esc(actual)} WHERE ID_PROYECTO = ${row.ID_PROYECTO}`);
+      }
+    } catch (eAlertas) {
+      console.warn('⚠ Alertas RAG producto:', eAlertas.message);
+    }
+
     res.json({ ok: true, umbral_ambar: UMBRAL_AMBAR, data });
+  } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
+});
+
+// ── GET /alertas
+// Descripción: alertas de cambio de semáforo en RAG producto. Devuelve las 50
+// más recientes con nombre de proyecto/cliente, y dos conteos: sin_leer y
+// semana (alertas de lunes a viernes de la semana en curso; el lunes se
+// calcula en JS para no depender del DATEFIRST del servidor SQL).
+// Sin bitácora (consulta de solo lectura).
+router.get('/alertas', requireAuth, async (req, res) => {
+  try {
+    // Lunes de la semana en curso (si hoy es sáb/dom, el lunes ya pasado)
+    const hoy = new Date();
+    const lun = new Date(hoy);
+    lun.setDate(hoy.getDate() - ((hoy.getDay() + 6) % 7));
+    const lunStr = `${lun.getFullYear()}-${String(lun.getMonth()+1).padStart(2,'0')}-${String(lun.getDate()).padStart(2,'0')}`;
+
+    const alertas = await query(`
+      SELECT TOP 50 a.ID_ALERTA, a.ID_PROYECTO, a.RAG_ANTERIOR, a.RAG_NUEVO,
+             a.PCT_NUEVO, a.FECHA_ALERTA, a.LEIDA,
+             p.NOMBRE_PROYECTO, p.CLAVE_CONTRATO, cl.NOMBRE_CLIENTE
+      FROM PROY_RAG_ALERTAS a
+      INNER JOIN PROYECTOS p ON p.ID_PROYECTO = a.ID_PROYECTO
+      LEFT JOIN CONTRATOS c  ON c.CLAVE_CONTRATO = p.CLAVE_CONTRATO
+      LEFT JOIN CLIENTE  cl  ON cl.CLAVE_CLIENTE = c.CLAVE_CLIENTE
+      ORDER BY a.FECHA_ALERTA DESC
+    `);
+    const [conteo] = await query(`
+      SELECT SUM(CASE WHEN LEIDA = 0 THEN 1 ELSE 0 END) AS sin_leer,
+             SUM(CASE WHEN FECHA_ALERTA >= '${lunStr}'
+                       AND FECHA_ALERTA <  DATEADD(DAY, 5, CAST('${lunStr}' AS DATE))
+                      THEN 1 ELSE 0 END) AS semana
+      FROM PROY_RAG_ALERTAS
+    `);
+    res.json({ ok: true, data: { alertas, sin_leer: conteo?.sin_leer || 0, semana: conteo?.semana || 0 } });
+  } catch(e) { res.json({ ok: true, data: { alertas: [], sin_leer: 0, semana: 0 } }); }
+});
+
+// ── PUT /alertas/leidas
+// Descripción: marca todas las alertas pendientes como leídas (quién y cuándo
+// queda en la misma fila: FECHA_LEIDA / USUARIO_LEIDA).
+router.put('/alertas/leidas', requireAuth, async (req, res) => {
+  try {
+    const usuario = req.session.user.username;
+    await query(`
+      UPDATE PROY_RAG_ALERTAS
+      SET LEIDA = 1, FECHA_LEIDA = GETDATE(), USUARIO_LEIDA = ${esc(usuario)}
+      WHERE LEIDA = 0
+    `);
+    res.json({ ok: true });
   } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
 });
 

@@ -5544,6 +5544,7 @@
   let proyData = [];          // datos crudos del tablero
   let proyFiltroTipo = '';    // pestaña activa (TIPO_ACTIVIDAD) — '' = todos
   let proyUltimoSnapshot = null; // fecha del último snapshot semanal (viernes 8pm PT)
+  let proyAlertas = { alertas: [], sin_leer: 0, semana: 0 }; // alertas de cambio de RAG producto
   let proyFiltroTexto = '';   // búsqueda libre
   let proyCatalogo = [];      // catálogo cliente→contratos para el alta en cascada
 
@@ -5633,9 +5634,10 @@
     const wrap = document.getElementById('proy-content');
     wrap.innerHTML = '<div class="loading">Cargando proyectos...</div>';
     try {
-      const [res, resSnap] = await Promise.all([
+      const [res, resSnap, resAler] = await Promise.all([
         fetch('/api/proyectos/tablero'),
         fetch('/api/proyectos/snapshot/ultimo'),
+        fetch('/api/proyectos/alertas'),
       ]);
       const data = await res.json();
       if (!data.ok) throw new Error(data.message);
@@ -5645,6 +5647,11 @@
         const snap = await resSnap.json();
         proyUltimoSnapshot = snap.ok ? snap.data.ultimo : null;
       } catch (_) { proyUltimoSnapshot = null; }
+      // Alertas de cambio de RAG producto (si falla, se muestra sin alertas)
+      try {
+        const aler = await resAler.json();
+        proyAlertas = aler.ok ? aler.data : { alertas: [], sin_leer: 0, semana: 0 };
+      } catch (_) { proyAlertas = { alertas: [], sin_leer: 0, semana: 0 }; }
       proyRender();
     } catch (e) {
       wrap.innerHTML = '<div class="loading">Error: ' + e.message + '</div>';
@@ -5678,8 +5685,27 @@
       ? `🕒 Último snapshot: ${new Date(proyUltimoSnapshot).toLocaleString('es-MX', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}`
       : '🕒 Aún sin snapshot semanal';
 
+    // Link de alertas (arriba a la derecha): cambios de semáforo en RAG producto
+    let alerTxt, alerColor;
+    if (proyAlertas.sin_leer > 0) {
+      alerTxt = `🔔 ${proyAlertas.sin_leer} alerta${proyAlertas.sin_leer === 1 ? '' : 's'} sin leer`;
+      alerColor = '#c0392b';
+    } else if (proyAlertas.semana > 0) {
+      alerTxt = `🔔 ${proyAlertas.semana} alerta${proyAlertas.semana === 1 ? '' : 's'} esta semana`;
+      alerColor = '#1a3558';
+    } else {
+      alerTxt = '🔕 Sin alertas esta semana';
+      alerColor = '#7a8794';
+    }
+
     wrap.innerHTML = `
-      <div style="font-size:11px;color:#7a8794;margin-bottom:6px;" title="Cada viernes a las 8:00 pm hora Pacífico se guarda una foto completa del tablero (PROYECTOS_RESPALDO) para comparar qué cambió en la semana.">${snapTxt} · respaldo automático cada viernes 8:00 pm PT${proyUltimoSnapshot ? ' · <a href="#" onclick="proyToggleSnapPanel();return false;" style="color:#1a3558;font-weight:600;">🔍 ver comparativo</a>' : ''}</div>
+      <div style="display:flex;align-items:center;gap:12px;font-size:11px;color:#7a8794;margin-bottom:6px;">
+        <span title="Cada viernes a las 8:00 pm hora Pacífico se guarda una foto completa del tablero (PROYECTOS_RESPALDO) para comparar qué cambió en la semana.">${snapTxt} · respaldo automático cada viernes 8:00 pm PT${proyUltimoSnapshot ? ' · <a href="#" onclick="proyToggleSnapPanel();return false;" style="color:#1a3558;font-weight:600;">🔍 ver comparativo</a>' : ''}</span>
+        <a href="#" onclick="proyToggleAlertas();return false;"
+           title="Avisos cuando el RAG de producto de algún proyecto cambia de color (semana lunes-viernes)"
+           style="margin-left:auto;color:${alerColor};font-weight:700;text-decoration:underline;white-space:nowrap;">${alerTxt}</a>
+      </div>
+      <div id="proy-alertas-panel" style="display:none;"></div>
       <div id="proy-snap-panel" style="display:none;"></div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px;">
         ${tabs}
@@ -5819,6 +5845,61 @@
       out.innerHTML = html;
     } catch (e) {
       out.innerHTML = '<div class="loading">Error: ' + e.message + '</div>';
+    }
+  }
+
+  // ── Alertas de cambio de semáforo en RAG producto ─────────
+  // Círculo chico de color RAG para pintar el "antes → ahora" de cada alerta.
+  function proyAlerCirc(rag) {
+    const color = rag ? PROY_RAG_COLOR[rag] : '#b8c2cc';
+    return `<span title="${proyEsc(rag || 's/d')}" style="display:inline-block;width:11px;height:11px;border-radius:50%;background:${color};vertical-align:middle;"></span>`;
+  }
+
+  // Abre/cierra el panel de alertas (los datos ya vienen de loadProyTablero).
+  function proyToggleAlertas() {
+    const panel = document.getElementById('proy-alertas-panel');
+    if (panel.style.display !== 'none') { panel.style.display = 'none'; return; }
+    panel.style.display = '';
+    const al = proyAlertas.alertas || [];
+    if (!al.length) {
+      panel.innerHTML = `<div style="border:1px solid #d5dce3;border-radius:8px;background:#f8fafc;padding:12px;margin-bottom:12px;font-size:12px;color:#7a8794;">
+        🔕 No hay alertas todavía. Aquí aparecerá cada vez que el RAG de producto de un proyecto cambie de color.</div>`;
+      return;
+    }
+    const filas = al.map(a => {
+      const f = new Date(a.FECHA_ALERTA).toLocaleString('es-MX', { day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' });
+      const noLeida = !a.LEIDA;
+      return `<tr style="border-top:1px solid #e8edf2;${noLeida ? 'background:#fff7f5;' : ''}">
+        <td style="padding:4px 6px;">${noLeida ? '<span style="color:#c0392b;font-size:14px;" title="Sin leer">•</span>' : ''}</td>
+        <td style="padding:4px 6px;color:#888;white-space:nowrap;">${f}</td>
+        <td style="padding:4px 6px;${noLeida ? 'font-weight:600;' : ''}">${proyEsc(a.NOMBRE_CLIENTE || '')} · ${proyEsc(a.NOMBRE_PROYECTO || '')}</td>
+        <td style="padding:4px 6px;white-space:nowrap;">${proyAlerCirc(a.RAG_ANTERIOR)} → ${proyAlerCirc(a.RAG_NUEVO)}
+          <span style="color:#888;font-size:11px;">${a.PCT_NUEVO != null ? '(' + a.PCT_NUEVO + '%)' : ''}</span></td>
+      </tr>`;
+    }).join('');
+    panel.innerHTML = `
+      <div style="border:1px solid #d5dce3;border-radius:8px;background:#f8fafc;padding:12px;margin-bottom:12px;">
+        <div style="display:flex;align-items:center;margin-bottom:6px;">
+          <span style="font-size:12px;font-weight:700;color:#1a3558;">🔔 Alertas de RAG producto (últimas ${al.length})</span>
+          ${proyAlertas.sin_leer > 0 ? `<button onclick="proyMarcarAlertasLeidas(this)" style="margin-left:auto;padding:4px 10px;border:1px solid #d5dce3;border-radius:6px;background:#fff;color:#1a3558;font-size:11px;cursor:pointer;">✓ Marcar todas como leídas</button>` : ''}
+        </div>
+        <table style="width:100%;border-collapse:collapse;font-size:12px;">
+          <tbody>${filas}</tbody>
+        </table>
+      </div>`;
+  }
+
+  // Marca todas las alertas como leídas y recarga el tablero.
+  async function proyMarcarAlertasLeidas(btn) {
+    btn.disabled = true; btn.textContent = '...';
+    try {
+      const res  = await fetch('/api/proyectos/alertas/leidas', { method: 'PUT' });
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.message);
+      await loadProyTablero();
+    } catch (e) {
+      alert('Error: ' + e.message);
+      btn.disabled = false; btn.textContent = '✓ Marcar todas como leídas';
     }
   }
 

@@ -383,6 +383,41 @@ async function setup() {
       ALTER TABLE CONTRATOS_VALIDACION_ESTATUS ADD FECHA_REAL DATE NULL
   `);
 
+  // PROYECTOS.RAG_PRODUCTO_ULTIMO: último color de RAG producto observado.
+  // El RAG producto se calcula al vuelo; esta columna guarda el último valor
+  // visto para detectar cambios de semáforo y generar alertas (PROY_RAG_ALERTAS).
+  await query(`
+    IF COL_LENGTH('PROYECTOS', 'RAG_PRODUCTO_ULTIMO') IS NULL
+      ALTER TABLE PROYECTOS ADD RAG_PRODUCTO_ULTIMO VARCHAR(10) NULL
+  `);
+
+  // ── PROY_RAG_ALERTAS ──────────────────────────────────────
+  // Alertas de cambio de semáforo en RAG producto: cada vez que el color
+  // calculado difiere del último observado, se registra aquí (quién la lee
+  // queda en bitácora de lectura). El tablero muestra "N alertas sin leer".
+  await query(`
+    IF NOT EXISTS (
+      SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'PROY_RAG_ALERTAS'
+    )
+    BEGIN
+      CREATE TABLE PROY_RAG_ALERTAS (
+        ID_ALERTA      INT IDENTITY(1,1) PRIMARY KEY,
+        ID_PROYECTO    INT           NOT NULL,
+        RAG_ANTERIOR   VARCHAR(10)   NULL,       -- color previo (Green/Amber/Red)
+        RAG_NUEVO      VARCHAR(10)   NULL,       -- color nuevo
+        PCT_NUEVO      DECIMAL(5,1)  NULL,       -- % certificados al momento del cambio
+        FECHA_ALERTA   DATETIME      NOT NULL DEFAULT GETDATE(),
+        LEIDA          BIT           NOT NULL DEFAULT 0,
+        FECHA_LEIDA    DATETIME      NULL,
+        USUARIO_LEIDA  VARCHAR(100)  NULL
+      )
+      CREATE INDEX IX_PROYALER_PROY  ON PROY_RAG_ALERTAS (ID_PROYECTO)
+      CREATE INDEX IX_PROYALER_FECHA ON PROY_RAG_ALERTAS (FECHA_ALERTA)
+      PRINT 'Tabla PROY_RAG_ALERTAS creada.'
+    END
+    ELSE PRINT 'Tabla PROY_RAG_ALERTAS ya existe.'
+  `);
+
   // ── PROYECTOS_RESPALDO ────────────────────────────────────
   // Snapshots del tablero de proyectos para comparar semana contra semana.
   // El servicio de respaldos toma una foto completa cada viernes a las
