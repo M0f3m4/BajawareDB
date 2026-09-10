@@ -6421,18 +6421,23 @@
       const versionCliente = document.getElementById('bc-rep-version-cliente').value;
       let repUrl = `/api/contratos/contratos/${encodeURIComponent(clave)}/reportes`;
       if (versionCliente) repUrl += `?version_cliente=${encodeURIComponent(versionCliente)}`;
-      const [rRep, rRes] = await Promise.all([
-        fetch(repUrl).then(x => x.json()),
-        fetch(`/api/contratos/contratos/${encodeURIComponent(clave)}/resumen`).then(x => x.json()),
-      ]);
+      const rRep = await fetch(repUrl).then(x => x.json());
       bcRepData = rRep.data || [];
-      // Badge resumen
-      const res = rRes.data || {};
+      // Marcar registros legacy (misma regla que la pantalla Estatus de Reportes):
+      // VERSION no-semver (ej. "22", "2.17" del esquema viejo) cuando ya existe un
+      // registro semver (ej. "2.18.0") para el mismo reporte base + plataforma.
+      const esSemverCR = v => /^\d+\.\d+\.\d+$/.test(String(v ?? '').trim());
+      const tieneNuevaCR = {};
+      bcRepData.forEach(r => { if (esSemverCR(r.VERSION)) tieneNuevaCR[`${r.CLAVE_REP_BASE||r.CLAVE_REP}|${r.CLAVE_PLATAFORMA}`] = true; });
+      bcRepData.forEach(r => { r._legacy = !esSemverCR(r.VERSION) && !!tieneNuevaCR[`${r.CLAVE_REP_BASE||r.CLAVE_REP}|${r.CLAVE_PLATAFORMA}`]; });
+      // Badge resumen: solo filas vigentes (excluye HISTÓRICO)
+      const vig = bcRepData.filter(r => !r._legacy);
+      const nSi = campo => vig.filter(r => r[campo] === 'SI').length;
       document.getElementById('bc-rep-resumen').style.display = 'flex';
       document.getElementById('bc-rep-resumen').innerHTML = `
-        <span style="background:#8e44ad;color:#fff;padding:4px 12px;border-radius:12px;font-size:12px;">📝 Documentados: ${res.documentados||0}/${res.total||0}</span>
-        <span style="background:#2980b9;color:#fff;padding:4px 12px;border-radius:12px;font-size:12px;">💻 Programados: ${res.programados||0}/${res.total||0}</span>
-        <span style="background:#27ae60;color:#fff;padding:4px 12px;border-radius:12px;font-size:12px;">✅ Certificados: ${res.certificados||0}/${res.total||0}</span>`;
+        <span style="background:#8e44ad;color:#fff;padding:4px 12px;border-radius:12px;font-size:12px;">📝 Documentados: ${nSi('DOCUMENTADO')}/${vig.length}</span>
+        <span style="background:#2980b9;color:#fff;padding:4px 12px;border-radius:12px;font-size:12px;">💻 Programados: ${nSi('PROGRAMADO')}/${vig.length}</span>
+        <span style="background:#27ae60;color:#fff;padding:4px 12px;border-radius:12px;font-size:12px;">✅ Certificados: ${nSi('CERTIFICADO')}/${vig.length}</span>`;
       document.getElementById('bc-rep-export-btn').style.display = bcRepData.length ? '' : 'none';
       renderReportesContrato(bcRepData);
     } catch(e) { wrap.innerHTML = '<div class="loading">Error: ' + e.message + '</div>'; }
@@ -6450,6 +6455,7 @@
   function renderReportesContrato(data) {
     const wrap = document.getElementById('bc-rep-content');
     if (!data.length) { wrap.innerHTML = '<p style="color:#aaa;font-size:13px;">Sin reportes.</p>'; return; }
+    const tagHistoricoCR = '<span style="font-size:9px;background:#eceff3;color:#7a8699;padding:1px 6px;border-radius:8px;font-weight:600;letter-spacing:.5px;margin-left:6px;vertical-align:middle;" title="Registro del esquema anterior (versión embebida en la clave del reporte). Existe un registro más reciente con versionado nuevo.">HISTÓRICO</span>';
     wrap.innerHTML = `<table style="width:100%;border-collapse:collapse;font-size:12px;">
       <thead><tr style="background:#1a3558;color:#fff;">
         <th style="padding:7px 10px;text-align:left;">Clave Reporte</th>
@@ -6467,8 +6473,8 @@
         <th style="padding:7px 10px;text-align:center;">Ver. Cliente</th>
       </tr></thead>
       <tbody>${data.map((r,i) => `
-        <tr style="background:${i%2===0?'#fff':'#f8f9fa'};">
-          <td style="padding:6px 10px;font-weight:600;color:#1a3558;">${r.CLAVE_REP}</td>
+        <tr style="background:${i%2===0?'#fff':'#f8f9fa'};${r._legacy?'opacity:.55;':''}">
+          <td style="padding:6px 10px;font-weight:600;color:#1a3558;">${r.CLAVE_REP}${r._legacy?tagHistoricoCR:''}</td>
           <td style="padding:6px 10px;font-size:11px;">${r.DESCRIPCION_ESP||'<span style="color:#bbb;font-style:italic;">Sin descripción</span>'}</td>
           <td style="padding:6px 10px;">${r.CLAVE_PLATAFORMA||''}</td>
           <td style="padding:6px 10px;text-align:center;"><span style="font-size:11px;background:#f0f4ff;color:#1a3558;padding:2px 7px;border-radius:10px;font-family:monospace;">${r.VERSION_CARGA||'—'}</span></td>
