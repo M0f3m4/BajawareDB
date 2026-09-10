@@ -472,6 +472,44 @@ router.delete('/:id', requireAuth, async (req, res) => {
   } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
 });
 
+// ── GET /archivados
+// Descripción: proyectos dados de baja (ACTIVO = 0), para la ventana de
+// archivado del tablero. Ordenados por fecha de baja (FECHA_MODIFICA) desc.
+// Sin bitácora (consulta de solo lectura).
+router.get('/archivados', requireAuth, async (req, res) => {
+  try {
+    const rows = await query(`
+      SELECT p.ID_PROYECTO, p.NOMBRE_PROYECTO, p.TIPO_ACTIVIDAD, p.CLAVE_CONTRATO,
+             c.NOMBRE_CONTRATO, cl.NOMBRE_CLIENTE, p.FECHA_MODIFICA
+      FROM PROYECTOS p
+      INNER JOIN CONTRATOS c ON c.CLAVE_CONTRATO = p.CLAVE_CONTRATO
+      INNER JOIN CLIENTE  cl ON cl.CLAVE_CLIENTE = c.CLAVE_CLIENTE
+      WHERE p.ACTIVO = 0
+      ORDER BY p.FECHA_MODIFICA DESC
+    `);
+    res.json({ ok: true, data: rows });
+  } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
+});
+
+// ── PUT /:id/restaurar
+// Descripción: recupera un proyecto dado de baja por accidente (ACTIVO = 1).
+// Vuelve a aparecer en el tablero con todos sus datos intactos (la baja es
+// lógica, nada se pierde). Bitácora RESTAURA_PROYECTO.
+router.put('/:id/restaurar', requireAuth, async (req, res) => {
+  try {
+    const usuario = req.session.user.username;
+    const id = idNum(req.params.id);
+    if (!id) return res.status(400).json({ ok: false, message: 'id inválido' });
+
+    const [antes] = await query(`SELECT NOMBRE_PROYECTO, CLAVE_CONTRATO FROM PROYECTOS WHERE ID_PROYECTO = ${id} AND ACTIVO = 0`);
+    if (!antes) return res.status(404).json({ ok: false, message: 'Proyecto archivado no encontrado' });
+
+    await query(`UPDATE PROYECTOS SET ACTIVO = 1, FECHA_MODIFICA = GETDATE() WHERE ID_PROYECTO = ${id}`);
+    await auditLog(usuario, 'proyectos', 'RESTAURA_PROYECTO', { id_proyecto: id, ...antes });
+    res.json({ ok: true });
+  } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
+});
+
 // ── PUT /cliente/:clave/tipo-institucion
 // Descripción: asigna el tipo de institución del cliente (Banca Múltiple,
 // SOFIPO, FINTECH, etc.). Bitácora antes/después.

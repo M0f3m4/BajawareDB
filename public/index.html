@@ -5687,8 +5687,10 @@
                oninput="proyFiltroTexto=this.value;proyRenderSoloTabla();"
                style="margin-left:auto;padding:6px 10px;border:1px solid #d5dce3;border-radius:6px;font-size:12px;min-width:220px;">
         <button onclick="proyAbrirAlta()" style="padding:6px 12px;border:none;border-radius:6px;background:#1a3558;color:#fff;font-size:12px;cursor:pointer;">➕ Nuevo</button>
+        <button onclick="proyToggleArchivados()" title="Proyectos dados de baja — se pueden recuperar" style="padding:6px 12px;border:1px solid #d5dce3;border-radius:6px;background:#fff;color:#1a3558;font-size:12px;cursor:pointer;">🗄️ Archivados</button>
         <button onclick="loadProyTablero()" title="Recargar" style="padding:6px 10px;border:1px solid #d5dce3;border-radius:6px;background:#fff;cursor:pointer;">⟳</button>
       </div>
+      <div id="proy-arch-panel" style="display:none;"></div>
       <div id="proy-alta-panel" style="display:none;"></div>
       <div id="proy-tabla-wrap"></div>`;
     proyPintarTabla(proyFiltrar());
@@ -5817,6 +5819,65 @@
       out.innerHTML = html;
     } catch (e) {
       out.innerHTML = '<div class="loading">Error: ' + e.message + '</div>';
+    }
+  }
+
+  // ── Archivados: proyectos con baja lógica (ACTIVO=0) y su recuperación ──
+  // Abre/cierra la ventana de archivados y carga la lista del backend.
+  async function proyToggleArchivados() {
+    const panel = document.getElementById('proy-arch-panel');
+    if (panel.style.display !== 'none') { panel.style.display = 'none'; return; }
+    panel.style.display = '';
+    panel.innerHTML = '<div class="loading">Cargando archivados...</div>';
+    try {
+      const res  = await fetch('/api/proyectos/archivados');
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.message);
+      if (!data.data.length) {
+        panel.innerHTML = `<div style="border:1px solid #d5dce3;border-radius:8px;background:#f8fafc;padding:12px;margin-bottom:12px;font-size:12px;color:#7a8794;">
+          🗄️ No hay proyectos archivados. Aquí aparecen los que se dan de baja con 🗑️, por si hay que recuperar alguno.</div>`;
+        return;
+      }
+      const filas = data.data.map(a => {
+        const f = a.FECHA_MODIFICA ? new Date(a.FECHA_MODIFICA).toLocaleString('es-MX', { day:'numeric', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' }) : '—';
+        return `<tr style="border-top:1px solid #e8edf2;">
+          <td style="padding:4px 6px;">${proyEsc(a.NOMBRE_CLIENTE)}</td>
+          <td style="padding:4px 6px;">${proyEsc(a.NOMBRE_PROYECTO)}</td>
+          <td style="padding:4px 6px;color:#556;">${proyEsc(a.TIPO_ACTIVIDAD || 's/tipo')}</td>
+          <td style="padding:4px 6px;color:#888;">${f}</td>
+          <td style="padding:4px 6px;text-align:right;">
+            <button onclick="proyRestaurar(${a.ID_PROYECTO}, this)" style="padding:4px 10px;border:none;border-radius:6px;background:#27ae60;color:#fff;font-size:11px;cursor:pointer;">↩️ Recuperar</button>
+          </td></tr>`;
+      }).join('');
+      panel.innerHTML = `
+        <div style="border:1px solid #d5dce3;border-radius:8px;background:#f8fafc;padding:12px;margin-bottom:12px;">
+          <div style="font-size:12px;font-weight:700;color:#1a3558;margin-bottom:6px;">🗄️ Proyectos archivados (${data.data.length})</div>
+          <table style="width:100%;border-collapse:collapse;font-size:12px;">
+            <thead><tr style="color:#7a8794;font-size:10px;text-transform:uppercase;">
+              <th style="text-align:left;padding:4px 6px;">Cliente</th>
+              <th style="text-align:left;padding:4px 6px;">Proyecto</th>
+              <th style="text-align:left;padding:4px 6px;">Tipo</th>
+              <th style="text-align:left;padding:4px 6px;">Baja</th>
+              <th></th></tr></thead>
+            <tbody>${filas}</tbody>
+          </table>
+        </div>`;
+    } catch (e) {
+      panel.innerHTML = '<div class="loading">Error: ' + e.message + '</div>';
+    }
+  }
+
+  // Recupera un proyecto archivado (ACTIVO=1) y recarga el tablero.
+  async function proyRestaurar(id, btn) {
+    btn.disabled = true; btn.textContent = '...';
+    try {
+      const res  = await fetch(`/api/proyectos/${id}/restaurar`, { method: 'PUT' });
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.message);
+      await loadProyTablero(); // repinta el tablero (el panel se cierra al recargar)
+    } catch (e) {
+      alert('Error: ' + e.message);
+      btn.disabled = false; btn.textContent = '↩️ Recuperar';
     }
   }
 
