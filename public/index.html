@@ -5972,13 +5972,14 @@
     const cont = document.getElementById('proy-tabla-wrap');
     if (!rows.length) { cont.innerHTML = '<div class="loading">Sin proyectos con ese filtro. Usa "➕ Nuevo" para dar de alta.</div>'; return; }
     cont.innerHTML = `
-      <div style="font-size:12px;color:#888;margin-bottom:8px;">${rows.length} proyectos · clic en el círculo RAG proyecto para cambiarlo · clic en 📂 para ver y editar Pagos/Funcional/Técnico/Avance y el RAG de producto · doble clic en Proyecto/Tipo para editar</div>
+      <div style="font-size:12px;color:#888;margin-bottom:8px;">${rows.length} proyectos · clic en el círculo RAG proyecto para cambiarlo · clic en 📂 para ver y editar Pagos/Funcional/Técnico/Avance · doble clic en Proyecto/Tipo para editar</div>
       <table class="data-table">
         <thead><tr>
           <th>Cliente</th><th>Proyecto</th><th>Tipo</th>
           <th>Necesidad</th>
           <th>Estimado</th>
           <th style="text-align:center;">RAG<br>proyecto</th>
+          <th style="text-align:center;">RAG<br>producto</th>
           <th></th>
         </tr></thead>
         <tbody>
@@ -6009,12 +6010,13 @@
                 <span onclick="proyCambiarRag(${id})" title="${proyEsc(ragTip)}"
                       style="display:inline-block;width:16px;height:16px;border-radius:50%;background:${ragColor};cursor:pointer;border:2px solid #fff;box-shadow:0 0 0 1px #d5dce3;"></span>
               </td>
+              <td style="text-align:center;">${proyRagProducto(p)}</td>
               <td style="white-space:nowrap;">
-                <button onclick="proyToggleDetalle(${id}, ${i})" style="border:none;background:none;cursor:pointer;font-size:14px;" title="Ver Pagos / Funcional / Técnico / Avance / RAG producto">📂</button>
+                <button onclick="proyToggleDetalle(${id}, ${i})" style="border:none;background:none;cursor:pointer;font-size:14px;" title="Ver Pagos / Funcional / Técnico / Avance">📂</button>
                 <button onclick="proyBaja(${id})" style="border:none;background:none;cursor:pointer;font-size:12px;" title="Dar de baja este proyecto">🗑️</button>
               </td>
             </tr>
-            <tr id="proy-det-${i}" style="display:${proyAbiertos.has(id) ? '' : 'none'};"><td colspan="7" style="background:#f8fafc;padding:10px 18px;">${proyDetalleHTML(p, id, avance)}</td></tr>`;
+            <tr id="proy-det-${i}" style="display:${proyAbiertos.has(id) ? '' : 'none'};"><td colspan="8" style="background:#f8fafc;padding:10px 18px;">${proyDetalleHTML(p, id, avance)}</td></tr>`;
           }).join('')}
         </tbody>
       </table>`;
@@ -6094,7 +6096,6 @@
       ${campo('Avance', `<input type="number" min="0" max="100" value="${avance ?? ''}" placeholder="—"
               onchange="proyGuardarSelect(this, ${id}, 'avance_estimado')"
               style="width:52px;font-size:11px;text-align:center;border:1px solid #d5dce3;border-radius:10px;padding:2px 4px;">%`)}
-      ${campo('RAG producto', proyRagProducto(p))}
       ${campo('Producto', `<a href="#" onclick="proyIrEstatusContrato('${proyEsc(p.CLAVE_CLIENTE)}','${proyEsc(p.CLAVE_CONTRATO)}');return false;"
               title="Ver el estatus de reportes del contrato ${proyEsc(p.CLAVE_CONTRATO)}"
               style="font-size:11px;color:#1a3558;font-weight:700;text-decoration:none;border:1px solid #d5dce3;border-radius:10px;padding:3px 10px;display:inline-block;background:#fff;">📋 Estatus por contrato →</a>`)}
