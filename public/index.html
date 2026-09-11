@@ -6462,7 +6462,6 @@
         <th style="padding:7px 10px;text-align:left;">Descripción</th>
         <th style="padding:7px 10px;text-align:left;">Plataforma</th>
         <th style="padding:7px 10px;text-align:center;">Versión</th>
-        <th style="padding:7px 10px;text-align:center;">Etapa Contrato</th>
         <th style="padding:7px 10px;text-align:center;">Estatus Proyecto</th>
         <th style="padding:7px 10px;text-align:center;">Doc</th>
         <th style="padding:7px 10px;text-align:center;">Prog</th>
@@ -6478,7 +6477,6 @@
           <td style="padding:6px 10px;font-size:11px;">${r.DESCRIPCION_ESP||'<span style="color:#bbb;font-style:italic;">Sin descripción</span>'}</td>
           <td style="padding:6px 10px;">${r.CLAVE_PLATAFORMA||''}</td>
           <td style="padding:6px 10px;text-align:center;"><span style="font-size:11px;background:#f0f4ff;color:#1a3558;padding:2px 7px;border-radius:10px;font-family:monospace;">${r.VERSION_CARGA||'—'}</span></td>
-          <td style="padding:6px 10px;text-align:center;">${etapaPill(r.ETAPA)}</td>
           <td style="padding:6px 10px;text-align:center;">
             <select onchange="actualizarEstatusContratoRep('${r.CLAVE_REP}','${document.getElementById('bc-rep-contrato').value}',this.value,${r.ID_ESTATUS_REP||'null'})"
               style="font-size:11px;padding:3px 6px;border:1px solid #ddd;border-radius:5px;max-width:120px;">
