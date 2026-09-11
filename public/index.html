@@ -6268,7 +6268,7 @@
         tabla.innerHTML = '<p style="color:#aaa;font-size:13px;">Sin reportes ligados todavía — marca los del listado y guarda.</p>';
       } else {
         renderReportesContrato(rows.filter(r => ligadas.has(r.CLAVE_REP_BASE || r.CLAVE_REP)),
-          { wrapId: 'proy-reps-tabla-' + id, contrato: claveContrato });
+          { wrapId: 'proy-reps-tabla-' + id, contrato: claveContrato, soloLectura: true });
       }
     } catch (e) { panel.innerHTML = '<div class="loading">Error: ' + e.message + '</div>'; }
   }
@@ -6566,8 +6566,11 @@
   // renderReportesContrato(data, opts): Renderiza tabla reportes Base Conocimiento con radios de estatus, hitos DOCUMENTADO/PROGRAMADO/CERTIFICADO, personalización.
   // opts.wrapId: id del contenedor destino (default 'bc-rep-content').
   // opts.contrato: CLAVE_CONTRATO a usar en las acciones (default: select bc-rep-contrato).
+  // opts.soloLectura: true = tabla solo visual (sin select de estatus, sin
+  //   personalización ni ver. cliente) — la usa el panel de reportes por proyecto.
   function renderReportesContrato(data, opts) {
     opts = opts || {};
+    const ro = !!opts.soloLectura;
     const wrap = document.getElementById(opts.wrapId || 'bc-rep-content');
     const contratoSel = opts.contrato != null ? opts.contrato : document.getElementById('bc-rep-contrato').value;
     if (!data.length) { wrap.innerHTML = '<p style="color:#aaa;font-size:13px;">Sin reportes.</p>'; return; }
@@ -6584,8 +6587,8 @@
         <th style="padding:7px 10px;text-align:center;">Cert</th>
         <th style="padding:7px 10px;text-align:center;">Estatus Producto</th>
         <th style="padding:7px 10px;text-align:center;">Último Cambio</th>
-        <th style="padding:7px 10px;text-align:center;">Personalización</th>
-        <th style="padding:7px 10px;text-align:center;">Ver. Cliente</th>
+        ${ro ? '' : `<th style="padding:7px 10px;text-align:center;">Personalización</th>
+        <th style="padding:7px 10px;text-align:center;">Ver. Cliente</th>`}
       </tr></thead>
       <tbody>${data.map((r,i) => `
         <tr style="background:${i%2===0?'#fff':'#f8f9fa'};${r._legacy?'opacity:.55;':''}">
@@ -6594,6 +6597,7 @@
           <td style="padding:6px 10px;">${r.CLAVE_PLATAFORMA||''}</td>
           <td style="padding:6px 10px;text-align:center;"><span style="font-size:11px;background:#f0f4ff;color:#1a3558;padding:2px 7px;border-radius:10px;font-family:monospace;">${r.VERSION_CARGA||'—'}</span></td>
           <td style="padding:6px 10px;text-align:center;">
+            ${ro ? (r.ESTATUS_PROYECTO ? `<span style="font-size:11px;background:#f0f4ff;color:#1a3558;padding:2px 8px;border-radius:10px;font-weight:600;">${r.ESTATUS_PROYECTO}</span>` : '<span style="color:#ccc;font-size:11px;">—</span>') : `
             <select onchange="actualizarEstatusContratoRep('${r.CLAVE_REP}','${contratoSel}',this.value,${r.ID_ESTATUS_REP||'null'})"
               style="font-size:11px;padding:3px 6px;border:1px solid #ddd;border-radius:5px;max-width:120px;">
               <option value="">—</option>
@@ -6606,7 +6610,7 @@
               <option value="CERTIFICADO QA" ${r.ESTATUS_PROYECTO==='CERTIFICADO QA'?'selected':''}>CERTIFICADO QA</option>
               <option value="EN PRODUCCION" ${r.ESTATUS_PROYECTO==='EN PRODUCCION'?'selected':''}>EN PRODUCCION</option>
               <option value="EN SOPORTE" ${r.ESTATUS_PROYECTO==='EN SOPORTE'?'selected':''}>EN SOPORTE</option>
-            </select>
+            </select>`}
           </td>
           <td style="padding:6px 10px;text-align:center;">${etapaBadge(r.DOCUMENTADO)}</td>
           <td style="padding:6px 10px;text-align:center;">${etapaBadge(r.PROGRAMADO)}</td>
@@ -6627,7 +6631,7 @@
               return `<span style="font-weight:600;">${c.user}</span>${fecha ? `<br><span style="color:#aaa;font-size:10px;">${fecha}</span>` : ''}`;
             })()}
           </td>
-          <td style="padding:6px 10px;text-align:center;white-space:nowrap;">
+          ${ro ? '' : `<td style="padding:6px 10px;text-align:center;white-space:nowrap;">
             <button onclick="abrirPersonalizacion(${r.ID_ESTATUS_REP},'${contratoSel}',null,'','','REPORTE')"
               style="padding:3px 10px;background:#e67e22;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:11px;margin-right:3px;"
               title="Crear versión personalizada para este cliente">
@@ -6645,7 +6649,7 @@
               data-checked="${r.VERSION_CLIENTE ? '1' : '0'}"
               onclick="radioVcClick(this, ${r.ID_ESTATUS_REP}, '${r.CLAVE_REP_BASE||r.CLAVE_REP}', '${r.CLAVE_PLATAFORMA||''}', '${contratoSel}')"
               style="width:16px;height:16px;accent-color:#1a3558;cursor:pointer;">
-          </td>
+          </td>`}
         </tr>`).join('')}
       </tbody></table>`;
   }
