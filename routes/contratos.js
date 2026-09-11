@@ -153,9 +153,24 @@ router.get('/contratos/lista', requireAuth, async (req, res) => {
     if (cliente) where += ` AND c.CLAVE_CLIENTE=${esc(cliente)}`;
     const rows = await query(`
       SELECT c.CLAVE_CONTRATO, c.NOMBRE_CONTRATO, c.CLAVE_CLIENTE, c.CLAVE_PLATAFORMA,
-             c.ESTATUS, c.ETAPA, cl.NOMBRE_CLIENTE
+             c.ESTATUS, c.ETAPA, cl.NOMBRE_CLIENTE,
+             ISNULL(prod.TOT,0) AS PROD_TOTAL, ISNULL(prod.CERTIFICADOS,0) AS PROD_CERTIFICADOS
       FROM CONTRATOS c
       LEFT JOIN CLIENTE cl ON cl.CLAVE_CLIENTE = c.CLAVE_CLIENTE
+      LEFT JOIN (
+        -- RAG de producto del CONTRATO completo (mismo calculo que el tablero
+        -- de proyectos antes de la liga por proyecto): renglones de estatus de
+        -- todos los reportes del contrato y cuantos tienen ESTATUS=CERTIFICADO.
+        SELECT cr.CLAVE_CONTRATO,
+               COUNT(er.ID_ESTATUS_REP) AS TOT,
+               SUM(CASE WHEN er.ESTATUS = 'CERTIFICADO' THEN 1 ELSE 0 END) AS CERTIFICADOS
+        FROM CONTRATOS_REPORTES cr
+        INNER JOIN CONTRATOS cc ON cc.CLAVE_CONTRATO = cr.CLAVE_CONTRATO
+        LEFT JOIN ESTATUS_REPORTE er ON er.CLAVE_REP_GENERAL = cr.CLAVE_REP
+                                    AND er.CLAVE_PLATAFORMA  = cc.CLAVE_PLATAFORMA
+        WHERE cr.ACTIVO = 1
+        GROUP BY cr.CLAVE_CONTRATO
+      ) prod ON prod.CLAVE_CONTRATO = c.CLAVE_CONTRATO
       ${where}
       ORDER BY cl.NOMBRE_CLIENTE, c.NOMBRE_CONTRATO
     `);

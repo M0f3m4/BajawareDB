@@ -6426,6 +6426,21 @@
 
   let _bccCurrent = {};
 
+  // RAG de producto del contrato completo (misma regla que el tablero de
+  // proyectos): % de renglones de estatus con ESTATUS=CERTIFICADO sobre
+  // TODOS los reportes del contrato. <80% Rojo · 80-99% Ámbar · 100% Verde.
+  // Reusa el pintado del círculo del tablero (proyRagProducto).
+  function bccRagProducto(c) {
+    const pct = c.PROD_TOTAL > 0 ? Math.round((c.PROD_CERTIFICADOS / c.PROD_TOTAL) * 1000) / 10 : null;
+    return proyRagProducto({
+      RAG_PRODUCTO: pct === null ? null : (pct >= 100 ? 'Green' : (pct >= 80 ? 'Amber' : 'Red')),
+      PROD_PCT: pct,
+      PROD_CERTIFICADOS: c.PROD_CERTIFICADOS,
+      PROD_TOTAL: c.PROD_TOTAL,
+      PROD_LIGADOS: 0,
+    });
+  }
+
   async function loadContratos() {
     const wrap    = document.getElementById('bcc-content');
     const count   = document.getElementById('bcc-count');
@@ -6445,6 +6460,7 @@
           <th style="padding:8px 12px;text-align:left;">Cliente</th>
           <th style="padding:8px 12px;text-align:left;">Contrato</th>
           <th style="padding:8px 12px;text-align:left;">Plataforma</th>
+          <th style="padding:8px 12px;text-align:center;">RAG Producto</th>
           <th style="padding:8px 12px;text-align:center;">Estatus</th>
           <th style="padding:8px 12px;text-align:center;">Etapa</th>
           <th style="padding:8px 12px;text-align:center;">Acción</th>
@@ -6454,6 +6470,7 @@
             <td style="padding:7px 12px;font-weight:600;">${c.NOMBRE_CLIENTE || c.CLAVE_CLIENTE}${c.CLAVE_CLIENTE ? `<div style="font-size:10px;font-weight:400;color:#8a94a3;font-family:monospace;">${c.CLAVE_CLIENTE}</div>` : ''}</td>
             <td style="padding:7px 12px;">${c.NOMBRE_CONTRATO}${c.CLAVE_CONTRATO ? `<div style="font-size:10px;color:#8a94a3;font-family:monospace;">${c.CLAVE_CONTRATO}</div>` : ''}</td>
             <td style="padding:7px 12px;font-size:12px;color:#666;">${c.CLAVE_PLATAFORMA || '—'}</td>
+            <td style="padding:7px 12px;text-align:center;">${bccRagProducto(c)}</td>
             <td style="padding:7px 12px;text-align:center;">${bccEstatusPill(c.ESTATUS)}</td>
             <td style="padding:7px 12px;text-align:center;">${c.ETAPA != null ? `<span style="background:#f0f4ff;color:#1a3558;padding:2px 10px;border-radius:10px;font-size:12px;font-weight:600;">Etapa ${c.ETAPA}</span>` : '<span style="color:#ccc;font-size:11px;">—</span>'}</td>
             <td style="padding:7px 12px;text-align:center;">
