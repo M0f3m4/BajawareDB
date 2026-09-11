@@ -6072,7 +6072,7 @@
               : 'Sin RAG — clic para asignar';
             const avance = p.AVANCE_ESTIMADO != null ? Math.round(p.AVANCE_ESTIMADO) : null;
             return `<tr>
-              <td><strong style="color:#1a3558;">${proyEsc(p.NOMBRE_CLIENTE || p.CLAVE_CLIENTE || '—')}</strong></td>
+              <td><strong style="color:#1a3558;">${proyEsc(p.NOMBRE_CLIENTE || p.CLAVE_CLIENTE || '—')}</strong>${(p.CLAVE_CLIENTE || p.CLAVE_CONTRATO) ? `<div style="font-size:10px;color:#8a94a3;font-family:monospace;" title="${proyEsc(p.NOMBRE_CONTRATO || '')}">${proyEsc([p.CLAVE_CLIENTE, p.CLAVE_CONTRATO].filter(Boolean).join(' · '))}</div>` : ''}</td>
               <td style="font-size:12px;cursor:pointer;" title="Contrato: ${proyEsc(p.NOMBRE_CONTRATO || p.CLAVE_CONTRATO || '')}" ondblclick="proyEditarCampo(${id},'nombre_proyecto','${proyEsc((p.NOMBRE_PROYECTO||'').replace(/'/g,"\\'"))}')">${proyEsc(p.NOMBRE_PROYECTO || '—')}</td>
               <td style="font-size:11px;cursor:pointer;" ondblclick="proyEditarCampo(${id},'tipo_actividad','${p.TIPO_ACTIVIDAD||''}')">${p.TIPO_ACTIVIDAD || '<span style="color:#ccc;">—</span>'}</td>
               <td>
