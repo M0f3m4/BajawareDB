@@ -6343,8 +6343,8 @@
         </tr></thead>
         <tbody>${data.map((c, i) => `
           <tr style="background:${i%2===0?'#fff':'#f8f9fa'};">
-            <td style="padding:7px 12px;font-weight:600;">${c.NOMBRE_CLIENTE || c.CLAVE_CLIENTE}</td>
-            <td style="padding:7px 12px;">${c.NOMBRE_CONTRATO}</td>
+            <td style="padding:7px 12px;font-weight:600;">${c.NOMBRE_CLIENTE || c.CLAVE_CLIENTE}${c.CLAVE_CLIENTE ? `<div style="font-size:10px;font-weight:400;color:#8a94a3;font-family:monospace;">${c.CLAVE_CLIENTE}</div>` : ''}</td>
+            <td style="padding:7px 12px;">${c.NOMBRE_CONTRATO}${c.CLAVE_CONTRATO ? `<div style="font-size:10px;color:#8a94a3;font-family:monospace;">${c.CLAVE_CONTRATO}</div>` : ''}</td>
             <td style="padding:7px 12px;font-size:12px;color:#666;">${c.CLAVE_PLATAFORMA || '—'}</td>
             <td style="padding:7px 12px;text-align:center;">${bccEstatusPill(c.ESTATUS)}</td>
             <td style="padding:7px 12px;text-align:center;">${c.ETAPA != null ? `<span style="background:#f0f4ff;color:#1a3558;padding:2px 10px;border-radius:10px;font-size:12px;font-weight:600;">Etapa ${c.ETAPA}</span>` : '<span style="color:#ccc;font-size:11px;">—</span>'}</td>
