@@ -307,6 +307,29 @@ async function setup() {
     ELSE PRINT 'Tabla PROYECTOS ya existe.'
   `);
 
+  // ── PROYECTOS_REPORTES ────────────────────────────────────
+  // Liga N:M entre un proyecto y los reportes de su contrato padre.
+  // Permite decir "este proyecto trabaja específicamente estos reportes"
+  // (subconjunto de CONTRATOS_REPORTES del contrato del proyecto).
+  await query(`
+    IF NOT EXISTS (
+      SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'PROYECTOS_REPORTES'
+    )
+    BEGIN
+      CREATE TABLE PROYECTOS_REPORTES (
+        ID_PROY_REP  INT IDENTITY(1,1) PRIMARY KEY,
+        ID_PROYECTO  INT           NOT NULL,   -- FK lógica a PROYECTOS
+        CLAVE_REP    VARCHAR(100)  NOT NULL,   -- clave base (como en CONTRATOS_REPORTES)
+        USUARIO_ALTA VARCHAR(100)  NULL,
+        FECHA_ALTA   DATETIME      NOT NULL DEFAULT GETDATE(),
+        CONSTRAINT UQ_PROYREP UNIQUE (ID_PROYECTO, CLAVE_REP)
+      )
+      CREATE INDEX IX_PROYREP_PROY ON PROYECTOS_REPORTES (ID_PROYECTO)
+      PRINT 'Tabla PROYECTOS_REPORTES creada.'
+    END
+    ELSE PRINT 'Tabla PROYECTOS_REPORTES ya existe.'
+  `);
+
   // Columnas agregadas después del release inicial de PROYECTOS (idempotente,
   // por si la tabla ya se creó en producción sin ellas).
   await query(`

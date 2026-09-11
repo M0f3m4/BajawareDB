@@ -371,6 +371,60 @@ router.post('/', requireAuth, async (req, res) => {
   } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
 });
 
+// ── GET /:id/reportes-ligados
+// Descripción: claves de reportes (CLAVE_REP base) ligadas específicamente
+// a este proyecto en PROYECTOS_REPORTES.
+// Sin bitácora (solo lectura).
+router.get('/:id/reportes-ligados', requireAuth, async (req, res) => {
+  try {
+    const id = idNum(req.params.id);
+    if (!id) return res.status(400).json({ ok: false, message: 'id inválido' });
+    const rows = await query(`
+      SELECT CLAVE_REP FROM PROYECTOS_REPORTES
+      WHERE ID_PROYECTO = ${id} ORDER BY CLAVE_REP
+    `);
+    res.json({ ok: true, data: rows.map(r => r.CLAVE_REP) });
+  } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
+});
+
+// ── PUT /:id/reportes-ligados
+// Descripción: reemplaza el conjunto de reportes ligados al proyecto.
+// Body: { reportes: ['CLAVE_REP', ...] } — solo se aceptan claves que
+// pertenezcan al contrato padre del proyecto (CONTRATOS_REPORTES).
+// Bitácora: proyectos / REPORTES_LIGADOS.
+router.put('/:id/reportes-ligados', requireAuth, async (req, res) => {
+  try {
+    const usuario = req.session.user.username;
+    const id = idNum(req.params.id);
+    if (!id) return res.status(400).json({ ok: false, message: 'id inválido' });
+    const { reportes } = req.body || {};
+    if (!Array.isArray(reportes)) return res.status(400).json({ ok: false, message: 'reportes debe ser un arreglo' });
+
+    const [proy] = await query(`SELECT CLAVE_CONTRATO FROM PROYECTOS WHERE ID_PROYECTO = ${id}`);
+    if (!proy) return res.status(404).json({ ok: false, message: 'Proyecto no encontrado' });
+
+    const validas = await query(`
+      SELECT CLAVE_REP FROM CONTRATOS_REPORTES WHERE CLAVE_CONTRATO = ${esc(proy.CLAVE_CONTRATO)}
+    `);
+    const setValidas = new Set(validas.map(r => r.CLAVE_REP));
+    const limpias = [...new Set(reportes.map(c => String(c).trim()).filter(Boolean))]
+      .filter(c => setValidas.has(c));
+
+    await query(`DELETE FROM PROYECTOS_REPORTES WHERE ID_PROYECTO = ${id}`);
+    for (const c of limpias) {
+      await query(`
+        INSERT INTO PROYECTOS_REPORTES (ID_PROYECTO, CLAVE_REP, USUARIO_ALTA)
+        VALUES (${id}, ${esc(c)}, ${esc(usuario)})
+      `);
+    }
+    await auditLog(usuario, 'proyectos', 'REPORTES_LIGADOS', {
+      id_proyecto: id, clave_contrato: proy.CLAVE_CONTRATO,
+      total: limpias.length, reportes: limpias
+    });
+    res.json({ ok: true, total: limpias.length });
+  } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
+});
+
 // ── GET /:id/detalle
 // Descripción: detalle de un proyecto — los reportes y validaciones del
 // CONTRATO padre, con fechas y semáforo por renglón. Es el "expandir".

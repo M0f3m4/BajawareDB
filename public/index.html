@@ -5995,7 +5995,7 @@
             </div>
             <div>
               <label style="font-size:11px;color:#888;display:block;">2. Contrato</label>
-              <select id="proy-alta-contrato" disabled style="padding:6px;border:1px solid #d5dce3;border-radius:6px;font-size:12px;min-width:240px;">
+              <select id="proy-alta-contrato" disabled onchange="proyAltaCargarReportes()" style="padding:6px;border:1px solid #d5dce3;border-radius:6px;font-size:12px;min-width:240px;">
                 <option value="">— primero elige cliente —</option>
               </select>
             </div>
@@ -6011,6 +6011,10 @@
             </div>
             <button onclick="proyGuardarAlta()" style="padding:7px 16px;border:none;border-radius:6px;background:#27ae60;color:#fff;font-size:12px;cursor:pointer;">Crear</button>
             <button onclick="document.getElementById('proy-alta-panel').style.display='none'" style="padding:7px 12px;border:1px solid #d5dce3;border-radius:6px;background:#fff;font-size:12px;cursor:pointer;">Cancelar</button>
+          </div>
+          <div style="margin-top:10px;">
+            <label style="font-size:11px;color:#888;display:block;margin-bottom:4px;">4. Reportes ligados a este proyecto (opcional)</label>
+            <div id="proy-alta-reps" style="font-size:12px;color:#aaa;max-height:180px;overflow:auto;border:1px solid #e3e8ee;border-radius:6px;padding:8px;background:#fff;">— primero elige un contrato —</div>
           </div>
           <div style="font-size:11px;color:#888;margin-top:8px;">Pagos, líderes, RAG y avance se capturan después directo en el tablero (doble clic / clic en el círculo).</div>
         </div>`;
@@ -6028,6 +6032,35 @@
     sel.innerHTML = contratos.length
       ? contratos.map(c => `<option value="${proyEsc(c.CLAVE_CONTRATO)}">${proyEsc(c.NOMBRE_CONTRATO || c.CLAVE_CONTRATO)}</option>`).join('')
       : '<option value="">— este cliente no tiene contratos —</option>';
+    proyAltaCargarReportes(); // carga el checklist del contrato preseleccionado
+  }
+
+  // Llena el checklist de reportes del contrato elegido en el alta
+  // (claves base únicas de CONTRATOS_REPORTES vía el endpoint del contrato).
+  async function proyAltaCargarReportes(marcadas) {
+    const clave = document.getElementById('proy-alta-contrato').value;
+    const cont  = document.getElementById('proy-alta-reps');
+    if (!cont) return;
+    if (!clave) { cont.innerHTML = '— primero elige un contrato —'; return; }
+    cont.innerHTML = 'Cargando reportes del contrato...';
+    try {
+      const r = await fetch(`/api/contratos/contratos/${encodeURIComponent(clave)}/reportes`).then(x => x.json());
+      const vistas = new Set();
+      const claves = (r.data || []).map(x => x.CLAVE_REP_BASE || x.CLAVE_REP)
+        .filter(c => c && !vistas.has(c) && vistas.add(c));
+      if (!claves.length) { cont.innerHTML = '— este contrato no tiene reportes asignados —'; return; }
+      const sel = new Set(marcadas || []);
+      cont.innerHTML = `
+        <div style="margin-bottom:6px;">
+          <a href="#" onclick="document.querySelectorAll('.proy-alta-rep-chk').forEach(c=>c.checked=true);return false;" style="font-size:11px;color:#1a3558;margin-right:10px;">todos</a>
+          <a href="#" onclick="document.querySelectorAll('.proy-alta-rep-chk').forEach(c=>c.checked=false);return false;" style="font-size:11px;color:#1a3558;">ninguno</a>
+        </div>
+        ${claves.map(c => `
+          <label style="display:inline-flex;align-items:center;gap:5px;margin:2px 14px 2px 0;color:#333;cursor:pointer;">
+            <input type="checkbox" class="proy-alta-rep-chk" value="${proyEsc(c)}"${sel.has(c) ? ' checked' : ''} style="accent-color:#1a3558;">
+            <span style="font-family:monospace;font-size:11px;">${proyEsc(c)}</span>
+          </label>`).join('')}`;
+    } catch(e) { cont.innerHTML = 'Error cargando reportes: ' + e.message; }
   }
 
   // Guarda el alta (POST) y recarga el tablero.
@@ -6044,6 +6077,14 @@
       });
       const data = await res.json();
       if (!data.ok) throw new Error(data.message);
+      // Guardar los reportes ligados elegidos en el checklist (si hay).
+      const elegidos = [...document.querySelectorAll('.proy-alta-rep-chk:checked')].map(c => c.value);
+      if (data.id_proyecto && elegidos.length) {
+        await fetch(`/api/proyectos/${data.id_proyecto}/reportes-ligados`, {
+          method: 'PUT', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ reportes: elegidos }),
+        });
+      }
       loadProyTablero();
     } catch (e) { alert('Error: ' + e.message); }
   }
@@ -6180,7 +6221,74 @@
       ${campo('Producto', `<a href="#" onclick="proyIrEstatusContrato('${proyEsc(p.CLAVE_CLIENTE)}','${proyEsc(p.CLAVE_CONTRATO)}');return false;"
               title="Ver el estatus de reportes del contrato ${proyEsc(p.CLAVE_CONTRATO)}"
               style="font-size:11px;color:#1a3558;font-weight:700;text-decoration:none;border:1px solid #d5dce3;border-radius:10px;padding:3px 10px;display:inline-block;background:#fff;">📋 Estatus por contrato →</a>`)}
-    </div>`;
+      ${campo('Reportes del proyecto', `<a href="#" onclick="proyToggleReportes(${id},'${proyEsc(p.CLAVE_CONTRATO)}');return false;"
+              title="Ver y editar los reportes del contrato ligados específicamente a este proyecto"
+              style="font-size:11px;color:#1a3558;font-weight:700;text-decoration:none;border:1px solid #d5dce3;border-radius:10px;padding:3px 10px;display:inline-block;background:#fff;">📄 Ver reportes ligados</a>`)}
+    </div>
+    <div id="proy-reps-${id}" style="display:none;margin-top:12px;"></div>`;
+  }
+
+  // Muestra/oculta el panel de reportes ligados al proyecto: checklist editable
+  // (subconjunto de los reportes del contrato) + tabla igual a la pantalla de
+  // Estatus por Contrato, filtrada a los reportes ligados.
+  async function proyToggleReportes(id, claveContrato) {
+    const panel = document.getElementById('proy-reps-' + id);
+    if (!panel) return;
+    if (panel.style.display !== 'none') { panel.style.display = 'none'; return; }
+    panel.style.display = '';
+    panel.innerHTML = '<div class="loading">Cargando reportes del proyecto...</div>';
+    try {
+      const [rLig, rRep] = await Promise.all([
+        fetch(`/api/proyectos/${id}/reportes-ligados`).then(x => x.json()),
+        fetch(`/api/contratos/contratos/${encodeURIComponent(claveContrato)}/reportes`).then(x => x.json()),
+      ]);
+      const ligadas = new Set(rLig.data || []);
+      const rows = rRep.data || [];
+      bcMarcarLegacy(rows);
+      const vistas = new Set();
+      const claves = rows.map(x => x.CLAVE_REP_BASE || x.CLAVE_REP)
+        .filter(c => c && !vistas.has(c) && vistas.add(c));
+      panel.innerHTML = `
+        <div style="border:1px solid #d5dce3;border-radius:8px;padding:12px;background:#fff;">
+          <div style="font-size:12px;font-weight:700;color:#1a3558;margin-bottom:6px;">📄 Reportes ligados a este proyecto <span style="font-weight:400;color:#888;">(contrato ${proyEsc(claveContrato)})</span></div>
+          ${claves.length ? `
+          <div style="max-height:150px;overflow:auto;border:1px solid #e3e8ee;border-radius:6px;padding:8px;margin-bottom:8px;">
+            ${claves.map(c => `
+              <label style="display:inline-flex;align-items:center;gap:5px;margin:2px 14px 2px 0;color:#333;cursor:pointer;font-size:12px;">
+                <input type="checkbox" class="proy-reps-chk-${id}" value="${proyEsc(c)}"${ligadas.has(c) ? ' checked' : ''} style="accent-color:#1a3558;">
+                <span style="font-family:monospace;font-size:11px;">${proyEsc(c)}</span>
+              </label>`).join('')}
+          </div>
+          <button onclick="proyGuardarReportes(${id},'${proyEsc(claveContrato)}')" style="padding:5px 14px;border:none;border-radius:6px;background:#27ae60;color:#fff;font-size:12px;cursor:pointer;margin-bottom:10px;">Guardar selección</button>
+          <span id="proy-reps-msg-${id}" style="font-size:12px;margin-left:8px;"></span>` : '<div style="font-size:12px;color:#aaa;margin-bottom:8px;">Este contrato no tiene reportes asignados.</div>'}
+          <div id="proy-reps-tabla-${id}"></div>
+        </div>`;
+      const tabla = document.getElementById('proy-reps-tabla-' + id);
+      if (!ligadas.size) {
+        tabla.innerHTML = '<p style="color:#aaa;font-size:13px;">Sin reportes ligados todavía — marca los del listado y guarda.</p>';
+      } else {
+        renderReportesContrato(rows.filter(r => ligadas.has(r.CLAVE_REP_BASE || r.CLAVE_REP)),
+          { wrapId: 'proy-reps-tabla-' + id, contrato: claveContrato });
+      }
+    } catch (e) { panel.innerHTML = '<div class="loading">Error: ' + e.message + '</div>'; }
+  }
+
+  // Guarda el checklist de reportes ligados y recarga el panel.
+  async function proyGuardarReportes(id, claveContrato) {
+    const msg = document.getElementById('proy-reps-msg-' + id);
+    const elegidos = [...document.querySelectorAll('.proy-reps-chk-' + id + ':checked')].map(c => c.value);
+    msg.innerHTML = 'Guardando...';
+    try {
+      const r = await fetch(`/api/proyectos/${id}/reportes-ligados`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reportes: elegidos }),
+      }).then(x => x.json());
+      if (!r.ok) throw new Error(r.message);
+      // Recargar el panel para refrescar la tabla.
+      const panel = document.getElementById('proy-reps-' + id);
+      panel.style.display = 'none';
+      proyToggleReportes(id, claveContrato);
+    } catch (e) { msg.innerHTML = `<span style="color:#e74c3c;">Error: ${e.message}</span>`; }
   }
 
   // RAG de producto (calculado, no editable): % de reportes del contrato con
@@ -6423,13 +6531,7 @@
       if (versionCliente) repUrl += `?version_cliente=${encodeURIComponent(versionCliente)}`;
       const rRep = await fetch(repUrl).then(x => x.json());
       bcRepData = rRep.data || [];
-      // Marcar registros legacy (misma regla que la pantalla Estatus de Reportes):
-      // VERSION no-semver (ej. "22", "2.17" del esquema viejo) cuando ya existe un
-      // registro semver (ej. "2.18.0") para el mismo reporte base + plataforma.
-      const esSemverCR = v => /^\d+\.\d+\.\d+$/.test(String(v ?? '').trim());
-      const tieneNuevaCR = {};
-      bcRepData.forEach(r => { if (esSemverCR(r.VERSION)) tieneNuevaCR[`${r.CLAVE_REP_BASE||r.CLAVE_REP}|${r.CLAVE_PLATAFORMA}`] = true; });
-      bcRepData.forEach(r => { r._legacy = !esSemverCR(r.VERSION) && !!tieneNuevaCR[`${r.CLAVE_REP_BASE||r.CLAVE_REP}|${r.CLAVE_PLATAFORMA}`]; });
+      bcMarcarLegacy(bcRepData);
       // Badge resumen: solo filas vigentes (excluye HISTÓRICO)
       const vig = bcRepData.filter(r => !r._legacy);
       const nSi = campo => vig.filter(r => r[campo] === 'SI').length;
@@ -6451,9 +6553,23 @@
     ));
   }
 
-  // renderReportesContrato(data): Renderiza tabla reportes Base Conocimiento con radios de estatus, hitos DOCUMENTADO/PROGRAMADO/CERTIFICADO, personalización.
-  function renderReportesContrato(data) {
-    const wrap = document.getElementById('bc-rep-content');
+  // bcMarcarLegacy(rows): marca r._legacy (misma regla que la pantalla Estatus
+  // de Reportes): VERSION no-semver (ej. "22", "2.17" del esquema viejo) cuando
+  // ya existe un registro semver (ej. "2.18.0") para el mismo reporte base + plataforma.
+  function bcMarcarLegacy(rows) {
+    const esSemver = v => /^\d+\.\d+\.\d+$/.test(String(v ?? '').trim());
+    const tieneNueva = {};
+    rows.forEach(r => { if (esSemver(r.VERSION)) tieneNueva[`${r.CLAVE_REP_BASE||r.CLAVE_REP}|${r.CLAVE_PLATAFORMA}`] = true; });
+    rows.forEach(r => { r._legacy = !esSemver(r.VERSION) && !!tieneNueva[`${r.CLAVE_REP_BASE||r.CLAVE_REP}|${r.CLAVE_PLATAFORMA}`]; });
+  }
+
+  // renderReportesContrato(data, opts): Renderiza tabla reportes Base Conocimiento con radios de estatus, hitos DOCUMENTADO/PROGRAMADO/CERTIFICADO, personalización.
+  // opts.wrapId: id del contenedor destino (default 'bc-rep-content').
+  // opts.contrato: CLAVE_CONTRATO a usar en las acciones (default: select bc-rep-contrato).
+  function renderReportesContrato(data, opts) {
+    opts = opts || {};
+    const wrap = document.getElementById(opts.wrapId || 'bc-rep-content');
+    const contratoSel = opts.contrato != null ? opts.contrato : document.getElementById('bc-rep-contrato').value;
     if (!data.length) { wrap.innerHTML = '<p style="color:#aaa;font-size:13px;">Sin reportes.</p>'; return; }
     const tagHistoricoCR = '<span style="font-size:9px;background:#eceff3;color:#7a8699;padding:1px 6px;border-radius:8px;font-weight:600;letter-spacing:.5px;margin-left:6px;vertical-align:middle;" title="Registro del esquema anterior (versión embebida en la clave del reporte). Existe un registro más reciente con versionado nuevo.">HISTÓRICO</span>';
     wrap.innerHTML = `<table style="width:100%;border-collapse:collapse;font-size:12px;">
@@ -6478,7 +6594,7 @@
           <td style="padding:6px 10px;">${r.CLAVE_PLATAFORMA||''}</td>
           <td style="padding:6px 10px;text-align:center;"><span style="font-size:11px;background:#f0f4ff;color:#1a3558;padding:2px 7px;border-radius:10px;font-family:monospace;">${r.VERSION_CARGA||'—'}</span></td>
           <td style="padding:6px 10px;text-align:center;">
-            <select onchange="actualizarEstatusContratoRep('${r.CLAVE_REP}','${document.getElementById('bc-rep-contrato').value}',this.value,${r.ID_ESTATUS_REP||'null'})"
+            <select onchange="actualizarEstatusContratoRep('${r.CLAVE_REP}','${contratoSel}',this.value,${r.ID_ESTATUS_REP||'null'})"
               style="font-size:11px;padding:3px 6px;border:1px solid #ddd;border-radius:5px;max-width:120px;">
               <option value="">—</option>
               <option value="NO INICIADO" ${r.ESTATUS_PROYECTO==='NO INICIADO'?'selected':''}>NO INICIADO</option>
@@ -6512,12 +6628,12 @@
             })()}
           </td>
           <td style="padding:6px 10px;text-align:center;white-space:nowrap;">
-            <button onclick="abrirPersonalizacion(${r.ID_ESTATUS_REP},'${document.getElementById('bc-rep-contrato').value}',null,'','','REPORTE')"
+            <button onclick="abrirPersonalizacion(${r.ID_ESTATUS_REP},'${contratoSel}',null,'','','REPORTE')"
               style="padding:3px 10px;background:#e67e22;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:11px;margin-right:3px;"
               title="Crear versión personalizada para este cliente">
               + Ver.
             </button>
-            <button onclick="togglePersonalizaciones(${r.ID_ESTATUS_REP},'${document.getElementById('bc-rep-contrato').value}',this,'REPORTE')"
+            <button onclick="togglePersonalizaciones(${r.ID_ESTATUS_REP},'${contratoSel}',this,'REPORTE')"
               style="padding:3px 8px;background:#f0f4f8;color:#1a3558;border:1px solid #ddd;border-radius:4px;cursor:pointer;font-size:11px;">
               ▶
             </button>
@@ -6527,7 +6643,7 @@
               name="vc_${(r.CLAVE_REP_BASE||r.CLAVE_REP).replace(/[^a-zA-Z0-9]/g,'_')}_${r.CLAVE_PLATAFORMA||'X'}"
               ${r.VERSION_CLIENTE ? 'checked' : ''}
               data-checked="${r.VERSION_CLIENTE ? '1' : '0'}"
-              onclick="radioVcClick(this, ${r.ID_ESTATUS_REP}, '${r.CLAVE_REP_BASE||r.CLAVE_REP}', '${r.CLAVE_PLATAFORMA||''}', '${document.getElementById('bc-rep-contrato').value}')"
+              onclick="radioVcClick(this, ${r.ID_ESTATUS_REP}, '${r.CLAVE_REP_BASE||r.CLAVE_REP}', '${r.CLAVE_PLATAFORMA||''}', '${contratoSel}')"
               style="width:16px;height:16px;accent-color:#1a3558;cursor:pointer;">
           </td>
         </tr>`).join('')}
