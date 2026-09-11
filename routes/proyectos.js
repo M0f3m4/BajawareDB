@@ -120,7 +120,9 @@ router.get('/tablero', requireAuth, async (req, res) => {
         ISNULL(r.AMBAR,0) AS REP_AMBAR, ISNULL(r.ROJOS,0) AS REP_ROJOS, ISNULL(r.GRISES,0) AS REP_GRISES,
         ISNULL(v.TOT,0) AS VAL_TOTAL, ISNULL(v.VERDES,0) AS VAL_VERDES,
         ISNULL(v.AMBAR,0) AS VAL_AMBAR, ISNULL(v.ROJOS,0) AS VAL_ROJOS, ISNULL(v.GRISES,0) AS VAL_GRISES,
-        ISNULL(prod.TOT,0) AS PROD_TOTAL, ISNULL(prod.CERTIFICADOS,0) AS PROD_CERTIFICADOS
+        CASE WHEN prodp.ID_PROYECTO IS NOT NULL THEN prodp.TOT ELSE ISNULL(prod.TOT,0) END AS PROD_TOTAL,
+        CASE WHEN prodp.ID_PROYECTO IS NOT NULL THEN prodp.CERTIFICADOS ELSE ISNULL(prod.CERTIFICADOS,0) END AS PROD_CERTIFICADOS,
+        CASE WHEN prodp.ID_PROYECTO IS NOT NULL THEN 1 ELSE 0 END AS PROD_LIGADOS
       FROM PROYECTOS p
       INNER JOIN CONTRATOS c ON c.CLAVE_CONTRATO = p.CLAVE_CONTRATO
       LEFT JOIN CLIENTE cl ON cl.CLAVE_CLIENTE = c.CLAVE_CLIENTE
@@ -159,6 +161,21 @@ router.get('/tablero', requireAuth, async (req, res) => {
         WHERE cr.ACTIVO = 1
         GROUP BY cr.CLAVE_CONTRATO
       ) prod ON prod.CLAVE_CONTRATO = c.CLAVE_CONTRATO
+      LEFT JOIN (
+        -- RAG de producto POR PROYECTO: si el proyecto tiene reportes ligados
+        -- en PROYECTOS_REPORTES, el % se calcula solo sobre esos reportes
+        -- (mismo join de estatus). Si no tiene liga, manda el cálculo por
+        -- contrato completo (prod, arriba) como fallback.
+        SELECT pr.ID_PROYECTO,
+               COUNT(er.ID_ESTATUS_REP) AS TOT,
+               SUM(CASE WHEN er.ESTATUS = 'CERTIFICADO' THEN 1 ELSE 0 END) AS CERTIFICADOS
+        FROM PROYECTOS_REPORTES pr
+        INNER JOIN PROYECTOS pp ON pp.ID_PROYECTO = pr.ID_PROYECTO
+        INNER JOIN CONTRATOS cc ON cc.CLAVE_CONTRATO = pp.CLAVE_CONTRATO
+        LEFT JOIN ESTATUS_REPORTE er ON er.CLAVE_REP_GENERAL = pr.CLAVE_REP
+                                    AND er.CLAVE_PLATAFORMA  = cc.CLAVE_PLATAFORMA
+        GROUP BY pr.ID_PROYECTO
+      ) prodp ON prodp.ID_PROYECTO = p.ID_PROYECTO
       ${where}
       ORDER BY cl.NOMBRE_CLIENTE, p.NOMBRE_PROYECTO
     `);

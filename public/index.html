@@ -6299,7 +6299,7 @@
               <span style="font-size:10px;color:#aaa;vertical-align:middle;">s/d</span>`;
     }
     const color = PROY_RAG_COLOR[p.RAG_PRODUCTO];
-    const tip = `${p.PROD_CERTIFICADOS} de ${p.PROD_TOTAL} reportes CERTIFICADOS (${p.PROD_PCT}%) — regla: <80% Rojo · 80-99% Ámbar · 100% Verde`;
+    const tip = `${p.PROD_CERTIFICADOS} de ${p.PROD_TOTAL} reportes CERTIFICADOS (${p.PROD_PCT}%) — ${p.PROD_LIGADOS ? 'solo reportes ligados a este proyecto' : 'todos los reportes del contrato (sin liga específica)'} — regla: <80% Rojo · 80-99% Ámbar · 100% Verde`;
     return `<span title="${proyEsc(tip)}" style="display:inline-block;width:14px;height:14px;border-radius:50%;background:${color};vertical-align:middle;"></span>
             <span title="${proyEsc(tip)}" style="font-size:11px;font-weight:700;color:${color};vertical-align:middle;">${p.PROD_PCT}%</span>
             <span style="font-size:10px;color:#888;vertical-align:middle;">(${p.PROD_CERTIFICADOS}/${p.PROD_TOTAL})</span>`;
