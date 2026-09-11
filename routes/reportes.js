@@ -20,9 +20,13 @@ function requireAuth(req, res, next) {
 // ── GET /api/reportes ─────────────────────────────────────
 // Lista de todos los reportes regulatorios SOFIPO con conteo de campos
 // Retorna: { ok: true, data: [{ ID_REPORTE, TOTAL_CAMPOS, FECHA_CARGA }, ...] }
-// Tabla: SOFIPO_REPORTES (estructura de campos por reporte)
+// Tablas: SOFIPO_REPORTES (estructura de campos por reporte regulatorio)
+// Permisos: autenticado (requireAuth)
+// Nota: FECHA_CARGA es la más antigua (MIN) por reporte
+// Uso: para descubrir qué reportes existen en el sistema y cuántos campos cada uno tiene
 router.get('/', requireAuth, async (req, res) => {
   try {
+    // Agrupa SOFIPO_REPORTES por ID_REPORTE, contea campos y obtiene fecha carga más antigua
     const rows = await query(`
       SELECT
         ID_REPORTE,
@@ -39,19 +43,23 @@ router.get('/', requireAuth, async (req, res) => {
 });
 
 // ── GET /api/reportes/:id/campos ──────────────────────────
-// Lista todos los campos de un reporte específico con sus definiciones
+// Lista todos los campos de un reporte específico con sus definiciones técnicas
 // Params: :id = ID_REPORTE (ej. "R001")
 // Retorna: { ok: true, id_reporte, data: [{ ORDEN, NOMBRE_CAMPO, TIPO_DATO, LONGITUD,
 //            DECIMALES, FORMATO_CAPTURA, CATALOGO, LAYOUTS_QUE_USAN }, ...] }
-// Tablas: SOFIPO_REPORTES (estructura), SOFIPO_LAYOUT_USO (mapeo a layouts)
+// Tablas: SOFIPO_REPORTES (estructura de campos), SOFIPO_LAYOUT_USO (mapeo a layouts)
+// Permisos: autenticado (requireAuth)
+// Nota: LAYOUTS_QUE_USAN es subconsulta que agrupa layouts usando este campo/reporte
+// Uso: descubrir estructura exacta de un reporte, qué campos contiene y en qué layouts se usa
 router.get('/:id/campos', requireAuth, async (req, res) => {
   try {
     const id = req.params.id;
+    // Query con subconsulta: obtiene campos del reporte + lista de layouts que los usan
     const campos = await query(`
       SELECT
         r.ORDEN, r.NOMBRE_CAMPO, r.TIPO_DATO, r.LONGITUD,
         r.DECIMALES, r.FORMATO_CAPTURA, r.CATALOGO,
-        -- layouts que usan este campo
+        -- Subconsulta: layouts que usan este campo en este reporte
         (
           SELECT STRING_AGG(u.CLAVE_LAYOUT, ', ')
           FROM SOFIPO_LAYOUT_USO u
@@ -69,14 +77,18 @@ router.get('/:id/campos', requireAuth, async (req, res) => {
 });
 
 // ── GET /api/reportes/layout/:clave ──────────────────────
-// Obtiene qué reportes usa un layout específico y sus campos
+// Obtiene qué reportes usa un layout específico y sus campos mappados
 // Params: :clave = CLAVE_LAYOUT (ej. "LAYOUT_SOFOM")
 // Retorna: { ok: true, clave_layout, reportes: [{ id_reporte, campos: [...] }, ...] }
-//          Agrupado por reporte para visualizar estructura
-// Tablas: SOFIPO_LAYOUT_USO (vinculación layout-reporte), SOFIPO_LAYOUT_DESC (definiciones)
+//          Agrupado por reporte para visualizar estructura jerárquica
+// Tablas: SOFIPO_LAYOUT_USO (vinculación layout→reporte), SOFIPO_LAYOUT_DESC (definiciones de layout)
+// Permisos: autenticado (requireAuth)
+// Nota: usa LEFT JOIN para incluir campos sin descripción (NULL si no existe en LAYOUT_DESC)
+// Uso: ver cómo un layout específico mapea a múltiples reportes, con columnas y validaciones
 router.get('/layout/:clave', requireAuth, async (req, res) => {
   try {
     const clave = req.params.clave;
+    // Query: obtiene campos del layout con su mapeo a reportes y definiciones
     const rows = await query(`
       SELECT
         u.ID_REPORTE,
@@ -92,7 +104,7 @@ router.get('/layout/:clave', requireAuth, async (req, res) => {
       ORDER BY u.ID_REPORTE, u.COLUMNA_REPORTE
     `);
 
-    // Agrupar resultados por reporte para estructura jerárquica
+    // Post-procesamiento: agrupa resultados por reporte para estructura jerárquica
     const porReporte = {};
     for (const r of rows) {
       if (!porReporte[r.ID_REPORTE]) porReporte[r.ID_REPORTE] = { id_reporte: r.ID_REPORTE, campos: [] };
@@ -112,18 +124,22 @@ router.get('/layout/:clave', requireAuth, async (req, res) => {
 });
 
 // ── GET /api/reportes/campo/:nombre ──────────────────────
-// Busca en qué reportes aparece un campo específico (búsqueda parcial)
-// Params: :nombre = nombre o parte del nombre del campo (ej. "empresa")
+// Búsqueda de un campo en reportes (búsqueda parcial case-insensitive)
+// Params: :nombre = nombre o parte del nombre del campo (ej. "empresa", "%mpr%")
 // Retorna: { ok: true, campo, data: [{ ID_REPORTE, CLAVE_LAYOUT, NOMBRE_CAMPO,
 //            TIPO_DATO, OBLIGATORIO, DESCRIPCION, FUENTE: "layout"|"reporte" }, ...] }
-// FUENTE indica si viene de layout o estructura directa de reporte
-// Tablas: SOFIPO_LAYOUT_USO + SOFIPO_LAYOUT_DESC (vía layouts)
-//         SOFIPO_REPORTES (estructura directa)
+// FUENTE indica procedencia: "layout" (SOFIPO_LAYOUT_USO) o "reporte" (SOFIPO_REPORTES directo)
+// Tablas: SOFIPO_LAYOUT_USO + SOFIPO_LAYOUT_DESC (búsqueda 1)
+//         SOFIPO_REPORTES (búsqueda 2)
+// Permisos: autenticado (requireAuth)
+// Nota: busca en ambas tablas y retorna resultados combinados DISTINCT
+// Uso: descubrir dónde aparece un campo específico en la estructura de reportes
 router.get('/campo/:nombre', requireAuth, async (req, res) => {
   try {
     const nombre = req.params.nombre.replace(/'/g,"''");
 
-    // Búsqueda 1: En campos vinculados a layouts (SOFIPO_LAYOUT_USO)
+    // Búsqueda 1: campos vinculados a layouts (SOFIPO_LAYOUT_USO + SOFIPO_LAYOUT_DESC)
+    // Busca por NOMBRE_CAMPO en layout y obtiene definiciones
     const porLayout = await query(`
       SELECT DISTINCT
         u.ID_REPORTE,
@@ -142,7 +158,8 @@ router.get('/campo/:nombre', requireAuth, async (req, res) => {
       ORDER BY u.ID_REPORTE
     `);
 
-    // Búsqueda 2: En estructura directa de reportes (SOFIPO_REPORTES)
+    // Búsqueda 2: estructura directa de reportes (SOFIPO_REPORTES)
+    // Busca por NOMBRE_CAMPO directo en reportes (sin layout)
     const porReporte = await query(`
       SELECT DISTINCT
         r.ID_REPORTE,
@@ -158,6 +175,7 @@ router.get('/campo/:nombre', requireAuth, async (req, res) => {
       ORDER BY r.ID_REPORTE
     `);
 
+    // Combinar resultados de ambas búsquedas
     const data = [...porLayout, ...porReporte];
     res.json({ ok: true, campo: req.params.nombre, data });
   } catch (e) {
@@ -169,9 +187,14 @@ router.get('/campo/:nombre', requireAuth, async (req, res) => {
 // Lista todos los layouts disponibles con estadísticas de campos
 // Retorna: { ok: true, data: [{ CLAVE_LAYOUT, EMPRESA, PAIS, TOTAL_CAMPOS,
 //            CAMPOS_OBLIGATORIOS }, ...] }
-// Tabla: SOFIPO_LAYOUT_DESC (definiciones de layouts)
+// Tablas: SOFIPO_LAYOUT_DESC (definiciones de layouts)
+// Permisos: autenticado (requireAuth)
+// Nota: agrupa por layout/empresa/país; CAMPOS_OBLIGATORIOS cuenta cuando OBLIGATORIO='Si'
+// Uso: obtener lista de layouts disponibles y ver cuántos campos son obligatorios
 router.get('/layouts', requireAuth, async (req, res) => {
   try {
+    // Query: agrupa SOFIPO_LAYOUT_DESC por clave/empresa/país
+    // Cuenta total de campos y campos obligatorios
     const rows = await query(`
       SELECT
         CLAVE_LAYOUT,

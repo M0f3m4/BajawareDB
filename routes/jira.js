@@ -25,12 +25,15 @@ const JIRA_EMAIL = process.env.JIRA_EMAIL || '';
 const JIRA_TOKEN = process.env.JIRA_TOKEN || '';
 const AUTH_TOKEN = Buffer.from(`${JIRA_EMAIL}:${JIRA_TOKEN}`).toString('base64');
 
-// ── Helper: Realiza llamadas a Jira REST API ─────────────
+// ── Helper: Realiza llamadas a Jira REST API v3 ─────────────
+// Abstrae detalles de HTTPS, autenticación Basic, manejo de respuestas
 // Params:
-//   method (GET|POST|PUT|DELETE): verbo HTTP
-//   path: ruta relativa a JIRA_HOST (ej. /rest/api/3/issue/KEY)
-//   body: objeto a serializar como JSON (para POST/PUT)
-// Retorna: Promise que resuelve con respuesta parseada o rechaza con Error
+//   method = 'GET' | 'POST' | 'PUT' | 'DELETE' (verbo HTTP)
+//   path = ruta relativa a JIRA_HOST (ej. /rest/api/3/issue/KEY, /rest/agile/1.0/board)
+//   body = objeto JS a serializar como JSON (para POST/PUT), null para GET/DELETE
+// Retorna: Promise<{...}> respuesta JSON parseada de Jira
+//          Rechaza con Error si statusCode >= 400 (usa errorMessages o message de respuesta)
+// Nota: usa AUTH_TOKEN (Basic auth desde JIRA_EMAIL + JIRA_TOKEN en .env)
 function jiraRequest(method, path, body = null) {
   return new Promise((resolve, reject) => {
     const url     = new URL(JIRA_HOST + path);
@@ -88,8 +91,12 @@ function requireAuth(req, res, next) {
 // ── GET /api/jira/proyectos ───────────────────────────────
 // Lista todos los proyectos disponibles en Jira
 // Retorna: { ok: true, data: [{ id, key, name, tipo }, ...] }
+// Tablas: ninguna (consulta directa Jira API)
+// Permisos: autenticado (requireAuth)
+// Nota: expand=lead para incluir información del lead del proyecto
 router.get('/proyectos', requireAuth, async (req, res) => {
   try {
+    // Llamada a Jira: GET /rest/api/3/project
     const data = await jiraRequest('GET', '/rest/api/3/project?expand=lead');
     const proyectos = data.map(p => ({
       id:   p.id,
@@ -103,28 +110,33 @@ router.get('/proyectos', requireAuth, async (req, res) => {
   }
 });
 
-// ── GET /api/jira/tickets?project=KEY&status=&assignee=&texto=&max=100&jql=
-// Busca issues (tickets) en Jira con filtros opcionales
-// Params:
-//   ?project=KEY: filtrar por clave de proyecto (ej. QA_DEPLOYMENT)
-//   ?status=: estado del ticket (ej. Done, In Progress)
-//   ?assignee=: nombre o 'currentUser' para asignado
-//   ?texto=: texto a buscar en descripción/resumen
-//   ?max=: máximo de resultados (default 100)
-//   ?jql=: JQL directo (si se pasa, ignora otros filtros)
-// Retorna: { ok: true, total: N, data: [{ id, key, resumen, estado, ... }, ...] }
+// ── GET /api/jira/tickets ─────────────────────────────────
+// Busca issues (tickets) en Jira con filtros opcionales (construye JQL)
+// Query params:
+//   project=KEY: filtrar por clave de proyecto (ej. QA_DEPLOYMENT)
+//   status=: estado del ticket (ej. "Done", "In Progress")
+//   assignee=: nombre usuario o 'currentUser'
+//   texto=: búsqueda de texto en resumen/descripción
+//   max=: máximo de resultados (default 100)
+//   jql=: JQL directo (si se pasa, ignora otros filtros; permite queries complejas)
+// Retorna: { ok: true, total: N, data: [{ id, key, resumen, estado, asignado, prioridad, tipo, creado, actualizado }, ...] }
+// Tablas: ninguna (consulta directa Jira API /rest/api/3/search/jql)
+// Permisos: autenticado (requireAuth)
+// Nota: default si no hay project = "sprint in openSprints()" (búsqueda en sprints activos)
 router.get('/tickets', requireAuth, async (req, res) => {
   const { project, status, assignee, texto, max = 100, jql: jqlRaw } = req.query;
 
-  // Construir JQL: si viene directo se usa tal cual; si no, armar desde filtros
+  // Construir JQL: si viene directo se usa tal cual; si no, armar dinámicamente desde filtros
   let jql;
   if (jqlRaw) {
-    // JQL directo (ej: "sprint in openSprints()")
+    // JQL directo (ej: "sprint in openSprints()") — se usa tal cual sin validación
     jql = jqlRaw;
   } else {
+    // Armar JQL desde parámetros: project + status + assignee + texto
     jql = project ? `project = "${project}"` : 'sprint in openSprints()';
     if (status)   jql += ` AND status = "${status}"`;
     if (assignee === 'currentUser') {
+      // Función especial de Jira para usuario actual
       jql += ' AND assignee = currentUser()';
     } else if (assignee) {
       jql += ` AND assignee = "${assignee}"`;
@@ -162,8 +174,11 @@ router.get('/tickets', requireAuth, async (req, res) => {
 
 // ── GET /api/jira/tickets/:key ────────────────────────────
 // Obtiene detalles básicos de un ticket (issue) por su clave
-// Params: :key = clave de Jira (ej. QAD-123)
+// Params: :key = clave de Jira (ej. "QAD-123")
 // Retorna: { ok: true, data: { id, key, resumen, estado, asignado, prioridad, tipo, comentarios } }
+// Tablas: ninguna (consulta directa Jira API)
+// Permisos: autenticado (requireAuth)
+// Nota: incluye comentarios parseados de formato ADF a texto plano
 router.get('/tickets/:key', requireAuth, async (req, res) => {
   try {
     const i = await jiraRequest(
@@ -171,7 +186,8 @@ router.get('/tickets/:key', requireAuth, async (req, res) => {
       `/rest/api/3/issue/${req.params.key}?fields=summary,status,assignee,priority,issuetype,description,comment,transitions`
     );
 
-    // Extraer comentarios y parsear su contenido (formato ADF)
+    // Extraer comentarios y parsear su contenido (formato ADF = Atlassian Document Format)
+    // ADF es un formato JSON anidado; extraemos el primer nivel de texto
     const comentarios = (i.fields.comment?.comments || []).map(c => ({
       id:       c.id,
       autor:    c.author?.displayName,
@@ -200,21 +216,24 @@ router.get('/tickets/:key', requireAuth, async (req, res) => {
 // ── GET /api/jira/tickets/:key/transiciones ───────────────
 // Lista los estados/transiciones disponibles para un ticket
 // (estados a los que puede moverse desde su estado actual)
-// Params: :key = clave de Jira (ej. QAD-123)
+// Params: :key = clave de Jira (ej. "QAD-123")
 // Retorna: { ok: true, data: [{ id, nombre }, ...] }
+// Tablas: ninguna (consulta directa Jira API)
+// Permisos: autenticado (requireAuth)
+// Nota: intenta primero endpoint /transitions, fallback a expand si viene vacío
 router.get('/tickets/:key/transiciones', requireAuth, async (req, res) => {
   try {
-    // Intentar primero el endpoint de transiciones directo
+    // Intento 1: endpoint de transiciones directo (/rest/api/3/issue/:key/transitions)
     const data = await jiraRequest('GET', `/rest/api/3/issue/${req.params.key}/transitions`);
     let trans = (data.transitions || []).map(t => ({ id: t.id, nombre: t.name }));
 
-    // Si viene vacío, intentar expandir del issue completo
+    // Fallback: si viene vacío, intentar expandir del issue completo (expand=transitions)
     if (trans.length === 0) {
       try {
         const issue = await jiraRequest('GET', `/rest/api/3/issue/${req.params.key}?expand=transitions`);
         const expanded = (issue.transitions || []).map(t => ({ id: t.id, nombre: t.name }));
         if (expanded.length > 0) trans = expanded;
-      } catch (_) { /* ignorar error del fallback */ }
+      } catch (_) { /* ignorar error del fallback — retornar array vacío */ }
     }
 
     res.json({ ok: true, data: trans });
@@ -226,12 +245,15 @@ router.get('/tickets/:key/transiciones', requireAuth, async (req, res) => {
 // ── POST /api/jira/tickets ────────────────────────────────
 // Crea un nuevo issue (ticket) en Jira
 // Body requerido:
-//   project: clave de proyecto (ej. QAD)
-//   resumen: título del issue
-//   tipo: tipo de issue (default: Task)
+//   project: clave de proyecto (ej. "QAD")
+//   resumen: título del issue (descripción corta)
+//   tipo: tipo de issue (default: "Task"; puede ser "Bug", "Story", etc.)
 //   descripcion: cuerpo del issue (default: vacío)
-//   prioridad: prioridad (default: Medium)
-// Retorna: { ok: true, key: "QAD-999", id: "12345" }
+//   prioridad: prioridad (default: "Medium"; ej. "Low", "High", "Critical")
+// Retorna: { ok: true, key: "QAD-999", id: "12345" } = identificadores del nuevo issue
+// Tablas: ninguna (creación directa en Jira API)
+// Permisos: autenticado (requireAuth)
+// Nota: descripción se formatea en ADF (Atlassian Document Format)
 router.post('/tickets', requireAuth, async (req, res) => {
   const { project, tipo = 'Task', resumen, descripcion = '', prioridad = 'Medium' } = req.body;
 
@@ -239,7 +261,8 @@ router.post('/tickets', requireAuth, async (req, res) => {
     return res.status(400).json({ ok: false, message: 'project y resumen son requeridos' });
   }
 
-  // Armar estructura de campos Jira (descripción en formato ADF)
+  // Armar estructura de campos Jira según formato esperado por Jira REST API v3
+  // description usa formato ADF (Atlassian Document Format) con structure: doc → paragraph → text
   const body = {
     fields: {
       project:   { key: project },
@@ -266,10 +289,13 @@ router.post('/tickets', requireAuth, async (req, res) => {
 });
 
 // ── POST /api/jira/tickets/:key/estado ───────────────────
-// Cambia el estado/transición de un ticket
-// Params: :key = clave de Jira (ej. QAD-123)
-// Body requerido: { transitionId: "11" } (obtener IDs de endpoint transiciones)
+// Cambia el estado/transición de un ticket (workflow action)
+// Params: :key = clave de Jira (ej. "QAD-123")
+// Body requerido: { transitionId: "11" } (obtener IDs del endpoint /transiciones previo)
 // Retorna: { ok: true }
+// Tablas: ninguna (actualización directa en Jira API)
+// Permisos: autenticado (requireAuth)
+// Nota: transitionId varía según tipos de proyecto; usar /transiciones para obtener valores válidos
 router.post('/tickets/:key/estado', requireAuth, async (req, res) => {
   const { transitionId } = req.body;
   if (!transitionId) return res.status(400).json({ ok: false, message: 'transitionId requerido' });
@@ -286,14 +312,18 @@ router.post('/tickets/:key/estado', requireAuth, async (req, res) => {
 
 // ── POST /api/jira/tickets/:key/comentario ────────────────
 // Agrega un comentario a un ticket
-// Params: :key = clave de Jira (ej. QAD-123)
+// Params: :key = clave de Jira (ej. "QAD-123")
 // Body requerido: { texto: "contenido del comentario" }
-// Retorna: { ok: true, id: "12345" } (id del comentario creado)
+// Retorna: { ok: true, id: "12345" } = id del comentario creado
+// Tablas: ninguna (creación directa en Jira API)
+// Permisos: autenticado (requireAuth)
+// Nota: texto se formatea en ADF (Atlassian Document Format)
 router.post('/tickets/:key/comentario', requireAuth, async (req, res) => {
   const { texto } = req.body;
   if (!texto) return res.status(400).json({ ok: false, message: 'texto requerido' });
 
   // Formatear comentario en formato ADF (Atlassian Document Format)
+  // Estructura: body → doc → paragraph → text
   const body = {
     body: {
       type:    'doc',
@@ -316,6 +346,10 @@ router.post('/tickets/:key/comentario', requireAuth, async (req, res) => {
 // ── GET /api/jira/epics ───────────────────────────────────
 // Lista todos los epics disponibles, agrupados por proyecto
 // Retorna: { ok: true, data: [{ nombre, key, epics: [...] }, ...], total: N }
+//          data[].epics[] = [{key, resumen, estado, categoria, proyecto, proyectoKey}, ...]
+// Tablas: ninguna (consulta directa Jira API)
+// Permisos: autenticado (requireAuth)
+// Nota: búsqueda por issuetype=Epic; agrupa resultados por proyecto
 router.get('/epics', requireAuth, async (req, res) => {
   try {
     const data = await jiraRequest(
@@ -323,7 +357,7 @@ router.get('/epics', requireAuth, async (req, res) => {
       `/rest/api/3/search/jql?jql=${encodeURIComponent('issuetype = Epic ORDER BY project ASC, status ASC')}&maxResults=200&fields=summary,status,project,priority,issuetype`
     );
 
-    // Mapear epics extrayendo campos clave
+    // Mapear issues/epics extrayendo campos clave (key, resumen, estado, proyecto)
     const epics = (data.issues || []).map(i => ({
       key:        i.key,
       resumen:    i.fields.summary,
@@ -333,7 +367,7 @@ router.get('/epics', requireAuth, async (req, res) => {
       proyectoKey: i.fields.project?.key
     }));
 
-    // Agrupar por proyecto para retorno jerárquico
+    // Post-procesamiento: agrupar por proyecto para retorno jerárquico
     const porProyecto = {};
     epics.forEach(e => {
       if (!porProyecto[e.proyectoKey]) {
@@ -387,9 +421,12 @@ router.get('/sprints/:sprintId/epics', requireAuth, async (req, res) => {
 
 // ── GET /api/jira/stats ───────────────────────────────────
 // Obtiene estadísticas globales de issues: contador por categoría de estado
-// (new = pendientes, indeterminate = en progreso, done = hechos)
+// Status categories: new=pendientes, indeterminate=en progreso, done=hechos
 // Retorna: { ok: true, data: { pendientes: N, enProgreso: N, hechos: N, total: N } }
-// Nota: limita a 4 páginas (máx 2000 issues) para no tardar demasiado
+// Tablas: ninguna (consulta directa Jira API con paginación)
+// Permisos: autenticado (requireAuth)
+// Nota: paginación limitada a 4 páginas (máx ~2000 issues) para evitar timeouts;
+//       excluye epics (issuetype != Epic) para contar solo tickets
 router.get('/stats', requireAuth, async (req, res) => {
   try {
     const counts = { new: 0, indeterminate: 0, done: 0 };
@@ -397,8 +434,9 @@ router.get('/stats', requireAuth, async (req, res) => {
     let nextPageToken = null;
     let pages = 0;
 
-    // Paginación de resultados (Jira retorna máx 500 por página)
+    // Paginación de resultados: Jira retorna máx 500 por página (pageSize=500)
     do {
+      // Construir URL con nextPageToken si existe (paginación)
       const url = nextPageToken
         ? `/rest/api/3/search/jql?jql=${encodeURIComponent('issuetype != Epic ORDER BY updated DESC')}&maxResults=${pageSize}&fields=status&nextPageToken=${encodeURIComponent(nextPageToken)}`
         : `/rest/api/3/search/jql?jql=${encodeURIComponent('issuetype != Epic ORDER BY updated DESC')}&maxResults=${pageSize}&fields=status`;
@@ -406,7 +444,7 @@ router.get('/stats', requireAuth, async (req, res) => {
       const data = await jiraRequest('GET', url);
       const issues = data.issues || [];
 
-      // Contar issues por categoría de estado
+      // Contar issues por categoría de estado (key = new, indeterminate, done)
       issues.forEach(i => {
         const key = i.fields?.status?.statusCategory?.key;
         if (key in counts) counts[key]++;
@@ -415,7 +453,7 @@ router.get('/stats', requireAuth, async (req, res) => {
       nextPageToken = data.nextPageToken || null;
       pages++;
 
-      // Máximo 4 páginas (2000 issues) para no tardar demasiado
+      // Límite de seguridad: máximo 4 páginas (2000 issues) para evitar timeouts
       if (pages >= 4) break;
     } while (nextPageToken);
 
@@ -436,19 +474,22 @@ router.get('/stats', requireAuth, async (req, res) => {
 });
 
 // ── GET /api/jira/sprints/activos ─────────────────────────
-// Lista sprints que están activos en todos los tableros (Agile API)
+// Lista sprints que están activos en todos los tableros (Jira Agile API)
 // Retorna: { ok: true, data: [{ id, name, boardName, state, ... }, ...] }
+// Tablas: ninguna (consulta directa Jira Agile API)
+// Permisos: autenticado (requireAuth)
+// Nota: usa /rest/agile/1.0/board para obtener tableros, luego /board/:id/sprint para activos
 router.get('/sprints/activos', requireAuth, async (req, res) => {
   try {
-    // Obtener todos los tableros
+    // Obtener lista de todos los tableros (Agile API)
     const boards = await jiraRequest('GET', '/rest/agile/1.0/board?maxResults=50');
     const boardList = boards.values || [];
 
-    // Para cada tablero, obtener sus sprints activos
+    // Para cada tablero, obtener sus sprints activos en paralelo (Promise.all)
     const sprintPromises = boardList.map(b =>
       jiraRequest('GET', `/rest/agile/1.0/board/${b.id}/sprint?state=active`)
         .then(r => (r.values || []).map(s => ({ ...s, boardName: b.name })))
-        .catch(() => [])
+        .catch(() => [])  // Fallback: si falla, retornar array vacío
     );
 
     const results  = await Promise.all(sprintPromises);
@@ -460,10 +501,14 @@ router.get('/sprints/activos', requireAuth, async (req, res) => {
 });
 
 // ── GET /api/jira/sprints/:sprintId/tickets ───────────────
-// Lista tickets de un sprint, agrupados por epic padre
+// Lista tickets de un sprint, agrupados por epic padre (estructura jerárquica)
 // Params: :sprintId = ID del sprint
 // Retorna: { ok: true, data: [{ key, resumen, estado, tickets: [...] }, ...] }
-//          (incluye grupo "Sin epic" si hay tickets sin padre)
+//          Agrupa tickets por epic (key=epic.key, estado, resumen)
+//          Incluye grupo "Sin epic" (key=null) si hay tickets sin padre
+// Tablas: ninguna (consulta directa Jira Agile API)
+// Permisos: autenticado (requireAuth)
+// Nota: filtra epics mismos (issuetype=Epic) para retornar solo tickets
 router.get('/sprints/:sprintId/tickets', requireAuth, async (req, res) => {
   try {
     const data = await jiraRequest(
@@ -478,11 +523,12 @@ router.get('/sprints/:sprintId/tickets', requireAuth, async (req, res) => {
     // Procesar cada issue del sprint
     issues.forEach(i => {
       const tipo   = i.fields.issuetype?.name;
-      if (tipo === 'Epic') return; // skip epics themselves
+      if (tipo === 'Epic') return; // skip epics mismos (contar solo tickets)
 
       const parent = i.fields.parent;
       const isEpic = parent?.fields?.issuetype?.name === 'Epic';
 
+      // Construir objeto ticket normalizado
       const ticket = {
         key:      i.key,
         resumen:  i.fields.summary,
@@ -493,9 +539,10 @@ router.get('/sprints/:sprintId/tickets', requireAuth, async (req, res) => {
         tipo
       };
 
-      // Agrupar por epic o en "sin epic"
+      // Agrupar por epic padre o en lista "sin epic"
       if (isEpic) {
         const eKey = parent.key;
+        // Crear entry de epic si no existe
         if (!epicMap[eKey]) {
           epicMap[eKey] = {
             key:     eKey,
@@ -522,6 +569,9 @@ router.get('/sprints/:sprintId/tickets', requireAuth, async (req, res) => {
 // ── GET /api/jira/boards ──────────────────────────────────
 // Lista todos los tableros (Kanban o Scrum) con su proyecto asociado
 // Retorna: { ok: true, data: [{ id, nombre, tipo, proyecto, proyectoKey }, ...] }
+// Tablas: ninguna (consulta directa Jira Agile API)
+// Permisos: autenticado (requireAuth)
+// Nota: tipo puede ser "scrum" o "kanban"
 router.get('/boards', requireAuth, async (req, res) => {
   try {
     const data = await jiraRequest('GET', '/rest/agile/1.0/board?maxResults=50');
@@ -541,10 +591,13 @@ router.get('/boards', requireAuth, async (req, res) => {
 // ── GET /api/jira/usuarios ────────────────────────────────
 // Lista usuarios activos de Jira (solo cuentas Atlassian, excluye apps/bots)
 // Retorna: { ok: true, data: [{ id, nombre, email, avatar }, ...] }
+// Tablas: ninguna (consulta directa Jira API)
+// Permisos: autenticado (requireAuth)
+// Nota: filtra solo accountType='atlassian' y active=true (excluye service accounts)
 router.get('/usuarios', requireAuth, async (req, res) => {
   try {
     const data = await jiraRequest('GET', '/rest/api/3/users/search?maxResults=200');
-    // Filtrar solo usuarios activos reales (account type = atlassian)
+    // Filtrar solo usuarios activos reales (account type = 'atlassian', no service accounts)
     const usuarios = (Array.isArray(data) ? data : [])
       .filter(u => u.accountType === 'atlassian' && u.active)
       .map(u => ({
@@ -560,12 +613,15 @@ router.get('/usuarios', requireAuth, async (req, res) => {
 });
 
 // ── GET /api/jira/tickets/:key/completo ───────────────────
-// Obtiene información COMPLETA de un ticket: campos, comentarios, worklogs,
-// historial de cambios y transiciones disponibles (para vistas detalladas)
-// Params: :key = clave de Jira (ej. QAD-123)
+// Obtiene información COMPLETA de un ticket (para vistas detalladas)
+// Incluye: campos, comentarios, worklogs, historial de cambios, transiciones disponibles
+// Params: :key = clave de Jira (ej. "QAD-123")
 // Retorna: { ok: true, data: { key, resumen, descripcion, estado, tipo, prioridad,
 //            asignado, reportero, proyecto, etiquetas, componentes, versiones, padre,
 //            creado, actualizado, vence, resuelto, tiempo, comentarios, worklogs, historial, transiciones } }
+// Tablas: ninguna (consulta directa Jira API + expand=changelog)
+// Permisos: autenticado (requireAuth)
+// Nota: historial limitado a últimos 30 cambios (slice(0,30)) para no retornar demasiado
 router.get('/tickets/:key/completo', requireAuth, async (req, res) => {
   try {
     const fields = 'summary,description,status,assignee,reporter,priority,issuetype,labels,components,fixVersions,created,updated,duedate,resolutiondate,parent,project,comment,worklog,timetracking';
@@ -576,8 +632,8 @@ router.get('/tickets/:key/completo', requireAuth, async (req, res) => {
     ]);
 
     // Helper: parsear formato ADF (Atlassian Document Format) a texto plano
+    // ADF es estructura anidada JSON; se hace walk recursivo por árbol content
     const extraerTexto = doc => {
-      // El body de comentarios/descripción viene en formato ADF (árbol JSON)
       const walk = n => !n ? '' : (n.text || '') + (n.content || []).map(walk).join('');
       return walk(doc);
     };
@@ -631,30 +687,38 @@ router.get('/tickets/:key/completo', requireAuth, async (req, res) => {
 });
 
 // ── Crosscheck Jira ↔ ESTATUS_REPORTE ─────────────────────
-// Funcionalidad CLAVE para integración con Bajaware:
+// Funcionalidad CLAVE para integración entre Jira y Bajaware:
 // Cruza tickets de Jira con registros en tabla ESTATUS_REPORTE usando el campo
 // custom "VersionBC" como llave (VersionBC = CLAVE_REP en la BD)
-// Esto permite ver qué tickets de Jira se corresponden con qué registros de estado
+// Esto permite ver qué tickets de Jira (con VersionBC lleno) se corresponden
+// con qué registros de estado en la BD y su estatus actual (DOCUMENTADO, PROGRAMADO, CERTIFICADO)
 
+// Helper: Escapa valor SQL (similar a esc() pero usando comilla simple)
 const escSql = v => `'${String(v).replace(/'/g, "''")}'`;
 
 // Cache del id interno del campo VersionBC (customfield_XXXXX)
-// Jira usa IDs como customfield_10123 para campos personalizados
+// Jira usa IDs como customfield_10123 para campos personalizados; se cachea tras primer uso
 let _versionBCField = null;
 async function getVersionBCField() {
   if (_versionBCField) return _versionBCField;
+  // Obtener lista de campos de Jira
   const fields = await jiraRequest('GET', '/rest/api/3/field');
+  // Buscar campo "VersionBC" (case-insensitive)
   const f = (fields || []).find(x => (x.name || '').trim().toLowerCase() === 'versionbc');
   if (!f) throw new Error('No se encontró el campo "VersionBC" en Jira');
-  _versionBCField = f.id; // ej. customfield_10123
+  // Cachear ID (ej. customfield_10123)
+  _versionBCField = f.id;
   return _versionBCField;
 }
 
-// ── GET /api/jira/campos?buscar= ──────────────────────────
+// ── GET /api/jira/campos ──────────────────────────────────
 // Lista todos los campos de Jira, incluyendo custom fields
 // Útil para descubrir IDs de custom fields (ej. "VersionBC" -> customfield_10123)
-// Params: ?buscar=texto para filtrar por nombre o ID
+// Query params: buscar=texto para filtrar por nombre o ID (case-insensitive)
 // Retorna: { ok: true, total: N, data: [{ id, nombre, custom: bool }, ...] }
+// Tablas: ninguna (consulta directa Jira API)
+// Permisos: autenticado (requireAuth)
+// Nota: custom=true para custom fields (ej. customfield_10123); false para campos estándar
 router.get('/campos', requireAuth, async (req, res) => {
   try {
     const buscar = (req.query.buscar || '').toLowerCase();
@@ -671,9 +735,13 @@ router.get('/campos', requireAuth, async (req, res) => {
 // ── GET /api/jira/tickets/:key/campos ─────────────────────
 // Retorna TODOS los campos no vacíos de un ticket con nombres legibles
 // Útil para debugging: descubrir qué custom fields contienen datos útiles
-// (ej. si viene el nombre de plataforma en algún campo custom)
-// Params: :key = clave de Jira (ej. QAD-123)
+// (ej. si viene nombre de plataforma, VersionBC, etc. en algún custom field)
+// Params: :key = clave de Jira (ej. "QAD-123")
 // Retorna: { ok: true, key, total: N, data: [{ id, nombre, valor }, ...] }
+//          valor es string: resume arrays (join ', '), objetos (extrae name/value/displayName)
+// Tablas: ninguna (consulta directa Jira API)
+// Permisos: autenticado (requireAuth)
+// Nota: útil para discovery de campos custom que pueden aportar información
 router.get('/tickets/:key/campos', requireAuth, async (req, res) => {
   try {
     // Obtener definiciones de campos + valores del issue
@@ -685,13 +753,16 @@ router.get('/tickets/:key/campos', requireAuth, async (req, res) => {
     (fieldDefs || []).forEach(f => { nombres[f.id] = f.name; });
 
     // Helper: convertir valores complejos a strings legibles
+    // Maneja: null, undefined, arrays (join con ', '), objetos (extrae name/value/displayName), strings
     const resumir = v => {
       if (v === null || v === undefined || v === '') return null;
       if (Array.isArray(v)) {
         if (!v.length) return null;
+        // Para cada elemento del array: si es objeto, extrae nombre; si es string, lo usa
         return v.map(x => (x && typeof x === 'object') ? (x.name || x.value || x.displayName || x.key || JSON.stringify(x)) : x).join(', ');
       }
       if (typeof v === 'object') {
+        // Para objeto: intenta extraer nombre legible, fallback a JSON (primeros 300 chars)
         return v.name || v.value || v.displayName || v.key || v.emailAddress || JSON.stringify(v).slice(0, 300);
       }
       return String(v);
@@ -710,16 +781,19 @@ router.get('/tickets/:key/campos', requireAuth, async (req, res) => {
   }
 });
 
-// ── GET /api/jira/crosscheck?dias=30&project=QA_DEPLOYMENT ─
-// ENDPOINT CENTRAL DE INTEGRACIÓN: cruza tickets de Jira con ESTATUS_REPORTE
-// Busca todos los tickets del proyecto con campo VersionBC lleno, luego en BD
-// busca registros que coincidan por CLAVE_REP o CLAVE_REP_GENERAL.
-// Params:
-//   ?dias=: filtrar tickets actualizados en últimos N días (default 30)
-//   ?project=: clave de proyecto en Jira (default QA_DEPLOYMENT)
+// ── GET /api/jira/crosscheck ──────────────────────────────
+// ENDPOINT CENTRAL DE INTEGRACIÓN: cruza tickets Jira con ESTATUS_REPORTE
+// Busca tickets del proyecto con VersionBC lleno, luego en BD busca registros
+// que coincidan por CLAVE_REP o CLAVE_REP_GENERAL
+// Query params:
+//   dias=: filtrar tickets actualizados en últimos N días (default 30)
+//   project=: clave de proyecto en Jira (default "QA_DEPLOYMENT")
 // Retorna: { ok: true, campo: "customfield_XXXXX", jql: "...", total: N,
 //            data: [{ key, resumen, estadoJira, asignado, actualizado, clave, enBD: [...] }, ...] }
-// Donde enBD es array de registros ESTATUS_REPORTE que coinciden con la clave
+// Tablas: ESTATUS_REPORTE (consulta SELECT con campos de estatus)
+// Permisos: autenticado (requireAuth)
+// Donde enBD es array de registros ESTATUS_REPORTE que coinciden:
+//   {plataforma, documentado, programado, certificado, estatus, fecha, usuario, claveRep}
 router.get('/crosscheck', requireAuth, async (req, res) => {
   try {
     const dias    = parseInt(req.query.dias, 10) || 30;
@@ -727,24 +801,27 @@ router.get('/crosscheck', requireAuth, async (req, res) => {
     const cfId    = await getVersionBCField();           // customfield_XXXXX
     const cfNum   = cfId.replace('customfield_', '');
 
-    // Buscar tickets del proyecto con VersionBC no vacío, actualizados recientemente
+    // Buscar tickets del proyecto con VersionBC (cfId) no vacío, actualizados en últimos N días
+    // JQL: project=QA_DEPLOYMENT AND cf[<num>] is not EMPTY AND updated >= -30d
     const jql = `project = "${project}" AND cf[${cfNum}] is not EMPTY AND updated >= -${dias}d ORDER BY updated DESC`;
     const data = await jiraRequest(
       'GET',
       `/rest/api/3/search/jql?jql=${encodeURIComponent(jql)}&maxResults=100&fields=summary,status,assignee,updated,${cfId}`
     );
 
-    // Mapear tickets extrayendo el valor de VersionBC
+    // Mapear tickets extrayendo el valor de VersionBC (puede ser string o objeto con .value)
     const tickets = (data.issues || []).map(i => ({
       key:         i.key,
       resumen:     i.fields.summary,
       estadoJira:  i.fields.status?.name,
       asignado:    i.fields.assignee?.displayName || 'Sin asignar',
       actualizado: i.fields.updated,
+      // VersionBC puede venir como string directo o como objeto {value: "..."}
       clave:       (typeof i.fields[cfId] === 'object' ? i.fields[cfId]?.value : i.fields[cfId]) || null
-    })).filter(t => t.clave);
+    })).filter(t => t.clave);  // Filtrar solo tickets con clave no vacía
 
     // Una sola consulta a BD con todas las claves de tickets encontrados
+    // Busca por CLAVE_REP (legacy con _22) y CLAVE_REP_GENERAL (nuevo formato)
     let dbRows = [];
     const claves = [...new Set(tickets.map(t => String(t.clave).trim()))];
     if (claves.length) {
@@ -757,9 +834,10 @@ router.get('/crosscheck', requireAuth, async (req, res) => {
       `);
     }
 
-    // Indexar registros BD por clave para búsqueda rápida
+    // Post-procesamiento: indexar registros BD por clave para búsqueda rápida (O(1))
     const porClave = {};
     dbRows.forEach(r => {
+      // Normalizar campos de estatus en estructura plana
       const fila = {
         plataforma:  r.CLAVE_PLATAFORMA,
         documentado: r.DOCUMENTADO,
@@ -770,15 +848,16 @@ router.get('/crosscheck', requireAuth, async (req, res) => {
         usuario:     r.USER_ESTATUS,
         claveRep:    r.CLAVE_REP
       };
-      // Indexar tanto por CLAVE_REP (legacy con _22) como por CLAVE_REP_GENERAL
+      // Indexar por AMBAS claves (CLAVE_REP legacy + CLAVE_REP_GENERAL nuevo)
+      // Permite encontrar registros sin importar cuál se use en la búsqueda
       const llaves = new Set([(r.CLAVE_REP || '').trim(), (r.CLAVE_REP_GENERAL || '').trim()]);
       llaves.forEach(k => { if (k) (porClave[k] = porClave[k] || []).push(fila); });
     });
 
-    // Enriquecer tickets con sus registros BD
+    // Enriquecer tickets Jira con sus registros BD correspondientes
     const resultado = tickets.map(t => ({
       ...t,
-      enBD: porClave[String(t.clave).trim()] || []
+      enBD: porClave[String(t.clave).trim()] || []  // Retorna array vacío si no hay matches
     }));
 
     res.json({ ok: true, campo: cfId, jql, total: resultado.length, data: resultado });
@@ -790,8 +869,10 @@ router.get('/crosscheck', requireAuth, async (req, res) => {
 // ── GET /api/jira/test-transiciones/:key ──────────────────
 // Endpoint de prueba: obtiene transiciones sin validar autenticación
 // (útil para debugging en frontend)
-// Params: :key = clave de Jira (ej. QAD-123)
+// Params: :key = clave de Jira (ej. "QAD-123")
 // Retorna: { ok: true, transiciones: [...] }
+// Nota: NO requiere autenticación (requireAuth) — useful para pruebas públicas
+// Tablas: ninguna (consulta directa Jira API)
 router.get('/test-transiciones/:key', async (req, res) => {
   try {
     const data = await jiraRequest('GET', `/rest/api/3/issue/${req.params.key}/transitions`);

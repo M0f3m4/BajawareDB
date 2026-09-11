@@ -10,16 +10,41 @@ const { query } = require('./connection');
 
 /**
  * setup()
- * Crea todas las tablas necesarias en SQL Server si no existen.
- * Tablas: LAYOUT_VERSIONES, QA_ALERTAS, SOFIPO_LAYOUT_DESC/USO/REPORTES, AUDIT_LOG, INVENTARIO_VERSIONES, PROYECTOS
- * Se ejecuta automáticamente al arrancar server.js o manualmente: node db/setup.js
- * Idempotente: IF NOT EXISTS previene errores si se llama múltiples veces.
+ * Crea y actualiza todas las tablas necesarias en SQL Server (idempotente).
+ *
+ * TABLAS CREADAS (si no existen):
+ *  - LAYOUT_VERSIONES: Versionado semántico (MAJOR.MINOR.PATCH) vinculado a tickets Jira QD/CDL
+ *  - QA_ALERTAS: Tickets QD/CDL en "Instalados en QA" pendientes de procesamiento
+ *  - SOFIPO_LAYOUT_DESC: Metadata de campos SOFIPO (tipos, validaciones, catálogos)
+ *  - SOFIPO_LAYOUT_USO: Vinculación campos SOFIPO ↔ reportes
+ *  - SOFIPO_REPORTES: Estructura de reportes SOFIPO
+ *  - AUDIT_LOG: Bitácora de todas las acciones (quién, qué, cuándo, dónde)
+ *  - INVENTARIO_VERSIONES: Versionador central para reportes/validaciones/layouts
+ *  - PROYECTOS: Proyectos ligados a contratos (RAG, líderes, avance, semáforos)
+ *  - PROYECTOS_REPORTES: Liga N:M proyecto ↔ reportes del contrato padre
+ *  - PROY_RAG_ALERTAS: Alertas de cambio de semáforo en RAG producto
+ *  - PROYECTOS_RESPALDO: Snapshots semanales del tablero de proyectos
+ *
+ * ALTERACIONES DE COLUMNAS (agregadas después del release inicial):
+ *  - PROYECTOS: RAG_REPORTES_MANUAL, RAG_VALIDACIONES_MANUAL, TIPO_INSTITUCION, FECHA_NECESIDAD, RAG_PRODUCTO_ULTIMO
+ *  - CLIENTE: TIPO_INSTITUCION, FECHA_MODIFICA
+ *  - CONTRATOS_REPORTES: FECHA_NECESIDAD, FECHA_ESTIMADA_QA, FECHA_INSTALADO_QA, FECHA_ESTIMADA_CERT, FECHA_CERTIFICADO, FECHA_ESTIMADA_PROD, FECHA_INSTALADO_PROD
+ *  - CONTRATOS_VALIDACION_ESTATUS: FECHA_NECESIDAD, FECHA_ESTIMADA, FECHA_REAL
+ *
+ * INVOCACIÓN:
+ *  - Automática: server.js al arrancar (pm2 restart crea tablas nuevas)
+ *  - Manual: node db/setup.js (verificación/setup independiente)
+ *
+ * IDEMPOTENCIA: IF NOT EXISTS en CREATE TABLE y COL_LENGTH en ALTER TABLE previenen
+ * errores si se llama múltiples veces (safe en prod con tablas previas).
  */
 async function setup() {
   console.log('🔧 Verificando / creando tablas...');
 
   // ── LAYOUT_VERSIONES ──────────────────────────────────────
-  // Versión semántica (MAJOR.MINOR.PATCH) vinculada a tickets Jira QD/CDL
+  // Versión semántica (MAJOR.MINOR.PATCH) vinculada a tickets Jira QD/CDL.
+  // Registra cada cambio de layout (nuevo campo, cambio de tipo, cambio de descripción).
+  // Índices: CLAVE_LAYOUT (búsqueda por layout), JIRA_TICKET (por ticket), FECHA_CARGA (historial).
   await query(`
     IF NOT EXISTS (
       SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'LAYOUT_VERSIONES'
@@ -78,7 +103,10 @@ async function setup() {
   `);
 
   // ── QA_ALERTAS ────────────────────────────────────────────
-  // Tickets QD/CDL detectados en "Instalados en QA" pendientes de procesar
+  // Tickets QD/CDL detectados automáticamente en "Instalados en QA" pendientes de procesamiento.
+  // Workflow: PENDIENTE (espera Excel) → PROCESADO (Excel subido, versión generada) o IGNORADO (descartar).
+  // El usuario confirma manualmente el layout detectado (CLAVE_LAYOUT_FINAL).
+  // Índices: JIRA_TICKET (UNIQUE, un ticket = una alerta), ESTADO (para filtrar pendientes).
   await query(`
     IF NOT EXISTS (
       SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'QA_ALERTAS'
@@ -121,6 +149,9 @@ async function setup() {
   `);
 
   // ── SOFIPO_LAYOUT_DESC ────────────────────────────────────
+  // Metadata de campos SOFIPO: clave de layout, nombre campo, tipo dato, formato, obligatorio,
+  // validaciones permitidas y catálogos. Se carga via importar-sofipo.js desde Excel oficial.
+  // Índices: CLAVE_LAYOUT (búsqueda de campos en un layout), NOMBRE_CAMPO (búsqueda inversa).
   await query(`
     IF NOT EXISTS (
       SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'SOFIPO_LAYOUT_DESC'
@@ -154,6 +185,9 @@ async function setup() {
   `);
 
   // ── SOFIPO_LAYOUT_USO ─────────────────────────────────────
+  // Vinculación: qué campo SOFIPO se usa en qué reporte y en qué columna (posición).
+  // Permite detectar si un campo cambió de posición o se elimina de un reporte.
+  // Índices: CLAVE_LAYOUT (por layout), NOMBRE_CAMPO (por campo), ID_REPORTE (por reporte).
   await query(`
     IF NOT EXISTS (
       SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'SOFIPO_LAYOUT_USO'
@@ -178,6 +212,9 @@ async function setup() {
   `);
 
   // ── SOFIPO_REPORTES ───────────────────────────────────────
+  // Estructura de reportes SOFIPO: columnas, tipos, longitudes, decimales, catálogos permitidos.
+  // Se carga via importar-sofipo.js desde Excel oficial. Define la "firma" de cada reporte.
+  // Índice: ID_REPORTE (búsqueda de estructura por reporte).
   await query(`
     IF NOT EXISTS (
       SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'SOFIPO_REPORTES'
@@ -202,7 +239,11 @@ async function setup() {
   `);
 
   // ── AUDIT_LOG ─────────────────────────────────────────────
-  // Bitácora de movimientos: quién hizo qué, cuándo y en qué sección
+  // Bitácora exhaustiva: quién (USUARIO), hizo qué (ACCION), dónde (SECCION), cuándo (FECHA).
+  // DETALLE: JSON con datos relevantes del cambio (ej: ID_REPORTE, estado_anterior, estado_nuevo).
+  // SECCION ejemplos: 'estatus-reporte', 'estatus-validacion', 'upload-contratos', 'login', 'marcar-rag'.
+  // ACCION ejemplos: 'MARCAR', 'DESMARCAR', 'UPLOAD', 'LOGIN', 'GENERAR_ALERTA'.
+  // Índices: USUARIO (quién hizo qué), SECCION (filtrar por módulo), FECHA DESC (historial reciente).
   await query(`
     IF NOT EXISTS (
       SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'AUDIT_LOG'
@@ -225,7 +266,11 @@ async function setup() {
   `);
 
   // ── INVENTARIO_VERSIONES ──────────────────────────────────
-  // Versionador light: registra cada carga de reportes/validaciones/layouts
+  // Versionador central: registra todas las cargas de reportes, validaciones y layouts con versión semántica.
+  // TIPO_OBJETO: 'REPORTE', 'VALIDACION' o 'LAYOUT'.
+  // ESTATUS: 'IDENTIFICADO', 'EN_QA', 'CERTIFICADO', etc.
+  // Migración inicial (al crear tabla): inserta 1.0.0 para todos los datos previos desde INVENTARIO_REPORTES, REPORTE_VALIDACION, SOFIPO_LAYOUT_DESC.
+  // Índices: (TIPO_OBJETO, CLAVE_OBJ) para búsqueda rápida, FECHA_CARGA para historial.
   await query(`
     IF NOT EXISTS (
       SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'INVENTARIO_VERSIONES'
@@ -269,9 +314,12 @@ async function setup() {
   `);
 
   // ── PROYECTOS ─────────────────────────────────────────────
-  // Un proyecto cuelga de un contrato (CLIENTE → CONTRATOS → PROYECTOS).
-  // Un contrato puede tener varios proyectos. Réplica del Excel del área:
-  // RAG manual, líderes, avance, tipo de actividad, estatus de pagos.
+  // Proyectos ligados a contratos. Réplica del Excel del área de PMO:
+  // CLIENTE → CONTRATOS → PROYECTOS (relación jerárquica).
+  // Campos: nombre, tipo (PROYECTO/CAMBIO_REGULATORIO/SOPORTE/CUSTOMER_S), tipo institución,
+  //        estatus pago, líderes (funcional/técnico), RAG manual/automático, avance estimado,
+  //        fechas (necesidad, estimada conclusión), flags de semáforo manual (NULL = automático).
+  // Índices: CLAVE_CONTRATO (obtener proyectos de un contrato), TIPO_ACTIVIDAD (filtrar por tipo).
   await query(`
     IF NOT EXISTS (
       SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'PROYECTOS'
@@ -308,9 +356,10 @@ async function setup() {
   `);
 
   // ── PROYECTOS_REPORTES ────────────────────────────────────
-  // Liga N:M entre un proyecto y los reportes de su contrato padre.
-  // Permite decir "este proyecto trabaja específicamente estos reportes"
-  // (subconjunto de CONTRATOS_REPORTES del contrato del proyecto).
+  // Liga N:M entre proyecto y reportes del contrato padre (subconjunto selectivo).
+  // Permite marcar "este proyecto trabaja SOLO con estos reportes" (subset de CONTRATOS_REPORTES).
+  // UNIQUE (ID_PROYECTO, CLAVE_REP) previene duplicados.
+  // Índice: ID_PROYECTO (obtener reportes de un proyecto).
   await query(`
     IF NOT EXISTS (
       SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'PROYECTOS_REPORTES'
@@ -330,8 +379,10 @@ async function setup() {
     ELSE PRINT 'Tabla PROYECTOS_REPORTES ya existe.'
   `);
 
-  // Columnas agregadas después del release inicial de PROYECTOS (idempotente,
-  // por si la tabla ya se creó en producción sin ellas).
+  // ── Alteraciones de columnas en PROYECTOS ──────────────────────────────
+  // Columnas agregadas después del release inicial (idempotentes: si ya existen, no hacen nada).
+  // Motivo: desarrollo iterativo en dev sin actualizar setup.js hasta después de desplegar.
+  // En prod, pm2 restart ejecuta este bloque y agrega columnas faltantes automáticamente.
   await query(`
     IF COL_LENGTH('PROYECTOS', 'RAG_REPORTES_MANUAL') IS NULL
       ALTER TABLE PROYECTOS ADD RAG_REPORTES_MANUAL VARCHAR(10) NULL
@@ -348,10 +399,11 @@ async function setup() {
     IF COL_LENGTH('PROYECTOS', 'FECHA_NECESIDAD') IS NULL
       ALTER TABLE PROYECTOS ADD FECHA_NECESIDAD DATE NULL
   `);
-  // CLIENTE.TIPO_INSTITUCION: fallback del tipo de institución por cliente
-  // (el tablero de proyectos hace ISNULL(p.TIPO_INSTITUCION, cl.TIPO_INSTITUCION)).
-  // En dev se agregó con un ALTER manual y nunca quedó aquí — en prod no existía
-  // y el tablero tronaba con "Invalid column name 'TIPO_INSTITUCION'".
+  // ── Alteraciones en CLIENTE ────────────────────────────────────────────
+  // TIPO_INSTITUCION: fallback del tipo de institución (si proyecto no tiene, hereda del cliente).
+  // Tablero usa: ISNULL(p.TIPO_INSTITUCION, cl.TIPO_INSTITUCION).
+  // Bug histórico: agregado a mano en dev (ALTER manual), nunca en setup.js → prod sin la columna.
+  // FECHA_MODIFICA: tracking de cambios (auditoría ligera a nivel cliente).
   await query(`
     IF COL_LENGTH('CLIENTE', 'TIPO_INSTITUCION') IS NULL
       ALTER TABLE CLIENTE ADD TIPO_INSTITUCION VARCHAR(50) NULL
@@ -361,10 +413,14 @@ async function setup() {
       ALTER TABLE CLIENTE ADD FECHA_MODIFICA DATETIME NULL
   `);
 
-  // Fechas de semáforos en CONTRATOS_REPORTES y CONTRATOS_VALIDACION_ESTATUS.
-  // Se agregaron a mano en dev al construir los RAG del tablero de proyectos
-  // (2026-09-04) y nunca quedaron aquí — en prod tronaba el tablero con
-  // "Invalid column name". Idempotentes: si ya existen, no hacen nada.
+  // ── Alteraciones en CONTRATOS_REPORTES y CONTRATOS_VALIDACION_ESTATUS ──
+  // Fechas de semáforos para RAG del tablero de proyectos (agregadas 2026-09-04).
+  // FECHA_NECESIDAD: deadline del reporte/validación.
+  // FECHA_ESTIMADA_*: pronóstico (QA, CERT, PROD).
+  // FECHA_INSTALADO_*: cuando realmente se instaló.
+  // FECHA_CERTIFICADO/FECHA_REAL: fechas finales de cumplimiento.
+  // Bug histórico: agregado a mano en dev (ALTER manual), nunca en setup.js → prod explotaba con "Invalid column".
+  // Idempotentes: COL_LENGTH(...) IS NULL previene errores si ya existen.
   await query(`
     IF COL_LENGTH('CONTRATOS_REPORTES', 'FECHA_NECESIDAD') IS NULL
       ALTER TABLE CONTRATOS_REPORTES ADD FECHA_NECESIDAD DATE NULL
@@ -406,18 +462,20 @@ async function setup() {
       ALTER TABLE CONTRATOS_VALIDACION_ESTATUS ADD FECHA_REAL DATE NULL
   `);
 
-  // PROYECTOS.RAG_PRODUCTO_ULTIMO: último color de RAG producto observado.
-  // El RAG producto se calcula al vuelo; esta columna guarda el último valor
-  // visto para detectar cambios de semáforo y generar alertas (PROY_RAG_ALERTAS).
+  // ── Alteración en PROYECTOS.RAG_PRODUCTO_ULTIMO ────────────────────────
+  // Guarda el último color de RAG producto observado (Green/Amber/Red).
+  // RAG producto se calcula al vuelo; esta columna detecta cambios de color para generar PROY_RAG_ALERTAS.
+  // Permite alertar: "RAG cambió de Green a Red, revisa los reportes".
   await query(`
     IF COL_LENGTH('PROYECTOS', 'RAG_PRODUCTO_ULTIMO') IS NULL
       ALTER TABLE PROYECTOS ADD RAG_PRODUCTO_ULTIMO VARCHAR(10) NULL
   `);
 
   // ── PROY_RAG_ALERTAS ──────────────────────────────────────
-  // Alertas de cambio de semáforo en RAG producto: cada vez que el color
-  // calculado difiere del último observado, se registra aquí (quién la lee
-  // queda en bitácora de lectura). El tablero muestra "N alertas sin leer".
+  // Alertas de cambio de semáforo en RAG producto.
+  // Workflow: cada vez que RAG calculado ≠ RAG_PRODUCTO_ULTIMO, se crea alerta → usuario la lee (LEIDA, FECHA_LEIDA, USUARIO_LEIDA).
+  // Permite el tablero mostrar "N alertas sin leer" y auditar qué cambios de RAG se notificaron.
+  // Índices: ID_PROYECTO (alertas de un proyecto), FECHA_ALERTA (historial ordenado).
   await query(`
     IF NOT EXISTS (
       SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'PROY_RAG_ALERTAS'
@@ -442,11 +500,12 @@ async function setup() {
   `);
 
   // ── PROYECTOS_RESPALDO ────────────────────────────────────
-  // Snapshots del tablero de proyectos para comparar semana contra semana.
-  // El servicio de respaldos toma una foto completa cada viernes a las
-  // 20:00 hora Pacífico (motivo='SEMANAL'). Misma estructura que PROYECTOS
-  // más los metadatos estándar del motor de respaldos. Se conservan
-  // indefinidamente (≈40 filas por semana).
+  // Snapshots semanales del tablero de proyectos (histórico para comparativas).
+  // Motor de respaldos automáticos: cada viernes 20:00 Pacífico toma foto completa (motivo='SEMANAL').
+  // Estructura idéntica a PROYECTOS + metadatos de respaldo (FECHA_RESPALDO, MOTIVO, USUARIO_RESPALDO).
+  // Permite: "¿qué cambió semana pasada?", "¿cuándo cambió RAG de Green a Red?", análisis de tendencias.
+  // Retención: indefinida (aprox. 40 filas/semana × 52 semanas/año = 2080 filas/año → bajo impacto).
+  // Índice: FECHA_RESPALDO (búsqueda por período de tiempo).
   await query(`
     IF NOT EXISTS (
       SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'PROYECTOS_RESPALDO'
@@ -489,11 +548,13 @@ async function setup() {
   console.log('✅ Setup de tablas completado.');
 }
 
-// Exportar función setup para inicialización en server.js
+// ── Exportar ───────────────────────────────────────────────────────────
+// setup: función para inicialización (llamada desde server.js)
 module.exports = { setup };
 
-// Permitir ejecución como script independiente
-// Ejecutar directo si: node db/setup.js
+// ── Permitir ejecución como script independiente ─────────────────────
+// Uso: node db/setup.js
+// Útil para verificación/recreación manual sin arrancar toda la app.
 if (require.main === module) {
   setup()
     .then(() => process.exit(0))

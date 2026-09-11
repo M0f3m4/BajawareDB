@@ -5,6 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>BAJAWARE</title>
   <style>
+    /* ══════════════════════════════════════════════════════════════════════
+       ESTILOS GENERALES Y LAYOUT
+       ══════════════════════════════════════════════════════════════════════ */
     * { box-sizing: border-box; margin: 0; padding: 0; }
 
     body {
@@ -15,7 +18,9 @@
       overflow: hidden;
     }
 
-    /* ─── LOGIN ─────────────────────────────────────────── */
+    /* ─── LOGIN ───────────────────────────────────────────
+         Pantalla de autenticación: formulario centrado con gradiente de fondo
+         Elementos: card, logo, inputs, botón, mensaje de error */
     #login-page {
       display: flex;
       align-items: center;
@@ -112,7 +117,9 @@
       display: none;
     }
 
-    /* ─── MAIN APP ───────────────────────────────────────── */
+    /* ─── MAIN APP ────────────────────────────────────────
+         Contenedor principal tras login: encabezado, sidebar, área de contenido
+         Layout flex: header + body (sidebar + content) */
     #main-app {
       display: none;
       height: 100vh;
@@ -148,7 +155,9 @@
 
     .app-body { display: flex; flex: 1; overflow: hidden; }
 
-    /* SIDEBAR */
+    /* ─── SIDEBAR ──────────────────────────────────────────
+         Menú de navegación vertical, ancho fijo 185px, gradiente oscuro
+         Contiene: logo, menús jerárquicos (seg, inv, chi, etc.), Salir */
     .sidebar {
       width: 185px;
       background: linear-gradient(180deg, #1e3d6e 0%, #152a4e 100%);
@@ -218,7 +227,9 @@
 
     .nav-salir { margin-top: auto; border-top: 1px solid rgba(255,255,255,0.1); }
 
-    /* CONTENT */
+    /* ─── CONTENT AREA ─────────────────────────────────────
+         Área dinámica de pantallas: dashboard, inventario, contratos, proyectos
+         Solo una .content-section visible a la vez (display:none/block controlado por JS) */
     .content-area { flex: 1; overflow-y: auto; padding: 32px 36px; }
     .content-section { display: none; }
     .content-section.active { display: block; }
@@ -246,11 +257,13 @@
     }
 
     .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
-    .dot-ok { background: #27ae60; }
-    .dot-warn { background: #f39c12; }
-    .dot-err { background: #e74c3c; }
+    .dot-ok { background: #27ae60; }  /* Verde: conectado/OK */
+    .dot-warn { background: #f39c12; } /* Naranja: atención/warning */
+    .dot-err { background: #e74c3c; }  /* Rojo: error/desconectado */
 
-    /* STATS */
+    /* ─── CARDS DE ESTADÍSTICAS ──────────────────────────
+         Grid de tarjetas con métrica y valor (etiqueta + número grande)
+         Se usa en dashboard para tickets, paquetes, inventario */
     .dashboard-grid {
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
@@ -269,7 +282,9 @@
     .dash-card .label { font-size: 12px; color: #888; margin-bottom: 6px; }
     .dash-card .value { font-size: 28px; font-weight: 700; color: #1a3558; }
 
-    /* TABLE */
+    /* ─── TABLAS DE DATOS ──────────────────────────────────
+         Tablas con encabezados, filas alternadas, bordes suaves
+         Se reutiliza en inventario, layouts, reportes, contratos, usuarios */
     .data-table-wrap {
       background: #fff;
       border-radius: 8px;
@@ -314,11 +329,13 @@
       font-weight: 600;
     }
 
-    .badge-green  { background: #eafaf1; color: #1e8449; }
-    .badge-yellow { background: #fef9e7; color: #b7770d; }
-    .badge-red    { background: #fdedec; color: #a93226; }
+    /* Badges de estatus de hitos (Documentado, Programado, Certificado) */
+    .badge-green  { background: #eafaf1; color: #1e8449; }  /* Completado */
+    .badge-yellow { background: #fef9e7; color: #b7770d; }  /* En progreso */
+    .badge-red    { background: #fdedec; color: #a93226; }  /* No iniciado */
 
-    /* PLACEHOLDER */
+    /* ─── PLACEHOLDERS ─────────────────────────────────────
+         Mensajes vacíos: "Sin registros", sin reportes, etc. */
     .placeholder-card {
       background: #fff;
       border-radius: 8px;
@@ -331,10 +348,13 @@
 
     .placeholder-card .icon { font-size: 40px; margin-bottom: 12px; }
 
-    /* LOADING */
+    /* ─── ESTADOS DE CARGA ─────────────────────────────────
+         Spinner/mensaje "Cargando..." mostrado mientras se espera datos del servidor */
     .loading { text-align: center; padding: 40px; color: #aaa; font-size: 14px; }
 
-    /* SPRINT PROGRESS */
+    /* ─── SPRINT PROGRESS ──────────────────────────────────
+         Barra de progreso para burndown/burnup de sprint Jira
+         Componentes: barra de fondo, barra de relleno, metadata de sprint */
     .sprint-info {
       background: #fff;
       border-radius: 8px;
@@ -365,7 +385,9 @@
       color: #888;
     }
 
-    /* TICKET DETAIL PANEL */
+    /* ─── TICKET DETAIL PANEL ─────────────────────────────
+         Panel lateral para ver/editar ticket Jira: estado, comentarios, asignado
+         Aparece cuando se selecciona un ticket de la tabla, ancho fijo 340px */
     .tickets-layout { display: flex; gap: 16px; height: calc(100vh - 180px); }
     .tickets-left   { flex: 1; overflow-y: auto; }
     .ticket-panel   { width: 340px; flex-shrink: 0; background: #fff; border-radius: 8px; border: 1px solid #e8edf3; padding: 20px; overflow-y: auto; display: none; }
@@ -384,7 +406,9 @@
     .comment-item   { background: #f5f7fa; border-radius: 6px; padding: 10px; margin-bottom: 8px; font-size: 12px; }
     .comment-autor  { font-weight: 600; color: #1a3558; margin-bottom: 3px; }
 
-    /* NUEVO TICKET MODAL */
+    /* ─── MODALES ──────────────────────────────────────────
+         Overlay + formularios: cambio contraseña, nuevo ticket, editar campo
+         Overlay: position fixed inset 0, z-index 100 */
     .modal-overlay  { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.4); z-index:100; align-items:center; justify-content:center; }
     .modal-overlay.open { display:flex; }
     .modal-card     { background:#fff; border-radius:10px; padding:28px; width:460px; max-height:90vh; overflow-y:auto; }
@@ -400,6 +424,8 @@
     .btn-crear      { padding:9px 20px; border:none; border-radius:6px; background:#1a3558; color:#fff; font-size:13px; cursor:pointer; }
     .btn-crear:hover { background:#254a78; }
 
+    /* ─── JIRA EXPLORER ────────────────────────────────────
+         Colores y estilos para tabs, cards, estadísticas de proyectos Jira */
     /* Jira badge colors */
     .badge-blue   { background: #e3f2fd; color: #1565c0; }
     .badge-purple { background: #f3e5f5; color: #6a1b9a; }
@@ -412,10 +438,12 @@
     .jx-stat { border:1px solid #e0e6ed; border-radius:8px; padding:12px; text-align:center; background:#fff; }
     .jx-stat .num { font-size:22px; font-weight:700; color:#1a3558; }
     .jx-stat .lbl { font-size:11px; color:#888; }
-    .jx-key { color:#0052cc; font-weight:600; cursor:pointer; }
+    .jx-key { color:#0052cc; font-weight:600; cursor:pointer; }  /* Claves tipo JIRA-123 */
     .jx-key:hover { text-decoration:underline; }
 
-    /* Toolbar */
+    /* ─── TOOLBAR ──────────────────────────────────────────
+         Barra de herramientas: filtros, búsqueda, botones de acción
+         Se usa en tickets, inventario, reportes */
     .toolbar { display:flex; align-items:center; gap:10px; margin-bottom:14px; flex-wrap:wrap; }
     .toolbar select { padding:7px 10px; border:1px solid #ddd; border-radius:6px; font-size:13px; }
     .toolbar input  { padding:7px 10px; border:1px solid #ddd; border-radius:6px; font-size:13px; width:180px; outline:none; }
@@ -424,7 +452,9 @@
     .btn-nuevo { padding:8px 16px; background:#1a3558; color:#fff; border:none; border-radius:6px; font-size:13px; cursor:pointer; }
     .btn-nuevo:hover { background:#254a78; }
 
-    /* Epics */
+    /* ─── EPICS ────────────────────────────────────────────
+         Renderizado de epics de proyectos Jira: cards con estado (done/progress)
+         Agrupados por proyecto, conteo de tickets */
     .epics-section  { margin-top: 20px; }
     .epics-proyecto { margin-bottom: 18px; }
     .epics-proyecto-title { font-size: 13px; font-weight: 600; color: #1a3558; margin-bottom: 8px; display: flex; align-items: center; gap: 8px; }
@@ -437,7 +467,9 @@
     .epic-footer    { display: flex; justify-content: space-between; align-items: center; }
     .epic-tickets   { font-size: 11px; color: #888; }
 
-    /* Detalle ticket */
+    /* ─── DETALLE DE TICKET EXPANDIDO ─────────────────────
+         Vista completa de ticket: título, descripción, comentarios, metadata
+         Layout: main (izquierda) + sidebar (derecha con metadatos) */
     .detalle-header { display:flex; align-items:center; gap:12px; margin-bottom:20px; }
     .detalle-back   { background:none; border:1px solid #ddd; border-radius:6px; padding:6px 12px; font-size:13px; cursor:pointer; color:#555; }
     .detalle-back:hover { background:#f0f2f5; }
@@ -455,7 +487,7 @@
     .comment-box .texto { font-size:13px; color:#444; margin-top:5px; }
 
     .tr-clickable { cursor:pointer; }
-    .tr-clickable.selected td { background:#e8edf3 !important; }
+    .tr-clickable.selected td { background:#e8edf3 !important; }  /* Fila seleccionada */
   </style>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
@@ -2552,6 +2584,7 @@
   }
 
   // ── HELPERS ───────────────────────────────────────────────
+  // epicCardClass(cat): Determina clase CSS de epic según categoría (done/progress/neutral)
   function epicCardClass(cat) {
     if (!cat) return '';
     const c = cat.toLowerCase();
@@ -2560,6 +2593,8 @@
     return '';
   }
 
+  // renderEpicsHTML(porProyecto): Genera HTML de grid de epics agrupados por proyecto.
+  // Renderiza cards de epics con key, resumen, estado. Si no hay epics, muestra mensaje "Sin epics".
   function renderEpicsHTML(porProyecto) {
     if (!porProyecto.length) return '<div style="color:#aaa;font-size:13px;padding:8px 0;">Sin epics registrados.</div>';
     return porProyecto.map(p => `
@@ -2583,6 +2618,10 @@
   }
 
   // ── DASHBOARD STATS (desde Jira) ──────────────────────────
+  // loadDashboardStats(): Carga estadísticas desde Jira: tickets pendientes, en progreso, completados, sprints activos, epics.
+  // Endpoints: GET /api/jira/stats, /api/jira/sprints/activos, /api/jira/epics
+  // Renderiza: tarjetas con números + sprints con barra de progreso + grid de epics por proyecto.
+  // Se llama desde initApp() tras login y cuando usuario presiona botón "Actualizar".
   async function loadDashboardStats() {
     try {
       const [statsRes, sprintsRes, epicsRes] = await Promise.all([
@@ -2641,6 +2680,9 @@
   }
 
   // ── PROYECTOS (para filtros y modal) ─────────────────────
+  // loadProyectos(): Carga lista de proyectos Jira desde GET /api/jira/proyectos.
+  // Rellena selectores: filter-proyecto (tabla tickets) y nuevo-proyecto (modal crear ticket).
+  // Se guarda en proyectosList para uso por otras funciones.
   let proyectosList = [];
   async function loadProyectos() {
     try {
@@ -2669,7 +2711,11 @@
   }
 
   // ── INVENTARIO LAYOUTS ────────────────────────────────────
+  // Pantalla: Gestión de layouts (schemas de reportes).
+  // Funcionalidades: carga, versionado, historial, comparación entre versiones, filtros país/entidad
+  // Endpoints: GET /api/layouts (resumen/detalle), POST upload, GET historial versiones
   let _layTimer = null;
+  // loadLayoutsDebounced(): Debounce 350ms de loadLayouts() para evitar sobrecarga al escribir en filtros
   function loadLayoutsDebounced() {
     clearTimeout(_layTimer);
     _layTimer = setTimeout(loadLayouts, 350);
@@ -4512,7 +4558,11 @@
     loadInvReportes();
   }
 
-  // loadInvReportes(): GET /inv/reportes, renderiza resumen con filtros (país, entidad, estado validación), tabla con detalles.
+  // loadInvReportes(): Carga y renderiza inventario de reportes con múltiples filtros.
+  // Endpoints: GET /api/inventario/reportes (con query params de filtro)
+  // Filtros disponibles: país, región, entidad, grupo, período, versión, vigencia, búsqueda por texto
+  // Renderiza: tabla dinámico con columnas según datos retornados + contador de resultados.
+  // Nota: implementa sync de scroll horizontal con ghost element (invr-scroll-ghost).
   async function loadInvReportes() {
     const wrap = document.getElementById('invr-content');
     const count = document.getElementById('invr-count');
@@ -4608,10 +4658,14 @@
     _estTimer = setTimeout(loadEstatus, 400);
   }
 
-  // ── Estatus Validaciones ──────────────────────────────────
+  // ── ESTATUS DE VALIDACIONES ───────────────────────────────
+  // Pantalla: Estatus Validaciones — cascada de filtros: País → Entidad → Reporte, luego plataforma/estatus/búsqueda.
+  // Endpoints: GET /api/estatus-validaciones/filtros (con params país, entidad), GET /api/estatus-validaciones (tabla)
   let _estValTimer = null;
+  // estValFiltrarDebounced(): Debounce 400ms de loadEstatusVal para búsqueda en tiempo real
   function estValFiltrarDebounced() { clearTimeout(_estValTimer); _estValTimer = setTimeout(loadEstatusVal, 400); }
 
+  // initEstatusVal(): Carga lista inicial de países desde /api/estatus-validaciones/filtros (sin params)
   async function initEstatusVal() {
     const selPais = document.getElementById('estval-pais');
     if (selPais.options.length > 1) return;
@@ -4621,6 +4675,8 @@
     } catch(e) {}
   }
 
+  // estValOnPaisChange(): Al seleccionar país, carga entidades y limpia downstreams.
+  // Endpoint: GET /api/estatus-validaciones/filtros?pais=X
   async function estValOnPaisChange() {
     const pais = document.getElementById('estval-pais').value;
     const selEnt = document.getElementById('estval-entidad');
@@ -4639,6 +4695,8 @@
     } catch(e) {}
   }
 
+  // estValOnEntidadChange(): Al seleccionar entidad, carga reportes y plataformas de esa entidad.
+  // Endpoint: GET /api/estatus-validaciones/filtros?pais=X&entidad=Y
   async function estValOnEntidadChange() {
     const pais = document.getElementById('estval-pais').value;
     const entidad = document.getElementById('estval-entidad').value;
@@ -4653,13 +4711,14 @@
     try {
       const r = await fetch(`/api/estatus-validaciones/filtros?pais=${encodeURIComponent(pais)}&entidad=${encodeURIComponent(entidad)}`).then(x => x.json());
       (r.reportes || []).forEach(rep => { const o = document.createElement('option'); o.value = o.textContent = rep; selRep.appendChild(o); });
-      // poblar plataformas
+      // Poblar plataformas disponibles en esa entidad
       const selPlat2 = document.getElementById('estval-plat');
       selPlat2.innerHTML = '<option value="">Todas</option>';
       (r.plataformas || []).forEach(p => { const o = document.createElement('option'); o.value = o.textContent = p; selPlat2.appendChild(o); });
     } catch(e) {}
   }
 
+  // estValOnRepChange(): Al seleccionar reporte, activa plataforma/estatus/búsqueda y carga tabla (loadEstatusVal)
   async function estValOnRepChange() {
     const rep = document.getElementById('estval-rep').value;
     const selPlat = document.getElementById('estval-plat');
@@ -4670,6 +4729,9 @@
     else document.getElementById('estval-content').innerHTML = '<p style="color:#aaa;font-size:13px;">Selecciona un reporte.</p>';
   }
 
+  // loadEstatusVal(): Carga tabla de validaciones para reporte seleccionado con filtros opcionales.
+  // Endpoint: GET /api/estatus-validaciones?rep=X&pais=Y&entidad=Z&plataforma=P&estatus=E&texto=T
+  // Renderiza: tabla con estado de validaciones (similar a loadEstatus pero para validaciones, no reportes).
   async function loadEstatusVal() {
     const rep     = document.getElementById('estval-rep').value;
     const pais    = document.getElementById('estval-pais').value;
@@ -4849,6 +4911,9 @@
     await loadCatalogos();
   }
 
+  // initEstatus(): Inicializa selectores de plataformas y estatus disponibles para pantalla "Estatus de Reportes".
+  // Endpoints: GET /api/estatus-reportes/plataformas, GET /api/estatus-reportes/estatus-valores
+  // Rellena: select est-plat y select est-est antes de llamar a loadEstatus().
   async function initEstatus() {
     try {
       const [platRes, estRes] = await Promise.all([
@@ -4875,7 +4940,10 @@
     loadEstatus();
   }
 
-  // loadEstatus(): GET /inv/estatus, renderiza tabla estatus reporte con cascada de hitos, filtros, actualizaciones.
+  // loadEstatus(): Carga tabla estatus de reportes con hitos, marca legacy según regla HISTÓRICO, filtros por plataforma/estatus/texto.
+  // Endpoint: GET /api/estatus-reportes?plataforma=X&estatus=Y&texto=Z
+  // IMPORTANTE: Llama a bcMarcarLegacy(data) para marcar filas legacy con opacity 0.55 y badge HISTÓRICO.
+  // Renderiza: tabla con columnas clave, versión, hitos (DOC/PROG/CERT), estatus, badge legacy si aplica.
   async function loadEstatus() {
     const wrap  = document.getElementById('est-content');
     const count = document.getElementById('est-count');
@@ -5618,9 +5686,12 @@
   }
 
   // Escapa texto para meterlo en atributos/HTML generado.
+  // Escaper HTML simple para tooltips y atributos inline
   const proyEsc = s => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
 
-  // Badge de RAG calculado con desglose en tooltip. null = sin datos (gris).
+  // proyRagCalc(rag, verdes, ambar, rojos, grises, total): Renderiza badge RAG con desglose de conteos en tooltip.
+  // Parámetros: RAG color (Red/Amber/Green/null), conteos por color + sin fechas (grises).
+  // Renderiza: círculo de color + símbolo ⛔ rojo si hay rojos.
   function proyRagCalc(rag, verdes, ambar, rojos, grises, total) {
     if (!total) return '<span style="color:#ccc;font-size:11px;">—</span>';
     const color = rag ? PROY_RAG_COLOR[rag] : '#b8c2cc';
@@ -5629,7 +5700,10 @@
             <span style="font-size:10px;color:#888;vertical-align:middle;">${rojos ? rojos + '⛔' : ''}</span>`;
   }
 
-  // Carga inicial del tablero desde el backend.
+  // loadProyTablero(): Carga datos iniciales del tablero de proyectos.
+  // Endpoints: GET /api/proyectos/tablero, GET /api/proyectos/snapshot/ultimo, GET /api/proyectos/alertas
+  // Rellena: proyData (lista de proyectos), proyUltimoSnapshot (comparativo semanal), proyAlertas (cambios RAG).
+  // Luego llama a proyRender() para renderizar tabla filtrada.
   async function loadProyTablero() {
     const wrap = document.getElementById('proy-content');
     wrap.innerHTML = '<div class="loading">Cargando proyectos...</div>';
@@ -5658,7 +5732,9 @@
     }
   }
 
-  // Filtro común de pestaña + texto sobre proyData.
+  // proyFiltrar(): Filtra proyData por pestaña activa (proyFiltroTipo) y búsqueda de texto.
+  // Búsqueda busca en: cliente, proyecto, contrato, clave contrato, funcional, técnico.
+  // Retorna array filtrado para renderizar.
   function proyFiltrar() {
     return proyData.filter(p => {
       if (proyFiltroTipo && (p.TIPO_ACTIVIDAD || '') !== proyFiltroTipo) return false;
@@ -6023,7 +6099,8 @@
     }
   }
 
-  // Al elegir cliente, llena el select de contratos solo con los suyos.
+  // proyAltaFiltrarContratos(): Al cambiar cliente en modal alta, rellena select de contratos.
+  // Filtra proyCatalogo por CLAVE_CLIENTE, llena select con CLAVE_CONTRATO + NOMBRE_CONTRATO.
   function proyAltaFiltrarContratos() {
     const cliente = document.getElementById('proy-alta-cliente').value;
     const sel = document.getElementById('proy-alta-contrato');
@@ -6035,8 +6112,11 @@
     proyAltaCargarReportes(); // carga el checklist del contrato preseleccionado
   }
 
-  // Llena el checklist de reportes del contrato elegido en el alta
-  // (claves base únicas de CONTRATOS_REPORTES vía el endpoint del contrato).
+  // proyAltaCargarReportes(marcadas): Carga checklist de reportes base del contrato elegido.
+  // Endpoint: GET /api/contratos/contratos/{clave}/reportes
+  // Renderiza: checkboxes con claves base únicas (CLAVE_REP_BASE || CLAVE_REP), deduplicado.
+  // Parámetro marcadas: array de claves preseleccionadas (usado si recarga con selección anterior).
+  // Incluye enlaces "todos" y "ninguno" para marcar/desmarcar en lote.
   async function proyAltaCargarReportes(marcadas) {
     const clave = document.getElementById('proy-alta-contrato').value;
     const cont  = document.getElementById('proy-alta-reps');
@@ -6063,7 +6143,11 @@
     } catch(e) { cont.innerHTML = 'Error cargando reportes: ' + e.message; }
   }
 
-  // Guarda el alta (POST) y recarga el tablero.
+  // proyGuardarAlta(): Crea nuevo proyecto con datos del modal de alta cascada.
+  // FLUJO: 1. POST /api/proyectos (clave_contrato, nombre_proyecto, tipo_actividad)
+  //        2. PUT /api/proyectos/{id}/reportes-ligados con reportes elegidos en checklist (si hay)
+  //        3. Recarga tablero (loadProyTablero())
+  // Validación: requiere contrato + nombre de proyecto. Alerta si faltan.
   async function proyGuardarAlta() {
     const clave_contrato  = document.getElementById('proy-alta-contrato').value;
     const nombre_proyecto = document.getElementById('proy-alta-nombre').value.trim();
@@ -6089,7 +6173,10 @@
     } catch (e) { alert('Error: ' + e.message); }
   }
 
-  // Pinta la tabla principal del tablero.
+  // proyPintarTabla(rows): Renderiza tabla principal del tablero de proyectos con edición inline.
+  // Columnas: Cliente, Proyecto, Tipo, Necesidad, Estimado, RAG proyecto, RAG producto, acciones (📂 editar/🗑️ eliminar).
+  // Cada fila es: clickable en proyecto/tipo para editar, doble-clic en RAG proyecto para cambiar, clic en RAG producto va a Base Conocimiento.
+  // Panel desplegable de detalles (6 cols): Pagos, Funcional, Técnico, Avance, PROD_LIGADOS, botón Reportes.
   function proyPintarTabla(rows) {
     const cont = document.getElementById('proy-tabla-wrap');
     if (!rows.length) { cont.innerHTML = '<div class="loading">Sin proyectos con ese filtro. Usa "➕ Nuevo" para dar de alta.</div>'; return; }
@@ -6228,9 +6315,14 @@
     <div id="proy-reps-${id}" style="display:none;margin-top:12px;"></div>`;
   }
 
-  // Muestra/oculta el panel de reportes ligados al proyecto: checklist editable
-  // (subconjunto de los reportes del contrato) + tabla igual a la pantalla de
-  // Estatus por Contrato, filtrada a los reportes ligados.
+  // proyToggleReportes(id, claveContrato): Muestra/oculta panel de reportes ligados al proyecto.
+  // FUNCIONALIDAD: checklist editable de reportes base únicas del contrato + tabla de vista lectura (renderReportesContrato con soloLectura=true).
+  // CÁLCULO RAG PRODUCTO: usa solo los reportes ligados para el cálculo del RAG (PROD_LIGADOS=1 en el proyecto).
+  // Endpoints:
+  //   - GET /api/proyectos/{id}/reportes-ligados: claves base ligadas
+  //   - GET /api/contratos/contratos/{clave}/reportes: todos los reportes del contrato
+  //   - PUT /api/proyectos/{id}/reportes-ligados: guardar cambios en selección
+  // Renderiza: checklist con checkboxes + botón "Guardar selección" + tabla lectura.
   async function proyToggleReportes(id, claveContrato) {
     const panel = document.getElementById('proy-reps-' + id);
     if (!panel) return;
@@ -6244,7 +6336,7 @@
       ]);
       const ligadas = new Set(rLig.data || []);
       const rows = rRep.data || [];
-      bcMarcarLegacy(rows);
+      bcMarcarLegacy(rows);  // Marca registros legacy con regla HISTÓRICO
       const vistas = new Set();
       const claves = rows.map(x => x.CLAVE_REP_BASE || x.CLAVE_REP)
         .filter(c => c && !vistas.has(c) && vistas.add(c));
@@ -6273,7 +6365,9 @@
     } catch (e) { panel.innerHTML = '<div class="loading">Error: ' + e.message + '</div>'; }
   }
 
-  // Guarda el checklist de reportes ligados y recarga el panel.
+  // proyGuardarReportes(id, claveContrato): Guarda selección de reportes ligados al proyecto.
+  // Endpoint: PUT /api/proyectos/{id}/reportes-ligados con body { reportes: [claves] }
+  // Después recarga el panel de reportes (cierra y reabre) para refrescar tabla con nuevos datos.
   async function proyGuardarReportes(id, claveContrato) {
     const msg = document.getElementById('proy-reps-msg-' + id);
     const elegidos = [...document.querySelectorAll('.proy-reps-chk-' + id + ':checked')].map(c => c.value);
@@ -6290,9 +6384,16 @@
       proyToggleReportes(id, claveContrato);
     } catch (e) { msg.innerHTML = `<span style="color:#e74c3c;">Error: ${e.message}</span>`; }
   }
-
-  // RAG de producto (calculado, no editable): % de reportes del contrato con
-  // ESTATUS = CERTIFICADO. <80% Rojo, 80-99% Ámbar, 100% Verde; sin reportes = gris.
+  // proyRagProducto(p): Renderiza semáforo RAG (Rojo/Ámbar/Verde) de certificación de reportes en proyecto.
+  // INDICADOR DE SALUD: % de reportes CERTIFICADOS del contrato ligados al proyecto.
+  // Cálculo: pct = PROD_CERTIFICADOS / PROD_TOTAL * 100
+  // Colores por rango:
+  //   - <80%:     Rojo (PROY_RAG_COLOR['Red'])
+  //   - 80-99%:   Ámbar (PROY_RAG_COLOR['Amber'])
+  //   - 100%:     Verde (PROY_RAG_COLOR['Green'])
+  //   - s/d:      Gris (sin reportes, RAG_PRODUCTO es null)
+  // Parámetro PROD_LIGADOS: booleano que indica si el cálculo es solo reportes ligados (=1) o todos (=0).
+  // Renderiza: círculo de color + % + (num/total) con tooltip informativo.
   function proyRagProducto(p) {
     if (p.RAG_PRODUCTO === null || p.RAG_PRODUCTO === undefined) {
       return `<span title="Sin reportes ligados al contrato" style="display:inline-block;width:14px;height:14px;border-radius:50%;background:#b8c2cc;vertical-align:middle;"></span>
@@ -6429,7 +6530,10 @@
   // RAG de producto del contrato completo (misma regla que el tablero de
   // proyectos): % de renglones de estatus con ESTATUS=CERTIFICADO sobre
   // TODOS los reportes del contrato. <80% Rojo · 80-99% Ámbar · 100% Verde.
-  // Reusa el pintado del círculo del tablero (proyRagProducto).
+  // bccRagProducto(c): Renderiza RAG para CONTRATO en pantalla Base Conocimiento > Contratos.
+  // Reutiliza proyRagProducto() pero calcula pct localmente y siempre usa PROD_LIGADOS=0 (contrato completo).
+  // En contratos: siempre mostramos el RAG de TODOS los reportes del contrato, sin filtrar por proyecto.
+  // Diferencia con proyRagProducto: en tablero de proyectos, PROD_LIGADOS=1 si hay reportes ligados.
   function bccRagProducto(c) {
     const pct = c.PROD_TOTAL > 0 ? Math.round((c.PROD_CERTIFICADOS / c.PROD_TOTAL) * 1000) / 10 : null;
     return proyRagProducto({
@@ -6437,7 +6541,7 @@
       PROD_PCT: pct,
       PROD_CERTIFICADOS: c.PROD_CERTIFICADOS,
       PROD_TOTAL: c.PROD_TOTAL,
-      PROD_LIGADOS: 0,
+      PROD_LIGADOS: 0,  // Siempre 0 en contratos: es el contrato COMPLETO, no filtrado
     });
   }
 
@@ -6570,21 +6674,35 @@
     ));
   }
 
-  // bcMarcarLegacy(rows): marca r._legacy (misma regla que la pantalla Estatus
-  // de Reportes): VERSION no-semver (ej. "22", "2.17" del esquema viejo) cuando
-  // ya existe un registro semver (ej. "2.18.0") para el mismo reporte base + plataforma.
+  // bcMarcarLegacy(rows): Marca registros heredados con r._legacy = true.
+  // REGLA HISTÓRICO: Un registro es legacy si:
+  //   1. Su VERSION NO es semver (ej. "22", "2.17" — esquema viejo embebido en clave)
+  //   2. Existe OTRO registro semver (ej. "2.18.0") con MISMO reporte base (CLAVE_REP_BASE||CLAVE_REP) Y plataforma
+  // Las filas legacy se renderean con badge "HISTÓRICO" (gris, opacity 0.55) en renderReportesContrato().
+  // Nota: Si un reporte SOLO tiene registros de esquema viejo (no hay versión semver), NO se marca como legacy.
   function bcMarcarLegacy(rows) {
-    const esSemver = v => /^\d+\.\d+\.\d+$/.test(String(v ?? '').trim());
-    const tieneNueva = {};
+    const esSemver = v => /^\d+\.\d+\.\d+$/.test(String(v ?? '').trim());  // Regex: X.Y.Z
+    const tieneNueva = {};  // Mapa rápido: "clave|plataforma" → true si existe versión semver
     rows.forEach(r => { if (esSemver(r.VERSION)) tieneNueva[`${r.CLAVE_REP_BASE||r.CLAVE_REP}|${r.CLAVE_PLATAFORMA}`] = true; });
     rows.forEach(r => { r._legacy = !esSemver(r.VERSION) && !!tieneNueva[`${r.CLAVE_REP_BASE||r.CLAVE_REP}|${r.CLAVE_PLATAFORMA}`]; });
   }
 
-  // renderReportesContrato(data, opts): Renderiza tabla reportes Base Conocimiento con radios de estatus, hitos DOCUMENTADO/PROGRAMADO/CERTIFICADO, personalización.
-  // opts.wrapId: id del contenedor destino (default 'bc-rep-content').
-  // opts.contrato: CLAVE_CONTRATO a usar en las acciones (default: select bc-rep-contrato).
-  // opts.soloLectura: true = tabla solo visual (sin select de estatus, sin
-  //   personalización ni ver. cliente) — la usa el panel de reportes por proyecto.
+  // renderReportesContrato(data, opts): Renderiza tabla HTML de reportes en Base Conocimiento.
+  // FUNCIÓN COMPARTIDA usada en 2 contextos: modo edición (contratos) y modo lectura (proyectos).
+  // Columnas:
+  //   - Clave Reporte + badge HISTÓRICO (si r._legacy)
+  //   - Descripción (ESP)
+  //   - Plataforma (CLAVE_PLATAFORMA)
+  //   - Versión (VERSION_CARGA, formato semver)
+  //   - Estatus Proyecto: select (edición) o pill de texto (lectura)
+  //   - Hitos: DOCUMENTADO, PROGRAMADO, CERTIFICADO (badges verdes/grises)
+  //   - Estatus Producto (colorizado según ESTATUS)
+  //   - Último Cambio (usuario + fecha más reciente)
+  //   - Personalización + Ver. Cliente (solo si opts.soloLectura === false)
+  // Argumentos (opts):
+  //   - wrapId: id del div contenedor (default: 'bc-rep-content')
+  //   - contrato: CLAVE_CONTRATO preseleccionado (default: value de select 'bc-rep-contrato')
+  //   - soloLectura: true = tabla visual sin inputs (usada por panel de proyecto)
   function renderReportesContrato(data, opts) {
     opts = opts || {};
     const ro = !!opts.soloLectura;

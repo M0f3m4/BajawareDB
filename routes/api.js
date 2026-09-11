@@ -20,9 +20,12 @@ function requireAuth(req, res, next) {
   next();
 }
 
-/* GET /api/status — Verifica estado de conectividad con SQL Server.
-   No requiere autenticación. Retorna {ok, db, error?} */
 // ── GET /api/status ───────────────────────────────────────
+// Verifica estado de conectividad con SQL Server (health check)
+// Retorna: { ok: true, db: 'connected' } o { ok: false, db: 'disconnected', error: "..." }
+// Tablas: ninguna (solo SELECT 1 como ping)
+// Permisos: ninguno (endpoint público para monitoreo)
+// Nota: no requiere autenticación; útil para dashboards de salud del sistema
 router.get('/status', async (req, res) => {
   try {
     await query('SELECT 1 AS ping');
@@ -32,9 +35,13 @@ router.get('/status', async (req, res) => {
   }
 });
 
-/* GET /api/buscar-tabla?q=<texto> — Búsqueda de tablas en INFORMATION_SCHEMA.
-   Parámetro: q (string). Retorna lista de nombres de tabla que coincidan. */
-// ── GET /api/buscar-tabla?q=layout ───────────────────────
+// ── GET /api/buscar-tabla ─────────────────────────────────
+// Búsqueda de tablas en INFORMATION_SCHEMA (metadatos SQL Server)
+// Query param: q=<texto> (case-insensitive LIKE %q%)
+// Retorna: { ok: true, data: ["TABLA1", "TABLA2", ...] }
+// Tablas: INFORMATION_SCHEMA.TABLES (metadatos, no datos)
+// Permisos: ninguno (endpoint público)
+// Nota: filtro WHERE TABLE_TYPE='BASE TABLE' (excluye vistas, tablas del sistema)
 router.get('/buscar-tabla', async (req, res) => {
   const q = (req.query.q || '').toUpperCase();
   try {
@@ -50,10 +57,14 @@ router.get('/buscar-tabla', async (req, res) => {
   }
 });
 
-/* GET /api/explorar — Explora todas las tablas con estructura (columnas, tipos, nullable)
-   y cantidad de filas. Agrupa columnas por tabla. */
 // ── GET /api/explorar ─────────────────────────────────────
-// Lista todas las tablas con sus columnas y cantidad de filas
+// Explora todas las tablas con estructura (columnas, tipos, nullable) y cantidad de filas
+// Retorna: { ok: true, data: [{ tabla, filas: N, columnas: [...] }, ...] }
+// Tablas: INFORMATION_SCHEMA.TABLES + INFORMATION_SCHEMA.COLUMNS (metadatos)
+//         + COUNT(*) en cada tabla para conteo de filas
+// Permisos: ninguno (endpoint público)
+// Nota: columnas incluyen { columna, tipo, nullable: bool }
+// Uso: descobrimiento de estructura de BD para debugging/exploración
 router.get('/explorar', async (req, res) => {
   try {
     const tablas = await query(`
@@ -96,10 +107,13 @@ router.get('/explorar', async (req, res) => {
   }
 });
 
-/* GET /api/debug-tabla/:tabla — Endpoint DEBUG: muestra primeras 10 filas,
-   columnas y conteo total de cualquier tabla. Requiere autenticación. */
 // ── GET /api/debug-tabla/:tabla ───────────────────────────
-// Ver primeras filas + columnas de cualquier tabla (solo admin)
+// Endpoint DEBUG: muestra primeras 10 filas, columnas y conteo de cualquier tabla
+// Params: :tabla = nombre de tabla (sanitizado con replace [^a-zA-Z0-9_])
+// Retorna: { ok: true, tabla, total: N, columnas: [...], data: [...] }
+// Tablas: cualquiera (parámetro dinámico)
+// Permisos: autenticado (requireAuth) — protegido por seguridad
+// Nota: útil para debugging de estructura y contenido; limitado a 10 filas
 router.get('/debug-tabla/:tabla', requireAuth, async (req, res) => {
   const tabla = req.params.tabla.replace(/[^a-zA-Z0-9_]/g, '');
   try {
@@ -113,11 +127,14 @@ router.get('/debug-tabla/:tabla', requireAuth, async (req, res) => {
   } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
 });
 
-/* GET /api/debug-validaciones/:contrato — Diagnóstico de falta de validaciones.
-   Compara CLAVE_REP en CONTRATOS_REPORTES vs REPORTE_VALIDACION.
-   Prueba LIKE y LEFT para entender desajustes de claves. */
 // ── GET /api/debug-validaciones/:contrato ─────────────────
-// Diagnosticar por qué no hay validaciones para un contrato
+// Diagnóstico: compara CLAVE_REP en CONTRATOS_REPORTES vs REPORTE_VALIDACION
+// Identifica por qué no hay validaciones para un contrato
+// Params: :contrato = CLAVE_CONTRATO (sanitizado)
+// Retorna: { ok: true, clavesCR: [...], muestraRV: [...], matchLike: [...], matchLeft: [...] }
+// Tablas: CONTRATOS_REPORTES, REPORTE_VALIDACION
+// Permisos: autenticado (requireAuth)
+// Nota: prueba LIKE y LEFT para entender desajustes de claves (debugging de integridad)
 router.get('/debug-validaciones/:contrato', requireAuth, async (req, res) => {
   const clave = req.params.contrato.replace(/[^a-zA-Z0-9_]/g, '');
   try {
@@ -141,11 +158,15 @@ router.get('/debug-validaciones/:contrato', requireAuth, async (req, res) => {
   } catch(e) { res.status(500).json({ ok: false, message: e.message }); }
 });
 
-/* GET /api/paquetes — Lista paquetes (entregas) agrupados por ticket de Jira.
-   Filtros: estatus, grupo, cliente. Retorna progreso por ticket (total/cerrados).
-   Tabla: PAQUETES. */
 // ── GET /api/paquetes ─────────────────────────────────────
-// Paquetes agrupados por ticket con progreso por cliente
+// Lista paquetes (entregas) agrupados por ticket de Jira con progreso
+// Query params (filtros): estatus, grupo, cliente (LIKE)
+// Retorna: { ok: true, data: [{ ticket, descripcion, tipo, grupo, reportes,
+//            clientes: [...], cerrados: N, total: N }, ...] }
+// Tablas: PAQUETES (agregación por ID_TICKET)
+// Permisos: autenticado (requireAuth)
+// Nota: clientes[] contiene {id, cliente, entidad, estatus, fechaLibera} por paquete
+// Uso: ver estado de entregas/paquetes agrupados por ticket Jira
 router.get('/paquetes', requireAuth, async (req, res) => {
   try {
     const { estatus, grupo, cliente } = req.query;
@@ -196,9 +217,11 @@ router.get('/paquetes', requireAuth, async (req, res) => {
   }
 });
 
-/* GET /api/paquetes/grupos — Retorna lista distinta de grupos en PAQUETES
-   para usar como filtros en el UI. */
 // ── GET /api/paquetes/grupos ──────────────────────────────
+// Retorna lista distinta de grupos en PAQUETES para usar como filtros en UI
+// Retorna: { ok: true, data: ["GRUPO1", "GRUPO2", ...] }
+// Tablas: PAQUETES (SELECT DISTINCT CLAVE_GRUPO)
+// Permisos: autenticado (requireAuth)
 router.get('/paquetes/grupos', requireAuth, async (req, res) => {
   try {
     const rows = await query(`SELECT DISTINCT CLAVE_GRUPO FROM PAQUETES WHERE CLAVE_GRUPO IS NOT NULL ORDER BY CLAVE_GRUPO`);
@@ -208,9 +231,11 @@ router.get('/paquetes/grupos', requireAuth, async (req, res) => {
   }
 });
 
-/* GET /api/paquetes/estatus-distintos — Conteo de paquetes por estatus
-   (sin autenticación). Útil para dashboard. */
 // ── GET /api/paquetes/estatus-distintos ───────────────────
+// Conteo de paquetes por estatus (para dashboard)
+// Retorna: { ok: true, data: [{ESTATUS: "...", total: N}, ...] }
+// Tablas: PAQUETES (GROUP BY ESTATUS)
+// Permisos: ninguno (endpoint público, útil para dashboards públicos)
 router.get('/paquetes/estatus-distintos', async (req, res) => {
   try {
     const rows = await query(`
@@ -225,10 +250,14 @@ router.get('/paquetes/estatus-distintos', async (req, res) => {
   }
 });
 
-/* GET /api/inventario/layouts — Lista de layouts con sus campos.
-   Filtros: layout, entidad, texto (busca en nombre de campo).
-   Tabla: LAYOUTS (máx 500 filas). */
 // ── GET /api/inventario/layouts ───────────────────────────
+// Lista de layouts con sus campos (máx 500)
+// Query params (filtros): layout, entidad, texto (busca en NOMBRE_CAMPO o CLAVE_LAYOUT)
+// Retorna: { ok: true, total: N, data: [{CLAVE_PAIS, CLAVE_ENTIDADREGULADA, CLAVE_LAYOUT,
+//            ORDEN, NOMBRE_CAMPO, TIPO_DATO, FORMATO, OBLIGATORIO, CATALOGO, ...}, ...] }
+// Tablas: LAYOUTS (SELECT TOP 500)
+// Permisos: autenticado (requireAuth)
+// Nota: ORDER BY CLAVE_LAYOUT, ORDEN (secuencia de campos por layout)
 router.get('/inventario/layouts', requireAuth, async (req, res) => {
   const { layout, entidad, texto } = req.query;
   let where = 'WHERE 1=1';
@@ -435,11 +464,14 @@ router.get('/dashboard/stats', requireAuth, async (req, res) => {
   }
 });
 
-/* GET /api/dashboard/inventario — Resumen del inventario para dashboard.
-   Retorna totales, distribuciones por regulador/entidad/tipo de validación.
-   Tablas: INVENTARIO_REPORTES, INVENTARIO_VALIDACIONES, CONTRATOS_VERSION_CLIENTE. */
 // ── GET /api/dashboard/inventario ─────────────────────────
 // Resumen del inventario para el dashboard de inicio
+// Retorna: { ok: true, data: {totalReportes, totalValidaciones, reportesConValidaciones,
+//            vigentes: [...], porRegulador: [...], porEntidad: [...], valPorTipo: [...],
+//            estatusProyecto: [...] } }
+// Tablas: INVENTARIO_REPORTES, INVENTARIO_VALIDACIONES, CONTRATOS_VERSION_CLIENTE
+// Permisos: autenticado (requireAuth)
+// Nota: múltiples queries en paralelo (Promise.all) para performance
 router.get('/dashboard/inventario', requireAuth, async (req, res) => {
   try {
     const [tot, totVal, repConVal, vigentes, porRegulador, porEntidad, valPorTipo, estatusProyecto] = await Promise.all([
@@ -470,9 +502,12 @@ router.get('/dashboard/inventario', requireAuth, async (req, res) => {
   }
 });
 
-/* GET /api/soporte/clientes — Lista de clientes activos.
-   Tabla: CLIENTE (ACTIVO=1). */
 // ── GET /api/soporte/clientes ─────────────────────────────
+// Lista de clientes activos (para módulo de soporte)
+// Retorna: { ok: true, data: [{CLAVE_CLIENTE, NOMBRE_CLIENTE, CLAVE_PAIS, ACTIVO}, ...] }
+// Tablas: CLIENTE (WHERE ACTIVO=1)
+// Permisos: autenticado (requireAuth)
+// Nota: ORDER BY NOMBRE_CLIENTE (alfabético)
 router.get('/soporte/clientes', requireAuth, async (req, res) => {
   try {
     const rows = await query(`
@@ -487,11 +522,13 @@ router.get('/soporte/clientes', requireAuth, async (req, res) => {
   }
 });
 
-/* GET /api/soporte/cliente/:clave — Info técnica del cliente.
-   Retorna: contratos, reportes, último cambio en CAMBIOS, paquetes activos/cerrados.
-   Tablas: CONTRATOS, CONTRATOS_REPORTES, CAMBIOS, PAQUETES. */
 // ── GET /api/soporte/cliente/:clave ───────────────────────
 // Info técnica del cliente: contratos, reportes, última modificación
+// Params: :clave = CLAVE_CLIENTE
+// Retorna: { ok: true, data: {contratos: [...], totalReportes: N, reportesEnUso: N,
+//            ultimoCambio: {...}, paquetesActivos: N, paquetesCerrados: N} }
+// Tablas: CONTRATOS, CONTRATOS_REPORTES, CAMBIOS, PAQUETES
+// Permisos: autenticado (requireAuth)
 router.get('/soporte/cliente/:clave', requireAuth, async (req, res) => {
   const clave = req.params.clave;
   try {
@@ -551,11 +588,14 @@ router.get('/soporte/cliente/:clave', requireAuth, async (req, res) => {
   }
 });
 
-/* GET /api/soporte/cliente/:clave/fixes — Paquetes del cliente agrupados por ticket Jira.
-   Enriquece cada paquete con progreso global (todos los clientes).
-   Tabla: PAQUETES. */
 // ── GET /api/soporte/cliente/:clave/fixes ─────────────────
-// Paquetes del cliente agrupados por ticket de Jira
+// Paquetes del cliente agrupados por ticket Jira con progreso global
+// Params: :clave = CLAVE_CLIENTE
+// Retorna: { ok: true, data: [{ticket, descripcion, tipo, grupo, reportes,
+//            paquete: {...}, globalTotal: N, globalCerrados: N}, ...] }
+// Tablas: PAQUETES (filtra por cliente, agrupa por ticket, calcula progreso global)
+// Permisos: autenticado (requireAuth)
+// Nota: globalTotal/globalCerrados son conteos de TODOS los clientes para ese ticket
 router.get('/soporte/cliente/:clave/fixes', requireAuth, async (req, res) => {
   const clave = req.params.clave;
   try {
@@ -600,10 +640,14 @@ router.get('/soporte/cliente/:clave/fixes', requireAuth, async (req, res) => {
   }
 });
 
-/* GET /api/inventario/reportes — Inventario de reportes regulatorios.
-   Filtros: reg, entidad, grupo, periodo, pais, version, vigente, texto, todos (bool).
-   Tabla: INVENTARIO_REPORTES + CAT_REGULADORES. */
 // ── GET /api/inventario/reportes ─────────────────────────
+// Inventario de reportes regulatorios (máx 200 o todos si param todos=true)
+// Query params (filtros): reg, entidad, grupo, periodo, pais, version, vigente, texto, todos (bool)
+// Retorna: { ok: true, total: N, data: [{CLAVE_REP, CLAVE_REP_GENERAL, REPORTE,
+//            DESCRIPCION_ESP, VIGENTE, FECHA_ACTUALIZADA, REGULADOR_NOMBRE, ...}, ...] }
+// Tablas: INVENTARIO_REPORTES LEFT JOIN CAT_REGULADORES
+// Permisos: autenticado (requireAuth)
+// Nota: vigente filtrado como string casting CAST(VIGENTE AS VARCHAR(10))
 router.get('/inventario/reportes', requireAuth, async (req, res) => {
   const { reg, entidad, grupo, periodo, pais, texto, version, vigente, todos } = req.query;
   let where = 'WHERE 1=1';
@@ -706,16 +750,19 @@ router.get('/estatus-validaciones/filtros', requireAuth, async (req, res) => {
   } catch(err) { res.status(500).json({ ok: false, message: err.message }); }
 });
 
-/* GET /api/estatus-reportes — Estatus de reportes (documentación, programación, certificación).
-   Filtros: plataforma, estatus, texto.
-   Tabla: ESTATUS_REPORTE + INVENTARIO_REPORTES.
-   Nota: Maneja VERSION_CARGA con posible truncamiento Excel (1.6 vs 1.6.0).
-   VERSION_CARGA es la versión PROPIA de la fila de estatus (NULL si no tiene);
-   VERSION_INV es la última versión cargada en el inventario (general por clave,
-   sin plataforma) — se regresan separadas para que la pantalla nunca las mezcle
-   como si fueran lo mismo (antes un COALESCE hacía parecer que un cambio de
-   versión en inventario "planchaba" la versión de todas las plataformas). */
 // ── GET /api/estatus-reportes ─────────────────────────────
+// Estatus de reportes: documentación, programación, certificación (máx 200)
+// Query params (filtros): plataforma, estatus, texto (LIKE CLAVE_REP)
+// Retorna: { ok: true, total: N, data: [{CLAVE_REP, CLAVE_PLATAFORMA, DOCUMENTADO,
+//            DOC_FECHA_ESTIMADA, DOC_FECHA_REAL, USER_DOC, PROGRAMADO, PROG_FECHA_ESTIMADA,
+//            CERTIFICADO, CERT_FECHA_ESTIMADA, QA_ALPHA, QA_BETA,
+//            VERSION_CARGA, VERSION_INV}, ...] }
+// Tablas: ESTATUS_REPORTE LEFT JOIN INVENTARIO_REPORTES
+// Permisos: autenticado (requireAuth)
+// Nota IMPORTANTE: VERSION_CARGA (propia de fila) vs VERSION_INV (general del inventario)
+//   Se retornan SEPARADAS para que UI no las confunda: cambio en inventario no
+//   "plancha" versión de plataformas. VERSION_CARGA puede ser NULL (usar VERSION_INV default)
+// ORDER BY CERT_FECHA_ESTIMADA ASC (ordenar por fechas de certificación)
 router.get('/estatus-reportes', requireAuth, async (req, res) => {
   const { plataforma, estatus, texto } = req.query;
   let where = 'WHERE 1=1';
@@ -786,10 +833,15 @@ router.get('/sprints/historial', requireAuth, async (req, res) => {
   }
 });
 
-/* GET /api/actividad — Registro de cambios/bitácora recientes.
-   Filtros: limit (default 50), usuario, tipo.
-   Tabla: CAMBIOS. Registra usuario, tipo, identidad, clave, descripción, fecha. */
 // ── GET /api/actividad ────────────────────────────────────
+// Registro de cambios/bitácora recientes para auditoría
+// Query params: limit (default 50, máx), usuario (filtro LIKE), tipo (filtro exacto)
+// Retorna: { ok: true, data: [{ID_CAMBIOS, USER_NAME, TIPO_CAMBIO, TIPO_IDENTIDAD,
+//            CLAVE, DESCRIPCION, FECHA}, ...] }
+// Tablas: CAMBIOS (SELECT TOP limit ORDER BY FECHA DESC)
+// Permisos: autenticado (requireAuth)
+// Nota: TIPO_CAMBIO puede ser 'INSERT', 'UPDATE', 'DELETE', etc.
+//       Auditoría: quién cambió qué, cuándo y para qué
 router.get('/actividad', requireAuth, async (req, res) => {
   const { limit = 50, usuario, tipo } = req.query;
   let where = 'WHERE 1=1';

@@ -92,11 +92,33 @@ function ragAgregado(rojos, ambar, verdes) {
 }
 
 // ── GET /tablero
-// Descripción: tablero principal — un renglón por PROYECTO con datos de su
-// contrato y cliente, RAG manual, avance, líderes y los RAG calculados de
-// reportes y validaciones del contrato padre (con conteos para tooltips).
-// Parámetros query opcionales: tipo_actividad, cliente, rag, texto.
-// Sin bitácora (solo lectura).
+// Descripción: tablero principal - un renglón por PROYECTO con datos contextuales.
+// Calcula RAG de reportes/validaciones/producto al vuelo desde fechas del contrato.
+// Si proyecto tiene reportes ligados (PROYECTOS_REPORTES), usa solo esos (fallback
+// a contrato completo si no hay liga). Detecta cambios de semáforo y genera alertas.
+//
+// Parámetros query opcionales: tipo_actividad, cliente, rag, texto (filtros).
+//
+// Campos devueltos por renglón:
+//   - ID_PROYECTO, NOMBRE_PROYECTO, TIPO_ACTIVIDAD, ESTATUS_PAGO.
+//   - RAG_PROYECTO (manual), RAG_COMENTARIO, RAG_FECHA, RAG_USUARIO.
+//   - RAG_REPORTES, RAG_VALIDACIONES (calculados: peor manda).
+//   - PROD_TOTAL, PROD_CERTIFICADOS, PROD_PCT (%), RAG_PRODUCTO.
+//   - PROD_LIGADOS (1 si usa reportes ligados, 0 si contrato completo).
+//   - Conteos por color (VERDES, AMBAR, ROJOS, GRISES) para tooltips.
+//   - FUNCIONAL_NOMBRE, TECNICO_NOMBRE (líderes).
+//   - Contexto: CLAVE_CONTRATO, NOMBRE_CONTRATO, CLAVE_CLIENTE, NOMBRE_CLIENTE.
+//
+// Lógica de RAG de producto:
+//   % = CERTIFICADOS / TOTAL * 100.
+//   100% Verde, 80-99% Ámbar, <80% Rojo, sin datos NULL (gris).
+//
+// Alertas de cambio de semáforo:
+//   Compara RAG_PRODUCTO (calculado) vs RAG_PRODUCTO_ULTIMO (testigo).
+//   Si cambian colores (ambos != null), genera alerta en PROY_RAG_ALERTAS.
+//   NULL -> Color o Color -> NULL solo actualiza testigo (sin alerta).
+//
+// Sin bitácora de lectura (solo lectura; alertas se escriben en silencio).
 router.get('/tablero', requireAuth, async (req, res) => {
   try {
     const { tipo_actividad, cliente, rag, texto } = req.query;

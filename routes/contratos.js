@@ -1,19 +1,45 @@
-// ──────────────────────────────────────────────────────────────────────────
-// Archivo: routes/contratos.js
-// Descripción: rutas Express de la API de gestión de reportes regulatorios (Bajaware).
-// Responsabilidades principales:
-//   1. Gestión de contratos (clientes, plataformas, reportes, validaciones)
-//   2. Control de estatus de reportes y validaciones (cascada de hitos: DOC→PROG→CERT)
-//   3. Carga masiva de inventarios (reportes y validaciones desde Excel)
-//   4. Bitácora de auditoría (registra cambios con "antes" y "después" en JSON)
-//   5. Candados y validaciones contra bugs históricos de truncamiento de versiones
-// Tablas principales que toca:
-//   - CONTRATOS, CLIENTE, CONTRATOS_REPORTES, CONTRATOS_VERSION_CLIENTE
-//   - ESTATUS_REPORTE (identidad de negocio: CLAVE_REP|CLAVE_PLATAFORMA|VERSION_CARGA)
+// ==============================================================================
+// routes/contratos.js - MÓDULO DE CONTRATOS Y GESTIÓN DE REPORTES REGULATORIOS
+// ==============================================================================
+//
+// DESCRIPCIÓN GENERAL:
+//   Endpoints Express para gestión integral de reportes regulatorios y contratos.
+//   Coordina cascada: CLIENTE -> CONTRATOS -> REPORTES|VALIDACIONES.
+//
+// RESPONSABILIDADES PRINCIPALES:
+//   1. Gestión de contratos y clientes (crear, leer, filtrar por estatus/cliente).
+//   2. Control de estatus de reportes y validaciones (cascada de hitos:
+//      DOCUMENTADO -> PROGRAMADO -> CERTIFICADO con "SI"/"NO" en ESTATUS_REPORTE).
+//   3. Carga masiva desde Excel (POST /contratos/upload, inventarios).
+//      CLAVE: Excel es LISTA DEFINITIVA de reportes. Presentes INSERT/UPDATE,
+//      ausentes se marcan ACTIVO=0 (desactivación automática).
+//   4. Bitácora de auditoría (AUDIT_LOG): registra cambios antes/después en JSON.
+//   5. Candados anti-truncamiento: protege ESTATUS_REPORTE (identidad única
+//      CLAVE_REP|CLAVE_PLATAFORMA|VERSION_CARGA).
+//   6. Cache en RAM de claves de validaciones (~431k filas en REPORTE_VALIDACION).
+//
+// TABLAS PRINCIPALES:
+//   - CLIENTE, CONTRATOS, CONTRATOS_REPORTES, CONTRATOS_VALIDACION_ESTATUS
+//   - CONTRATOS_VERSION_CLIENTE, ESTATUS_REPORTE (maestra con hitos)
 //   - REPORTE_VALIDACION, INVENTARIO_VALIDACIONES, INVENTARIO_VALIDACIONES_HIST
 //   - INVENTARIO_REPORTES, INVENTARIO_REPORTES_HIST, INVENTARIO_VERSIONES
-//   - AUDIT_LOG (bitácora de cambios)
-// ──────────────────────────────────────────────────────────────────────────
+//   - PERSONALIZACIONES (config especial por contrato+reporte)
+//   - AUDIT_LOG (bitácora con JSON de detalles)
+//
+// FLUJO TÍPICO:
+//   1. POST /contratos/upload (Excel) -> carga clientes, contratos, reportes.
+//   2. GET /contratos/lista -> lista contratos con RAG producto (%).
+//   3. GET /contratos/:clave/reportes -> lista reportes con join correcto.
+//   4. PUT /estatus-reporte -> actualiza hitos (cascada DOC->PROG->CERT).
+//
+// ASPECTOS CLAVE DE DISEÑO:
+//   - Join correcto: CONTRATOS_REPORTES.CLAVE_REP (base) ->
+//     ESTATUS_REPORTE.CLAVE_REP_GENERAL + CLAVE_PLATAFORMA del contrato.
+//   - RAG producto: % = CERTIFICADOS/TOTAL*100; 100%=Verde, 80-99%=Ámbar, <80%=Rojo.
+//   - Bitácora: todos los cambios (INSERT/UPDATE/DELETE) pasan por auditLog().
+//   - Autenticación: requireAuth en TODOS los endpoints.
+//
+// ==============================================================================
 
 const express = require('express');
 const router  = express.Router();
@@ -141,9 +167,17 @@ router.get('/clientes-con-contratos', requireAuth, async (req, res) => {
 });
 
 // ── GET /contratos/lista
-// Descripción: lista de contratos con filtros opcionales por estatus y cliente.
+// Descripción: lista de contratos con RAG producto (% certificados).
 // Parámetros query: estatus (ACTIVO, INACTIVO, etc.), cliente (CLAVE_CLIENTE).
-// Tablas: CONTRATOS (LEFT JOIN CLIENTE).
+// Tablas: CONTRATOS LEFT JOIN CLIENTE; subquery 'prod' (CONTRATOS_REPORTES ->
+//         ESTATUS_REPORTE); devuelve TOT (reportes activos) y CERTIFICADOS.
+// Lógica clave del subquery 'prod':
+//   - Por cada contrato, cuenta TODOS los reportes ACTIVOS (TOT).
+//   - Cuenta cuántos tienen ESTATUS='CERTIFICADO' en ESTATUS_REPORTE (CERTIFICADOS).
+//   - Join: CONTRATOS_REPORTES.CLAVE_REP (base) -> ESTATUS_REPORTE.CLAVE_REP_GENERAL,
+//     filtrado por CONTRATOS.CLAVE_PLATAFORMA (plataforma del contrato).
+//   - RAG producto en frontend: % = (CERTIFICADOS/TOT)*100;
+//     <80% Rojo, 80-99% Ámbar, 100% Verde, sin datos=NULL(gris).
 // Sin bitácora (consulta de solo lectura).
 router.get('/contratos/lista', requireAuth, async (req, res) => {
   try {
